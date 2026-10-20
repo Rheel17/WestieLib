@@ -1,0 +1,611 @@
+# WestieLib architecture
+
+WestieLib keeps online playlists in sync with a local folder of tagged audio files (Opus by default, FLAC as an
+option) for use in Mixxx. It reads YouTube Music and Spotify playlists, finds and downloads the audio from YouTube
+Music, tags every file with title, artists, album and cover art, and remembers what it has done so each sync only
+processes what changed.
+
+It is a single, statically linked Win32 executable written in C++26.
+
+## Components
+
+```
+                         +------------------+
+                         |     UI layer     |  Win32 windows
+                         +------------------+
+                        commands |      ^ events (PostMessageW)
+                                 v      |
++--------------------------------------------------------------------------+
+|                                  Core                                    |
+|                                                                          |
+|   SyncEngine ----> PlaylistSource (YouTubeMusicSource, SpotifySource)    |
+|       |      ----> Matcher                                               |
+|       |      ----> Downloader ----> Tagger ----> Library                 |
+|       |                                                                  |
+|   StateStore      Settings      ToolManager      SelfUpdater             |
+|                                                  RemoteConfig            |
++--------------------------------------------------------------------------+
+                                 |
+                                 v
++--------------------------------------------------------------------------+
+|                       Platform services (Win32)                          |
+|   HttpClient   ProcessRunner   FileOps   Hasher   TextNormalizer         |
++--------------------------------------------------------------------------+
+```
+
+- **Core** holds all logic. It reaches the operating system only through the platform service interfaces,
+  which makes every core component unit-testable with fakes.
+- **Platform services** implement those interfaces with Win32 APIs.
+- **UI layer** calls core commands and receives core events. All window code lives here.
+
+## Files and folders
+
+```
+<anywhere>\WestieLib.exe                 the application; runs from any folder
+
+%LOCALAPPDATA%\WestieLib\
+    settings.json                         library location and sync tuning
+    state.json                            playlists and tracks (human-readable)
+    state.json.bak                        previous version of state.json
+    remote.json                           cached copy of the remote config
+    covers\<track key>.jpg                custom cover art set through editTrack (':' in the key becomes '_')
+    tools\
+        tools.json                        installed tool versions and digests
+        yt-dlp.exe
+        ffmpeg.exe
+        ffprobe.exe
+        deno.exe
+    work\<track key>\                     per-track scratch space during download
+    logs\<timestamp>.log                  one log per run, including full tool output
+
+<library folder>\                          flat folder of finished .opus / .flac files
+
+HKCU\Software\WestieLib\Window            main window placement and panel widths (UI layer)
+```
+
+## Data model
+
+### settings.json
+
+```json
+{
+  "version": 1,
+  "libraryPath": "D:\\Music\\WestieLib",
+  "format": "opus",
+  "embedCover": true,
+  "concurrency": 2,
+  "delayBetweenTracksSeconds": 3,
+  "autoUpdateTools": true
+}
+```
+
+| Field                       | Meaning                                                                       |
+|-----------------------------|-------------------------------------------------------------------------------|
+| `format`                    | `opus` or `flac`; applies to new downloads, existing files keep their format  |
+| `embedCover`                | write the cover art into the file                                             |
+| `concurrency`               | number of parallel downloads (1–4)                                            |
+| `delayBetweenTracksSeconds` | pause between track starts                                                    |
+| `autoUpdateTools`           | update installed tools at startup (see ToolManager)                           |
+
+### state.json
+
+Pretty-printed UTF-8, read and written with glaze. Fields appear in struct declaration order. `playlists`,
+`sources` and `tracks` are `std::map`s, so their keys are sorted. File paths are relative to `libraryPath`.
+
+The state separates what playlists list from what is on disk:
+
+- A **source** is one entry in an online catalog: a YouTube Music video or a Spotify track. Its key is
+  `<source>:<source id>`, e.g. `ytm:<videoId>` or `spotify:<trackId>`. Playlists list source keys, and a source
+  that appears in several playlists has one entry.
+- A **track** is one audio file in the library, made from one YouTube video. It has one or more sources. The
+  same song in a YouTube Music playlist and a Spotify playlist is one track with two sources and one file.
+
+```json
+{
+  "version": 1,
+  "playlists": {
+    "ytm:PLxxxxxxxx": {
+      "url": "https://music.youtube.com/playlist?list=PLxxxxxxxx",
+      "name": "WCS",
+      "lastSync": "2026-10-11T14:03:00Z",
+      "sources": [ "ytm:aaaaaaaaaaa", "ytm:ccccccccccc" ]
+    },
+    "spotify:37i9dQZF1DXxxxxxxx": {
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DXxxxxxxx",
+      "name": "Her playlist",
+      "lastSync": "2026-10-11T14:05:00Z",
+      "sources": [ "spotify:6r8k1vznHrzlEKYxxxxxxx", "spotify:7yq3vB0cNvb1Xxxxxxxxxx" ]
+    },
+    "spotify:5aX8kq1sTn2Yz9wxxxxxxx": {
+      "url": "https://open.spotify.com/playlist/5aX8kq1sTn2Yz9wxxxxxxx",
+      "name": "Slow & bluesy",
+      "lastSync": "2026-10-09T20:12:00Z",
+      "fetchError": "HTTP 404 from api-partner.spotify.com",
+      "fetchErrorAt": "2026-10-11T14:05:00Z",
+      "sources": [ "spotify:6r8k1vznHrzlEKYxxxxxxx" ]
+    }
+  },
+  "sources": {
+    "ytm:aaaaaaaaaaa": {
+      "title": "Title",
+      "artists": [ "Artist" ],
+      "album": "Album",
+      "year": 2021,
+      "durationMs": 215000,
+      "track": "ytm:aaaaaaaaaaa"
+    },
+    "ytm:ccccccccccc": {
+      "title": "Title",
+      "artists": [ "Artist One" ],
+      "durationMs": 243000,
+      "track": "spotify:6r8k1vznHrzlEKYxxxxxxx"
+    },
+    "spotify:6r8k1vznHrzlEKYxxxxxxx": {
+      "title": "Title",
+      "artists": [ "Artist One", "Artist Two" ],
+      "album": "Album",
+      "year": 2017,
+      "durationMs": 242733,
+      "isrc": "USxxx0000000",
+      "coverUrl": "https://i.scdn.co/image/...",
+      "match": { "videoId": "ccccccccccc", "confidence": 0.94, "review": false,
+                 "title": "Title", "artist": "Artist One", "durationMs": 243000 },
+      "track": "spotify:6r8k1vznHrzlEKYxxxxxxx"
+    },
+    "spotify:7yq3vB0cNvb1Xxxxxxxxxx": {
+      "title": "Title (WCS Edit)",
+      "artists": [ "Artist" ],
+      "album": "Title",
+      "year": 2024,
+      "durationMs": 228000,
+      "track": "spotify:7yq3vB0cNvb1Xxxxxxxxxx"
+    }
+  },
+  "tracks": {
+    "ytm:aaaaaaaaaaa": {
+      "sources": [ "ytm:aaaaaaaaaaa" ],
+      "videoId": "aaaaaaaaaaa",
+      "edits": { "album": "Album (Deluxe)" },
+      "status": "downloaded",
+      "file": "Artist - Title.opus",
+      "addedAt": "2026-10-11T14:03:00Z"
+    },
+    "spotify:6r8k1vznHrzlEKYxxxxxxx": {
+      "sources": [ "spotify:6r8k1vznHrzlEKYxxxxxxx", "ytm:ccccccccccc" ],
+      "videoId": "ccccccccccc",
+      "status": "downloaded",
+      "file": "Artist One, Artist Two - Title.opus",
+      "addedAt": "2026-10-11T14:05:00Z"
+    },
+    "spotify:7yq3vB0cNvb1Xxxxxxxxxx": {
+      "sources": [ "spotify:7yq3vB0cNvb1Xxxxxxxxxx" ],
+      "status": "failed",
+      "failure": "noMatch",
+      "error": "Searched ISRC QZxxx2400000: no results\nSearched \"Artist Title\": no usable results",
+      "addedAt": "2026-10-11T14:05:00Z"
+    }
+  }
+}
+```
+
+In this example, the WCS playlist (YouTube Music) and Her playlist (Spotify) both contain "Title". The Matcher
+picked the same video (`ccccccccccc`) that WCS lists, so the two sources share one track and one file.
+
+**Playlist fields.**
+- `sources` is the ordered list of source keys.
+- `fetchError` and `fetchErrorAt` are set when the last fetch failed, and cleared by the next successful fetch.
+- `lastSync` keeps the time of the last successful sync.
+
+**Source fields.**
+
+| Field                            | Meaning                                                                    |
+|----------------------------------|----------------------------------------------------------------------------|
+| `title`, `artists`, `durationMs` | From the playlist                                                          |
+| `album`, `year`                  | Spotify: from the playlist response, when it has them. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
+| `isrc`, `coverUrl`               | Spotify only                                                               |
+| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence`, `review`, and the video's `title`, `artist` and `durationMs`, so a review shows what was matched |
+| `track`                          | Key of the track this source belongs to                                    |
+
+**Track fields.**
+
+| Field              | Meaning                                                                         |
+|--------------------|---------------------------------------------------------------------------------|
+| `sources`          | Its source keys, in the order they joined. The first one created the track; its key is the **track key**, which never changes |
+| `videoId`          | The YouTube video the file was made from                                        |
+| `videoOverride`    | See Video resolution                                                            |
+| `edits`            | User edits from `editTrack`: any of `title`, `artists`, `album`, `year`, and `cover: true` for a custom cover in `covers\`. They win over source values, and syncs never overwrite them |
+| `status`           | See below                                                                       |
+| `failure`, `error` | Set with `failed`. Either `noMatch` (no usable candidate; `error` lists the searched queries) or `download` (a tool failed; `error` holds its last output lines) |
+| `file`             | File name in the library                                                        |
+| `addedAt`          | When the track entered the state                                                |
+
+**Track status.**
+
+| Status       | Meaning                                                                |
+|--------------|------------------------------------------------------------------------|
+| `pending`    | Known from a playlist, waiting to be downloaded                        |
+| `downloaded` | File is in the library, tagged                                         |
+| `failed`     | Last attempt failed; `failure` and `error` hold the reason; retried on the next sync or by `retry` |
+| `orphaned`   | None of its sources is in a playlist anymore; waiting for a keep/remove decision |
+| `kept`       | None of its sources is in a playlist anymore; kept by choice           |
+
+**Video resolution.** A track's video is the first of:
+1. its `videoOverride`;
+2. the video of its first YouTube Music source, because the playlist owner chose it;
+3. the Matcher's result for its first Spotify source.
+
+A track **needs review** when its video comes from a match with `review: true`. Resolution runs for tracks
+without a file, and again when the override changes. Setting `videoOverride` re-downloads the track (or merges
+it, see below), and clears `failure` and `review`.
+
+**Merging.** No two tracks share a video. A video gets resolved in three ways:
+- a fetch adds a YouTube Music source;
+- the Matcher finishes;
+- a video override is set.
+
+Each time, if another track already has that video, the two tracks merge:
+- The track that had the video first survives. The other track's sources move into it, and its entry is
+  deleted.
+- If the deleted track had a file, that file goes to the Recycle Bin.
+- The surviving track keeps its own `edits`, and takes the other track's edits for fields it hasn't edited.
+- When the merge changes the effective metadata or cover, the file is re-tagged and renamed.
+- The engine emits `TracksMerged`.
+
+Sources stay attached to their track until the track is removed.
+
+**Effective metadata.** Tags and file names use, per field, the first of:
+1. `edits`;
+2. the track's first Spotify source, because Spotify metadata is the cleanest (separate artists, proper album,
+   ISRC);
+3. the track's first YouTube Music source.
+
+The cover art comes from the first of:
+1. the custom cover;
+2. the first Spotify source's `coverUrl`;
+3. the video thumbnail.
+
+### tools.json
+
+```json
+{
+  "yt-dlp": { "release": "2026.09.30", "digest": "sha256:..." },
+  "ffmpeg": { "release": "n8.0",       "digest": "sha256:..." },
+  "deno":   { "release": "v2.5.4",     "digest": "sha256:..." }
+}
+```
+
+## Platform services
+
+| Service          | Implementation                                                                       |
+|------------------|--------------------------------------------------------------------------------------|
+| `HttpClient`     | WinHTTP. GET for JSON/HTML, streaming file download with progress callback.          |
+| `ProcessRunner`  | `CreateProcessW` with stdout/stderr pipes, line splitting, UTF-8 decoding, exit code. Every child joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; cancelling a run terminates the job. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. |
+| `FileOps`        | Atomic replace via `ReplaceFileW` (with backup), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
+| `Hasher`         | SHA-256 via BCrypt.                                                                  |
+| `TextNormalizer` | `NormalizeString` (NFKD), combining marks dropped, case folded.                      |
+
+Strings inside the core are UTF-8 `std::string`; paths are `std::filesystem::path`. Conversion to UTF-16 happens
+inside the platform services.
+
+## Core components
+
+### Settings and StateStore
+
+`Settings` loads and saves `settings.json`. `StateStore` owns `state.json` in memory behind a mutex. Every write
+goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which keeps the previous version as
+`state.json.bak`. The SyncEngine saves after every finished track, so an interrupted run resumes where it stopped.
+
+A named mutex makes WestieLib single-instance, so exactly one process writes the state.
+
+### RemoteConfig
+
+`RemoteConfig` fetches `https://raw.githubusercontent.com/Rheel17/WestieLib/main/config/remote.json` at startup and
+caches it as `remote.json`. A compiled-in default is used until the first successful fetch. It carries the Spotify GraphQL operation name and persisted-query hash:
+
+```json
+{
+  "version": 1,
+  "spotify": {
+    "operationName": "fetchPlaylist",
+    "sha256Hash": "a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4",
+    "pageSize": 100
+  }
+}
+```
+
+Updating this file in the repository updates every installation on its next start.
+
+### ToolManager
+
+ToolManager installs and updates the external tools in `tools\` from their GitHub Releases:
+
+| Tool             | Repository             | Asset                                   | Updated when                  |
+|------------------|------------------------|-----------------------------------------|-------------------------------|
+| yt-dlp           | `yt-dlp/yt-dlp`        | `yt-dlp.exe`                            | release tag changes           |
+| ffmpeg, ffprobe  | `yt-dlp/FFmpeg-Builds` | `ffmpeg-nX.Y-latest-win64-gpl-X.Y.zip`  | release branch `X.Y` changes  |
+| deno             | `denoland/deno`        | `deno-x86_64-pc-windows-msvc.zip`       | release tag changes           |
+
+Flow per tool:
+
+1. `GET https://api.github.com/repos/<repo>/releases/latest`.
+2. Compare the release with `tools.json`.
+3. Download the asset into `tools\.staging\`.
+4. Verify its SHA-256 against the `digest` GitHub reports for the asset.
+5. Extract zip archives with miniz.
+6. Swap the new files into `tools\` while no tool process is running, then update `tools.json`.
+
+ToolManager runs at startup and before the first sync of a session.
+- Missing tools are always installed.
+- Installed tools are updated only when `autoUpdateTools` is on, or when `checkForUpdates` asks for it.
+
+The SyncEngine starts only when all tools are installed. ToolManager exposes the absolute tool paths to the other
+components.
+
+### SelfUpdater
+
+SelfUpdater runs at startup, before ToolManager.
+
+1. `GET https://api.github.com/repos/Rheel17/WestieLib/releases/latest`.
+2. Compare the `vX.Y.Z` tag with the version compiled in from CMake's `project(VERSION)`.
+3. Download the `WestieLib.exe` asset to `<exe dir>\WestieLib.exe.new` and verify its digest.
+4. Rename the running `WestieLib.exe` to `WestieLib.exe.old`, rename `WestieLib.exe.new` to `WestieLib.exe`.
+5. Start the new executable and exit.
+
+Every start deletes a leftover `WestieLib.exe.old`. When the executable's folder is read-only, SelfUpdater reports
+the available version through an event.
+
+### PlaylistSource
+
+```cpp
+struct SourceTrack {
+	std::string key;                       // source key: "ytm:<videoId>" / "spotify:<trackId>"
+	std::string title;
+	std::vector<std::string> artists;
+	std::string album;
+	std::optional<std::string> isrc;
+	std::optional<std::string> coverUrl;
+	std::optional<std::string> videoId;    // set by YouTubeMusicSource
+	std::chrono::milliseconds duration;
+};
+
+class PlaylistSource {
+public:
+	virtual ~PlaylistSource() = default;
+	virtual PlaylistInfo fetch(const std::string& url, CancelToken&) = 0;   // name + ordered SourceTracks
+};
+```
+
+The source type follows from the URL: `music.youtube.com` / `youtube.com` playlist URLs go to
+`YouTubeMusicSource`, `open.spotify.com/playlist/...` URLs go to `SpotifySource`.
+
+**YouTubeMusicSource** runs `yt-dlp --flat-playlist -J <url>` and maps each entry to a `SourceTrack` with its
+`videoId`. The album and year of these sources come from yt-dlp's info JSON at download time.
+
+**SpotifySource** reads public Spotify playlists:
+
+1. `GET https://open.spotify.com/embed/playlist/<id>` and parse the `__NEXT_DATA__` JSON. It holds an anonymous
+   access token (`props.pageProps.state.settings.session.accessToken`) and its expiry.
+2. Page through `GET https://api-partner.spotify.com/pathfinder/v1/query` with `operationName`,
+   `variables` (`uri`, `offset`, `limit`) and `extensions` (persisted-query hash from RemoteConfig), sending
+   `Authorization: Bearer <token>` and `app-platform: WebPlayer`.
+3. Map each item to a `SourceTrack` with title, artists, album, duration, the largest cover URL and the ISRC when
+   present.
+
+The token is refreshed from the embed page when it expires or a request returns 401.
+
+### Matcher
+
+The Matcher turns a Spotify source into a YouTube Music `videoId`. It runs only for tracks that have no video
+override and no YouTube Music source (see Video resolution).
+
+1. **Queries.** The ISRC first (when present), then `"<artists> <title>"`.
+2. **Search.** `yt-dlp --flat-playlist -J --playlist-items 1:10 "https://music.youtube.com/search?q=<query>#songs"`.
+   Each candidate carries videoId, title, artist and duration.
+3. **Normalize** titles and artists with `TextNormalizer`, strip punctuation and bracketed suffixes such as
+   `(feat. ...)` and `- Remastered 2011`.
+4. **Score** each candidate as a weighted sum of title similarity, artist similarity and duration closeness. Words
+   such as `live`, `remix`, `cover`, `karaoke`, `sped up`, `slowed`, `instrumental` lower the score unless the
+   Spotify title contains the same word. A candidate whose video already belongs to a track gets a small bonus,
+   so the same song from both sources tends to end up as one track.
+5. **Choose** the highest score.
+   - The source's `match` stores the video id, the confidence, and the candidate's title, artist and duration.
+   - A confidence below the review threshold sets `match.review = true`. The track is downloaded with its best
+     candidate, and it stays flagged until a video override is set or the match is confirmed.
+   - If the chosen video already belongs to another track, the two tracks merge instead of downloading.
+   - When the searches return nothing, or no candidate reaches the minimum score, the track fails with
+     `failure: noMatch` and the searched queries in `error`.
+
+The Matcher is pure logic on top of `ProcessRunner` output and is unit-tested with recorded yt-dlp JSON.
+
+**Video search.** `searchVideos(query, filter)` serves the UI's Choose a video dialog. It runs the same yt-dlp
+search with `#songs`, `#videos`, or no fragment (for both), and returns up to 20 results. Each result has
+videoId, title, artist, album, type (song or video) and duration. A search runs on its own worker thread, outside
+any sync run. A new search cancels the previous one.
+
+### Downloader
+
+The Downloader produces one tagged `.opus` or `.flac` file in `work\<track key>\`:
+
+```
+yt-dlp -f "bestaudio[acodec=opus]/bestaudio" -x --audio-format <format>
+       --write-info-json --write-thumbnail --convert-thumbnails jpg
+       --ffmpeg-location <tools> --js-runtimes deno:<tools>\deno.exe
+       --newline --progress-template "download:%(progress._percent_str)s"
+       --no-playlist -o "<work>\%(id)s.%(ext)s"
+       https://music.youtube.com/watch?v=<videoId>
+```
+
+- **Format.** `<format>` comes from `settings.format` at download time.
+  - `opus` (the default): Opus sources are remuxed into `.opus` without re-encoding, and AAC sources are
+    transcoded to Opus.
+  - `flac`: the audio is transcoded to FLAC. The source is lossy, so FLAC changes the container but not the
+    quality.
+
+  A format change applies to new downloads only. Existing files keep their format, so a library can mix both.
+- Progress lines from `--progress-template` become `TrackProgress` events.
+- **Cover art.** The first of these that applies:
+  1. a custom cover from `edits` (`covers\<track key>.jpg`);
+  2. when the track has a Spotify source, its Spotify image (square, 640 px), fetched with `HttpClient`;
+  3. the video thumbnail, center-cropped to a square with `ffmpeg -vf "crop=min(iw\,ih):min(iw\,ih)"`.
+
+  No cover is fetched when `embedCover` is off.
+- **Metadata.** The info JSON fills the album and year of the track's YouTube Music sources: `track` (falling
+  back to `title`), `artists` (falling back to `artist`), `album`, `release_year`. The tags then use the
+  effective metadata.
+
+### Tagger
+
+The Tagger writes Vorbis comments with TagLib. Both Opus and FLAC files carry Vorbis comments. It uses the
+effective metadata, so `edits` win over source values:
+
+| Field                    | Value                                                         |
+|--------------------------|---------------------------------------------------------------|
+| `TITLE`                  | title                                                         |
+| `ARTIST`                 | artists joined with `, `                                      |
+| `ALBUM`                  | album                                                         |
+| `DATE`                   | `year`                                                        |
+| `ISRC`                   | ISRC, when known                                              |
+| `WESTIELIB_SOURCE`       | every source key of the track, one value each, track key first |
+| `WESTIELIB_VIDEOID`      | YouTube video id the audio came from                          |
+
+**Cover art** is the front cover (picture type 3), as a JPEG. It is written only when `embedCover` is on:
+- in Opus files, as `METADATA_BLOCK_PICTURE`;
+- in FLAC files, as a native `PICTURE` block.
+
+`WESTIELIB_SOURCE` and `WESTIELIB_VIDEOID` make every file self-identifying, which powers state rebuilds.
+
+The Tagger also re-tags finished library files in place, after `editTrack` and after a merge.
+
+### Library
+
+The Library places finished files and handles the library folder as a whole.
+
+- **File names.** `<ARTIST> - <TITLE>.<opus|flac>`, built from the effective metadata. Characters `<>:"/\|?*` and control characters become `_`, trailing dots
+  and spaces are trimmed, reserved device names (`CON`, `NUL`, `COM1`, ...) get a `_` suffix, and names are capped at
+  200 characters. A name that already belongs to another track gets ` (2)`, ` (3)`, ... appended.
+- **Placement.** The tagged file moves from `work\` into the library with `MoveFileExW`, so the library only ever
+  contains complete files.
+- **Rename.** When `editTrack` or a merge changes the effective artists or title, the file is renamed with the
+  same rules.
+- **Removal.** Files go to the Recycle Bin through `FileOps`.
+- **Relocation.** `relocateLibrary(newPath)` updates `libraryPath`; all `file` entries are relative, so they stay valid.
+- **Rebuild.** `rebuildState()` scans the library folder for `.opus` and `.flac` files. From each one it reads
+  `WESTIELIB_SOURCE` / `WESTIELIB_VIDEOID` and the regular tags, and recreates the track and its sources.
+  - The file tags become the source values, so `edits` are not restored.
+  - Playlist membership is restored on the next sync.
+
+### SyncEngine
+
+The SyncEngine coordinates a sync run on a coordinator thread with a pool of `concurrency` worker threads.
+
+1. **Fetch.** For each selected playlist, the matching `PlaylistSource` returns the ordered source list.
+   - On success, the playlist's `sources` and `name` in the state are replaced with it, and `fetchError` is
+     cleared. The engine emits `PlaylistFetched`.
+   - A new source becomes a new `pending` track with `addedAt`. The exception is a new YouTube Music source
+     whose video already belongs to a track: it joins that track (see Merging).
+   - On failure, the playlist gets `fetchError` / `fetchErrorAt` and keeps its previous source list, so none of
+     its tracks become orphans. The engine emits `PlaylistFetchFailed`, and the run continues with the other
+     playlists.
+2. **Orphans.** `downloaded` tracks with no source in any playlist become `orphaned`. The engine emits one
+   `RemovalsPending` event with all of them.
+3. **Queue.** All `pending` and `failed` tracks are queued in playlist order. Workers start tracks
+   `delayBetweenTracksSeconds` apart.
+4. **Per track (worker).**
+   1. Resolve the video (see Video resolution). This step takes a lock on the video id, so two tracks that
+      resolve to the same video in one run merge instead of downloading it twice.
+   2. If the video already belongs to another track, merge, emit `TracksMerged`, and stop here.
+   3. Downloader, then Tagger, then Library placement.
+   4. Update the track (`downloaded`, `file`, `videoId`) and the source's `match`, or mark the track `failed`
+      with a `failure`:
+      - `noMatch`, with the searched queries as `error`;
+      - `download`, with the last lines of tool output as `error`.
+   5. Save the state, clean `work\<track key>\`, emit `TrackStatusChanged`.
+5. **Finish.** Emit `SyncFinished` with counts per status.
+
+**Retry.** `retry(trackKeys)` sets the tracks to `pending` and queues them without a fetch step. While a run is
+active, they join its queue. Otherwise they start a run of their own.
+
+**Removal decisions** arrive through `resolveRemovals` at any time during or after a run.
+- `remove` sends the file to the Recycle Bin and deletes the track and its sources.
+- `keep` sets the status to `kept`.
+
+A `kept` or `orphaned` track that one of its sources brings back into a playlist returns to `downloaded`.
+
+**Cancellation** sets the run's `CancelToken` and terminates the Job Object. In-flight tracks return to `pending`
+and their work folders are cleaned.
+
+## Core API
+
+### Commands (UI layer to core)
+
+| Command                                  | Effect                                                         |
+|------------------------------------------|----------------------------------------------------------------|
+| `addPlaylist(url)`                       | Adds a playlist; the source type follows from the URL          |
+| `removePlaylist(id)`                     | Removes a playlist; tracks left with no source in a playlist become `orphaned` |
+| `sync(playlistIds)`                      | Starts a sync run                                              |
+| `cancel()`                               | Cancels the running sync                                       |
+| `retry(trackKeys)`                       | Queues the given tracks again without fetching playlists       |
+| `resolveRemovals({trackKey: keep/remove})` | Applies removal decisions                                    |
+| `setVideoOverride(trackKey, youtubeUrl)` | Sets `videoOverride` and re-downloads the track, or merges it into the track that already has that video |
+| `confirmMatch(trackKey)`                 | Clears `review` on the match the track's video came from       |
+| `searchVideos(query, filter)`            | Searches YouTube Music songs, videos or both; answers with `VideoSearchResults` |
+| `editTrack(trackKey, edits, coverImage?)` | Stores `edits` and an optional custom cover. Re-tags the file, renames it when artists or title changed, emits `TrackUpdated` |
+| `setSettings(settings)`                  | Saves `settings.json`; applies to the next run                 |
+| `relocateLibrary(path)`                  | Points the state at a moved library folder                     |
+| `rebuildState()`                         | Rebuilds tracks and sources from file tags                     |
+| `checkForUpdates()`                      | Runs SelfUpdater and ToolManager, updating tools even when `autoUpdateTools` is off |
+
+### Events (core to UI layer)
+
+| Event                          | Payload                                         |
+|--------------------------------|-------------------------------------------------|
+| `SyncStarted` / `SyncFinished` | run summary                                     |
+| `PlaylistFetched`              | playlist id, name, track count                  |
+| `PlaylistFetchFailed`          | playlist id, error                              |
+| `TrackStatusChanged`           | track key, status, failure, error               |
+| `TrackProgress`                | track key, percent                              |
+| `TrackUpdated`                 | track key (tags, cover or file changed)         |
+| `TracksMerged`                 | deleted track key, surviving track key          |
+| `VideoSearchResults`           | query, filter, results                          |
+| `RemovalsPending`              | list of orphaned track keys                     |
+| `ToolStatus`                   | tool, installed release, update state           |
+| `AppUpdate`                    | available version, update state                 |
+| `LogLine`                      | level, text, optional playlist id and track key |
+
+Events are emitted from any thread through an `EventSink` interface. The Win32 implementation posts each event to
+the main window with `PostMessageW`, transferring ownership of a heap-allocated payload to the UI thread.
+
+## Startup sequence
+
+1. Acquire the single-instance mutex.
+2. Delete a leftover `WestieLib.exe.old`.
+3. Load `settings.json`, `state.json`, `remote.json`, `tools.json`.
+4. SelfUpdater check (may restart the process).
+5. RemoteConfig fetch.
+6. ToolManager installs missing tools and, with `autoUpdateTools`, updates the others.
+7. Ready for commands.
+
+## Build
+
+- CMake, Ninja, MSYS2 MinGW-w64, C++26, Unicode entry point (`wWinMain`, `-municode`).
+- Linked statically (`-static`), producing one self-contained `WestieLib.exe`.
+- Libraries: TagLib, glaze, miniz.
+- Windows libraries: `winhttp`, `bcrypt`, `ole32`, `shell32`.
+- The version comes from `project(VERSION)` and is compiled into a generated header and the executable's
+  `VERSIONINFO` resource.
+- Releases are published on https://github.com/Rheel17/WestieLib as `vX.Y.Z` tags with `WestieLib.exe` attached.
+
+## Source layout
+
+```
+src/
+    core/           SyncEngine, sources, Matcher, Downloader, Tagger, Library, StateStore, Settings,
+                    ToolManager, SelfUpdater, RemoteConfig, EventSink
+    platform/       service interfaces
+    platform/win32/ Win32 implementations of the platform services
+    ui/             Win32 windows, EventSink implementation
+    main.cpp        wWinMain: wires platform services, core and UI together
+tests/              core unit tests with fake platform services and recorded tool output
+config/
+    remote.json     served to installations via raw.githubusercontent.com
+```

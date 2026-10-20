@@ -1,0 +1,51 @@
+#pragma once
+
+#include <windows.h>
+
+#include "ui/framework/Splitter.h"
+#include "ui/framework/Window.h"
+#include "ui/framework/WindowIcon.h"
+#include "ui/inspector/InspectorPanel.h"
+#include "ui/main/MainLayout.h"
+#include "ui/main/WindowState.h"
+#include "ui/playlists/PlaylistPanel.h"
+#include "ui/tracks/TrackPanel.h"
+
+namespace westie::ui {
+
+class MainWindow final : public framework::Window {
+public:
+    MainWindow();
+
+    void show(int show_command) override;
+
+protected:
+    LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
+
+private:
+    static const framework::WindowClass& window_class();
+
+    void attach_menu();
+    void apply_initial_size();
+    void restore_placement(const WindowState& state);
+    void save_state() const;
+    MainLayout current_layout() const;
+    void layout_panels();
+    void on_playlists_splitter_drag(int left);
+    void on_inspector_splitter_drag(int left);
+    void on_get_min_max_info(MINMAXINFO& info) const;
+    void on_dpi_changed(UINT dpi, const RECT& suggested);
+    void on_destroy();
+
+    framework::WindowIcon icon_;
+    PlaylistPanel playlists_;
+    framework::Splitter playlists_splitter_;
+    TrackPanel tracks_;
+    framework::Splitter inspector_splitter_;
+    InspectorPanel inspector_;
+    PanelWidths widths_;
+    bool start_maximized_ = false;
+    bool restoring_placement_ = false;
+};
+
+}
