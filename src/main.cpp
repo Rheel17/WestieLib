@@ -4,12 +4,14 @@
 
 #include "ui/FatalError.h"
 #include "ui/framework/AcceleratorTable.h"
+#include "ui/framework/CommonControls.h"
 #include "ui/framework/MessageLoop.h"
 #include "ui/main/MainAccelerators.h"
 #include "ui/main/MainWindow.h"
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
     try {
+        westie::ui::framework::init_common_controls();
         westie::ui::MainWindow window;
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         window.show(show_command);

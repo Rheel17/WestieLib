@@ -10,7 +10,11 @@ constexpr int SplitterWidthDips = 5;
 
 }
 
-MainLayout compute_main_layout(framework::Rect client, framework::Dpi dpi, const PanelWidths& widths) {
+MainLayout compute_main_layout(framework::Rect client, framework::Dpi dpi, const BarHeights& bars, const PanelWidths& widths) {
+    MainLayout layout;
+    layout.toolbar = client.take_top(bars.toolbar);
+    layout.status_bar = client.take_bottom(bars.status_bar);
+
     int splitter = dpi.scale(SplitterWidthDips);
     int playlists_min = dpi.scale(PlaylistsMinDips);
     int inspector_min = dpi.scale(InspectorMinDips);
@@ -22,7 +26,6 @@ MainLayout compute_main_layout(framework::Rect client, framework::Dpi dpi, const
     inspector -= inspector_cut;
     playlists -= std::clamp(overflow - inspector_cut, 0, playlists - playlists_min);
 
-    MainLayout layout;
     layout.playlists = client.take_left(playlists);
     layout.playlists_splitter = client.take_left(splitter);
     layout.inspector = client.take_right(inspector);

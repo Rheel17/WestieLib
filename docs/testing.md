@@ -37,5 +37,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   in splitter client coordinates (`Move-Splitter`).
 - The app sets menu item states when a popup opens, so send `WM_INITMENUPOPUP` before reading them
   (`Update-MenuStates`). `Send-Command` looks a command up by its menu text, so the scripts don't repeat IDs.
+- Common controls don't marshal pointers across processes. A message that fills a buffer (`TB_GETBUTTON`,
+  `SB_GETTEXTW`, …) needs the buffer in the app's process: use `SendForBuffer`.
+- Text the app draws itself (the owner-drawn status bar parts) can't be read back with messages. The checks find it
+  in a `PrintWindow` capture instead, as the columns darker than mid-gray (`StatusTextGaps`). `StatusSeparators` finds
+  the bar's separator lines the same way. `Check-That` is for
+  checks that pass within a range.
 - Keep the scripts ASCII. Windows PowerShell reads a `.ps1` without a BOM as ANSI, so a `…` in it turns into
   mojibake. In embedded C#, write such characters as `(char)0x2026`.

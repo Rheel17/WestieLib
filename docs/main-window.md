@@ -32,11 +32,25 @@ the code is put together.
    window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window torn down by an exception saves nothing,
    because `~Window` detaches before destroying.
 
+## Toolbar and status bar
+
+- `MainToolbar` (`src/ui/toolbar/`) is a strip window. It paints the white background and the bottom rule, and hosts
+  a `Toolbar` control. A button click, or a choice from the Sync all dropdown, goes to the callback `MainWindow`
+  gives it, which is `run_command`. `update(CommandState)` enables the buttons and keeps the state for the dropdown.
+- `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths, its text padding, and the part texts:
+  Run, Library and Tools from the left, an empty part, and Version against the right edge with its text centered.
+  Until the core exists, Run reads `Ready` and Version shows the build's version. The texts are owner-drawn, so
+  `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
+- Both measure their height in `apply_dpi`. `MainWindow::apply_dpi` makes the message font and hands it and the DPI
+  to both. It runs in the constructor, on `WM_DPICHANGED`, and on `WM_SETTINGCHANGE` with `SPI_SETNONCLIENTMETRICS`
+  (a new system font size).
+
 ## Layout
 
-- `MainLayout.cpp` is pure: it takes the client rect, the DPI and the panel sizes, and returns a rect per child, with
-  no window calls. Size limits are constants in `MainLayout.h`; the rules they follow are in `plan/ui.md` (Window
-  layout).
+- `MainLayout.cpp` is pure: it takes the client rect, the DPI, the bar heights in pixels and the panel sizes, and
+  returns a rect per child, with no window calls. The toolbar takes the top, the status bar the bottom, and the
+  panels share the rest. Size limits are constants in `MainLayout.h`; the rules they follow are in `plan/ui.md`
+  (Window layout).
 - The `move_*_splitter` functions turn the position a dragged splitter wants into new panel sizes, clamped to the
   limits.
 - `MainWindow::layout_panels()` moves every child through one `DeferredPositions` batch. It runs on `WM_SIZE` and

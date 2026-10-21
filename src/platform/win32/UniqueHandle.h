@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include <windows.h>
+#include <commctrl.h>
 
 namespace westie::platform::win32 {
 
@@ -19,5 +20,8 @@ using UniqueIcon = UniqueHandle<HICON, DestroyIcon>;
 using UniqueMenu = UniqueHandle<HMENU, DestroyMenu>;
 using UniqueKey = UniqueHandle<HKEY, RegCloseKey>;
 using UniqueAcceleratorTable = UniqueHandle<HACCEL, DestroyAcceleratorTable>;
+using UniqueFont = UniqueHandle<HFONT, DeleteObject>;
+using UniqueMemoryDc = UniqueHandle<HDC, DeleteDC>;
+using UniqueImageList = UniqueHandle<HIMAGELIST, ImageList_Destroy>;
 
 }

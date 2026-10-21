@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <utility>
 
 #include "ResourceIds.h"
 #include "platform/win32/UniqueHandle.h"
@@ -27,12 +28,16 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 MainWindow::MainWindow() :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         icon_(IDI_APP_ICON),
+        font_(framework::Dpi::of(hwnd())),
+        toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
         playlists_(hwnd()),
         playlists_splitter_(hwnd(), [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
         inspector_splitter_(hwnd(), [this](int left) { on_inspector_splitter_drag(left); }),
-        inspector_(hwnd()) {
-    icon_.apply_to(hwnd(), framework::Dpi::of(hwnd()));
+        inspector_(hwnd()),
+        status_bar_(hwnd()) {
+    apply_dpi(framework::Dpi::of(hwnd()));
+    toolbar_.update(command_state());
     attach_menu();
 
     if (std::optional<WindowState> state = load_window_state()) {
@@ -53,9 +58,11 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_COMMAND:       on_command(wparam, lparam); return 0;
     case WM_INITMENUPOPUP: on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
+    case WM_DRAWITEM:      return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
     case WM_GETMINMAXINFO: on_get_min_max_info(*reinterpret_cast<MINMAXINFO*>(lparam)); return 0;
     case WM_SIZE:          layout_panels(); return 0;
     case WM_DPICHANGED:    on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
+    case WM_SETTINGCHANGE: on_setting_change(wparam); return Window::handle_message(message, wparam, lparam);
     case WM_DESTROY:       on_destroy(); return 0;
     default:               return Window::handle_message(message, wparam, lparam);
     }
@@ -75,6 +82,16 @@ void MainWindow::attach_menu() {
     platform::win32::check(SetMenu(hwnd(), menu.get()), "SetMenu");
     // The window owns it now
     menu.release();
+}
+
+void MainWindow::apply_dpi(framework::Dpi dpi) {
+    icon_.apply_to(hwnd(), dpi);
+
+    // The controls keep using the old font until they have the new one
+    framework::MessageFont font(dpi);
+    toolbar_.apply_dpi(dpi, font);
+    status_bar_.apply_dpi(dpi, font);
+    font_ = std::move(font);
 }
 
 void MainWindow::apply_initial_size() {
@@ -122,18 +139,21 @@ void MainWindow::save_state() const {
 MainLayout MainWindow::current_layout() const {
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
-    return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), widths_);
+    BarHeights bars{.toolbar = toolbar_.height(), .status_bar = status_bar_.height()};
+    return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), bars, widths_);
 }
 
 void MainWindow::layout_panels() {
     MainLayout layout = current_layout();
 
     framework::DeferredPositions positions;
+    positions.move(toolbar_.hwnd(), layout.toolbar);
     positions.move(playlists_.hwnd(), layout.playlists);
     positions.move(playlists_splitter_.hwnd(), layout.playlists_splitter);
     positions.move(tracks_.hwnd(), layout.tracks);
     positions.move(inspector_splitter_.hwnd(), layout.inspector_splitter);
     positions.move(inspector_.hwnd(), layout.inspector);
+    positions.move(status_bar_.hwnd(), layout.status_bar);
     positions.apply();
 }
 
@@ -166,6 +186,14 @@ void MainWindow::on_init_menu_popup(HMENU menu, bool window_menu) const {
     }
 }
 
+LRESULT MainWindow::on_draw_item(const DRAWITEMSTRUCT& item) const {
+    if (item.hwndItem != status_bar_.hwnd()) {
+        return FALSE;
+    }
+    status_bar_.draw(item);
+    return TRUE;
+}
+
 void MainWindow::on_playlists_splitter_drag(int left) {
     widths_ = move_playlists_splitter(current_layout(), framework::Dpi::of(hwnd()), widths_, left);
     layout_panels();
@@ -182,7 +210,7 @@ void MainWindow::on_get_min_max_info(MINMAXINFO& info) const {
 }
 
 void MainWindow::on_dpi_changed(UINT dpi, const RECT& suggested) {
-    icon_.apply_to(hwnd(), framework::Dpi(dpi));
+    apply_dpi(framework::Dpi(dpi));
 
     // Restored bounds are already in the pixels of the monitor they are on
     if (restoring_placement_) {
@@ -196,6 +224,13 @@ void MainWindow::on_dpi_changed(UINT dpi, const RECT& suggested) {
             ),
             "SetWindowPos"
     );
+}
+
+void MainWindow::on_setting_change(WPARAM setting) {
+    if (setting == SPI_SETNONCLIENTMETRICS) {
+        apply_dpi(framework::Dpi::of(hwnd()));
+        layout_panels();
+    }
 }
 
 void MainWindow::on_destroy() {

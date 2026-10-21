@@ -32,6 +32,18 @@ struct Rect {
         right = taken.left;
         return taken;
     }
+
+    Rect take_top(int height) {
+        Rect taken{left, top, right, std::clamp(top + height, top, bottom)};
+        top = taken.bottom;
+        return taken;
+    }
+
+    Rect take_bottom(int height) {
+        Rect taken{left, std::clamp(bottom - height, top, bottom), right, bottom};
+        bottom = taken.top;
+        return taken;
+    }
 };
 
 }

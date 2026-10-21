@@ -51,6 +51,14 @@ rules that the code doesn't spell out:
 | `DeferredPositions` | Collect `move(hwnd, rect)` calls, then `apply()`. It moves with `SWP_NOCOPYBITS`, then paints at once with `RedrawWindow(parent, RDW_UPDATENOW \| RDW_ALLCHILDREN)`. Those two fixed splitter drags that showed half-painted frames, so keep them. Every window in one batch must share a parent |
 | `Dpi` | Sizes are DIPs in the code; `scale` / `unscale` convert at the point of use |
 | `WindowIcon` | `WM_SETICON` doesn't hand the icons to the window, so this object keeps them alive. Call `apply_to` again after a DPI change |
+| `Control` | Base for children of a system class (`Toolbar`, `StatusBar`). It subclasses the control, so it never destroys a handle its parent already took down (`WM_NCDESTROY`), and a derived class can override `handle_message` for the control's own messages. As in `Window`, exceptions there are parked. It can't be copied or moved. The control's notifications go to its parent, so the owning `Window` handles them |
+| `Toolbar`, `StatusBar` | Created with `CCS_NORESIZE \| CCS_NOPARENTALIGN`, so the owner's layout places them like any other child |
+| `Toolbar` | It measures its buttons only on `WM_SETFONT`, and adds its theme's margins to their content. So `apply_metrics` sets padding, gaps and separators first, sends the font last, and reaches the button height through vertical padding. Don't use `TB_SETBUTTONSIZE`: the default width it leaves behind clips the text of disabled buttons. The toolbar paints its own gray background and a dark, off-center separator; its parent fills the background at `CDDS_PREPAINT` and paints over `separator_rects()` at `CDDS_POSTPAINT` |
+| `StatusBar` | `set_parts` takes fixed widths from the left and one part against the right edge, with a part between them taking up the slack. It fits them again on every `WM_SIZE`. The right part runs to the edge (`-1`) and has `SBT_NOBORDERS`, so no separator follows it. `SB_GETRECT` stops its rect at the size grip (or at the edge when the window is maximized and shows no grip), but the `WM_DRAWITEM` rect reaches under the grip, so `draw` clips to `SB_GETRECT`. The native text sits 3 px from a part's edge and can't be padded, so `set_text` makes the part owner-drawn and keeps the text with its alignment; the parent forwards `WM_DRAWITEM` to `draw`, which pads by `set_text_padding`. Owner-drawn parts have no text for screen readers |
+| `SavedDc` | `SaveDC` / `RestoreDC`, for drawing into a DC someone else owns, such as an owner-draw item's |
+| `MessageFont` | The message font for a DPI, with its line height. Controls keep the `HFONT` they were given, so on a change make the new font, hand it out, and only then replace the old one |
+| `IconImageList` | An image list of icon resources at one pixel size. Controls don't own image lists: keep it alive while the control uses it, and rebuild it on a DPI change |
+| `PaintScope` | `BeginPaint` / `EndPaint` for a `WM_PAINT` handler |
 | `build_popup_menu` | Builds a popup from a `MenuItem` table; `MenuSeparator` (an empty item) is a separator. Item states aren't part of the table: the owner sets them when the popup opens |
 | `AcceleratorTable` | Owns an `HACCEL`. `MessageLoop::run` translates through it for one window before `TranslateMessage`. `TranslateAccelerator` sends `WM_INITMENUPOPUP` first and skips grayed items, so shortcuts follow the menu's enabled state |
 | `platform::win32::UniqueHandle<H, Close>` | `unique_ptr` with a function deleter. Add an alias next to the others for each new handle type |
@@ -66,5 +74,7 @@ rules that the code doesn't spell out:
 ## DPI
 
 The app is Per-Monitor V2. Sizes live in the code as DIPs and are scaled with `Dpi` where they're used. Top-level
-windows handle `WM_DPICHANGED`: apply the suggested rect, reload DPI-dependent resources such as icons, and let
-`WM_SIZE` lay the children out again.
+windows handle `WM_DPICHANGED`: apply the suggested rect, reload DPI-dependent resources (icons, fonts, image lists),
+and let `WM_SIZE` lay the children out again. Hairlines stay one physical pixel.
+
+`main.cpp` calls `init_common_controls()` before creating any window.

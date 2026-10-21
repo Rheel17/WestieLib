@@ -1,6 +1,6 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
-# states, commands, sizes, splitter drags and limits, painting during a drag, and saving/restoring the window state
-# across restarts.
+# states, commands, the toolbar and status bar, sizes, splitter drags and limits, painting during a drag, and
+# saving/restoring the window state across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 # A stale Visual Studio path in LIB makes Add-Type's C# compiler fail on a warning
 $env:LIB = $null
 Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition @'
+Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
 using System.Text;
 using System.Linq;
@@ -55,6 +55,140 @@ public static class W {
 	public delegate bool EnumProc(IntPtr h, IntPtr l);
 	[DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr l);
 	[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc, IntPtr l);
+	[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out int pid);
+	[DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+	[DllImport("kernel32.dll")] public static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, IntPtr size, uint type, uint protect);
+	[DllImport("kernel32.dll")] public static extern bool VirtualFreeEx(IntPtr process, IntPtr address, IntPtr size, uint type);
+	[DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] buffer, IntPtr size, out IntPtr read);
+	[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
+
+	// Sends a message whose lparam is a buffer the window fills. Common controls don't marshal pointers across
+	// processes, so the buffer lives in the window's process.
+	public static byte[] SendForBuffer(IntPtr h, uint msg, IntPtr w, int size, out long result) {
+		int pid;
+		GetWindowThreadProcessId(h, out pid);
+		IntPtr process = OpenProcess(0x38, false, pid);
+		IntPtr remote = VirtualAllocEx(process, IntPtr.Zero, (IntPtr)size, 0x3000, 0x04);
+		try {
+			result = (long)SendMessageW(h, msg, w, remote);
+			var buffer = new byte[size];
+			IntPtr read;
+			ReadProcessMemory(process, remote, buffer, (IntPtr)size, out read);
+			return buffer;
+		} finally {
+			VirtualFreeEx(process, remote, IntPtr.Zero, 0x8000);
+			CloseHandle(process);
+		}
+	}
+
+	static string Utf16(byte[] bytes) {
+		var s = Encoding.Unicode.GetString(bytes);
+		int end = s.IndexOf('\0');
+		return end < 0 ? s : s.Substring(0, end);
+	}
+
+	// Button texts, with " v" for a dropdown and " (disabled)"; separators show as "-"
+	public static string ToolbarButtons(IntPtr toolbar) {
+		var parts = new List<string>();
+		long result;
+		int count = (int)SendMessageW(toolbar, 0x418, IntPtr.Zero, IntPtr.Zero);
+		for (int i = 0; i < count; i++) {
+			// TBBUTTON on x64: idCommand at 4, fsState at 8, fsStyle at 9
+			var button = SendForBuffer(toolbar, 0x417, (IntPtr)i, 32, out result);
+			if ((button[9] & 0x1) != 0) { parts.Add("-"); continue; }
+			var text = Utf16(SendForBuffer(toolbar, 0x44B, (IntPtr)BitConverter.ToInt32(button, 4), 256, out result));
+			parts.Add(text + ((button[9] & 0x8) != 0 ? " v" : "") + ((button[8] & 0x4) == 0 ? " (disabled)" : ""));
+		}
+		return String.Join(", ", parts);
+	}
+
+	// "gaps <between each pair of buttons> | separator <width>"
+	public static string ToolbarSpacing(IntPtr toolbar) {
+		var gaps = new List<string>();
+		long result;
+		int separator = 0, previousRight = -1;
+		int count = (int)SendMessageW(toolbar, 0x418, IntPtr.Zero, IntPtr.Zero);
+		for (int i = 0; i < count; i++) {
+			var rect = SendForBuffer(toolbar, 0x41D, (IntPtr)i, 16, out result);
+			int left = BitConverter.ToInt32(rect, 0), right = BitConverter.ToInt32(rect, 8);
+			if (previousRight >= 0) gaps.Add((left - previousRight).ToString());
+			previousRight = right;
+			if ((SendForBuffer(toolbar, 0x417, (IntPtr)i, 32, out result)[9] & 0x1) != 0) separator = right - left;
+		}
+		return "gaps " + String.Join(" ", gaps) + " | separator " + separator;
+	}
+
+	// The right edges of the parts
+	public static string StatusParts(IntPtr bar) {
+		long count;
+		var edges = SendForBuffer(bar, 0x406, (IntPtr)16, 64, out count);
+		var parts = new List<string>();
+		for (int i = 0; i < count; i++) parts.Add(BitConverter.ToInt32(edges, i * 4).ToString());
+		return String.Join(" ", parts);
+	}
+
+	public static RECT StatusPartRect(IntPtr bar, int part) {
+		long result;
+		var b = SendForBuffer(bar, 0x40A, (IntPtr)part, 16, out result);
+		return new RECT { Left = BitConverter.ToInt32(b, 0), Top = BitConverter.ToInt32(b, 4), Right = BitConverter.ToInt32(b, 8), Bottom = BitConverter.ToInt32(b, 12) };
+	}
+
+	// Captures the window with PrintWindow, as for the screenshot; (dx, dy) is where the child's client area starts in it
+	static System.Drawing.Bitmap Capture(IntPtr window, IntPtr child, out int dx, out int dy) {
+		RECT frame;
+		GetWindowRect(window, out frame);
+		RECT origin = new RECT();
+		MapWindowPoints(child, IntPtr.Zero, ref origin, 1);
+		dx = origin.Left - frame.Left;
+		dy = origin.Top - frame.Top;
+		var bitmap = new System.Drawing.Bitmap(frame.Right - frame.Left, frame.Bottom - frame.Top);
+		using (var graphics = System.Drawing.Graphics.FromImage(bitmap)) {
+			IntPtr dc = graphics.GetHdc();
+			PrintWindow(window, dc, 2);
+			graphics.ReleaseHdc(dc);
+		}
+		return bitmap;
+	}
+
+	static int Brightness(System.Drawing.Color p) { return (p.R + p.G + p.B) / 3; }
+
+	// The gaps between a status bar part's left and right edges and its text, found as the columns with pixels darker
+	// than mid-gray
+	public static int[] StatusTextGaps(IntPtr window, IntPtr bar, int part) {
+		RECT area = StatusPartRect(bar, part);
+		int dx, dy;
+		using (var bitmap = Capture(window, bar, out dx, out dy)) {
+			int first = -1, last = -1;
+			for (int x = area.Left; x < area.Right; x++) {
+				for (int y = area.Top; y < area.Bottom; y++) {
+					if (Brightness(bitmap.GetPixel(x + dx, y + dy)) < 128) { if (first < 0) first = x; last = x; break; }
+				}
+			}
+			return new[] { first - area.Left, area.Right - 1 - last };
+		}
+	}
+
+	// The x of each separator line in the status bar: a run of columns darker than the bar's face over at least 80% of
+	// a part's height. The grip's dots and text don't reach that.
+	public static int[] StatusSeparators(IntPtr window, IntPtr bar) {
+		RECT client, part = StatusPartRect(bar, 0);
+		GetClientRect(bar, out client);
+		var lines = new List<int>();
+		int dx, dy;
+		using (var bitmap = Capture(window, bar, out dx, out dy)) {
+			bool previous = false;
+			for (int x = 0; x < client.Right; x++) {
+				int dark = 0;
+				for (int y = part.Top; y < part.Bottom; y++) {
+					if (Brightness(bitmap.GetPixel(x + dx, y + dy)) < 0xE8) dark++;
+				}
+				bool line = dark * 10 >= (part.Bottom - part.Top) * 8;
+				if (line && !previous) lines.Add(x);
+				previous = line;
+			}
+		}
+		return lines.ToArray();
+	}
 
 	public static string ClassOf(IntPtr h) {
 		var s = new StringBuilder(256);
@@ -153,6 +287,12 @@ function Check([string]$what, $actual, $expected) {
 	"{0,-56} {1,-26} {2}" -f $what, $actual, $(if ($ok) { 'ok' } else { "FAIL (expected $expected)" })
 }
 
+# For checks that allow a range: $ok says whether $actual passes
+function Check-That([string]$what, $actual, [bool]$ok, [string]$expected) {
+	if (-not $ok) { $script:failures++ }
+	"{0,-56} {1,-26} {2}" -f $what, $actual, $(if ($ok) { 'ok' } else { "FAIL (expected $expected)" })
+}
+
 # DIPs to pixels, rounding like MulDiv
 function S([int]$dips) { [int][math]::Floor($dips * $script:dpi / 96 + 0.5) }
 
@@ -205,18 +345,69 @@ function Get-ClientWidth($hwnd) {
 	$c.Right
 }
 
-# Checks playlists | tracks | inspector widths (within $tolerance px), and that the splitters fill the gaps exactly
+function Get-ClientHeight($hwnd) {
+	$c = New-Object W+RECT
+	[void][W]::GetClientRect($hwnd, [ref]$c)
+	$c.Bottom
+}
+
+function Format-Rect($r) { "$($r.Left),$($r.Top) $($r.Right - $r.Left)x$($r.Bottom - $r.Top)" }
+
+function Get-ToolbarStrip($hwnd) { ([W]::Children($hwnd, 'WestieLib.MainToolbar'))[0] }
+
+function Get-StatusBar($hwnd) { ([W]::Children($hwnd, 'msctls_statusbar32'))[0] }
+
+# Checks playlists | tracks | inspector widths (within $tolerance px), that the splitters fill the gaps exactly, and that
+# all of them fill the height between the toolbar and the status bar
 function Check-Widths([string]$what, $hwnd, [int[]]$expected, [int]$tolerance = 0) {
 	$panels = @([W]::Children($hwnd, 'WestieLib.Panel') | ForEach-Object { [W]::RectIn($_, $hwnd) })
 	$splitters = @([W]::Children($hwnd, 'WestieLib.Splitter') | ForEach-Object { [W]::RectIn($_, $hwnd) })
+	$top = [W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd).Bottom
+	$bottom = [W]::RectIn((Get-StatusBar $hwnd), $hwnd).Top
+	$offRow = @($panels + $splitters | Where-Object { $_.Top -ne $top -or $_.Bottom -ne $bottom })
 	$contiguous = $panels[0].Left -eq 0 -and $panels[0].Right -eq $splitters[0].Left -and $splitters[0].Right -eq $panels[1].Left -and
-		$panels[1].Right -eq $splitters[1].Left -and $splitters[1].Right -eq $panels[2].Left -and $panels[2].Right -eq (Get-ClientWidth $hwnd)
+		$panels[1].Right -eq $splitters[1].Left -and $splitters[1].Right -eq $panels[2].Left -and $panels[2].Right -eq (Get-ClientWidth $hwnd) -and
+		$offRow.Count -eq 0
 	$widths = @($panels | ForEach-Object { $_.Right - $_.Left })
 	$near = $contiguous
 	for ($i = 0; $i -lt 3; $i++) { if ([math]::Abs($widths[$i] - $expected[$i]) -gt $tolerance) { $near = $false } }
 	$actual = "$($widths -join ' | ')$(if (-not $contiguous) { ' (gaps!)' })"
 	if (-not $near) { $script:failures++ }
 	"{0,-56} {1,-26} {2}" -f $what, $actual, $(if ($near) { 'ok' } else { "FAIL (expected $($expected -join ' | '))" })
+}
+
+# The toolbar strip spans the top and the status bar the bottom, each at its height
+function Check-Bars([string]$what, $hwnd) {
+	$cw = Get-ClientWidth $hwnd
+	$ch = Get-ClientHeight $hwnd
+	$strip = Format-Rect ([W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd))
+	$status = Format-Rect ([W]::RectIn((Get-StatusBar $hwnd), $hwnd))
+	Check $what "$strip | $status" "0,0 $($cw)x$(S 34) | 0,$($ch - (S 23)) $($cw)x$(S 23)"
+}
+
+# Run, Library and Tools from the left, then Version running to the right edge. Version's rect stops where the size
+# grip starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but Version.
+function Check-StatusParts([string]$what, $hwnd) {
+	$status = Get-StatusBar $hwnd
+	$cw = Get-ClientWidth $hwnd
+	$edges = @((S 270), ((S 270) + (S 300)), ((S 270) + (S 300) + (S 220)), ($cw - (S 80)))
+	$grip = $cw - [W]::StatusPartRect($status, 4).Right
+	$fits = if ([W]::IsZoomed($hwnd)) { $grip -eq 0 } else { $grip -gt 0 -and $grip -le (S 20) }
+	Check $what "$([W]::StatusParts($status)) | stops at grip: $fits" "$($edges -join ' ') -1 | stops at grip: True"
+
+	$lines = @([W]::StatusSeparators($hwnd, $status))
+	$matching = $lines.Count -eq $edges.Count
+	for ($i = 0; $matching -and $i -lt $edges.Count; $i++) { $matching = [math]::Abs($lines[$i] - $edges[$i]) -le 2 }
+	Check-That "$what, separators" ($lines -join ' ') $matching "one within 2 px of each of $($edges -join ' '), none after"
+}
+
+# Ready starts after the part's padding (glyphs may start a pixel or two later); Version is centered in its part
+function Check-StatusTexts([string]$what, $hwnd) {
+	$status = Get-StatusBar $hwnd
+	$run = [W]::StatusTextGaps($hwnd, $status, 0)
+	Check-That "$what Ready's left gap" "$($run[0])" ($run[0] -ge (S 8) -and $run[0] -le (S 8) + 2) "$(S 8) to $((S 8) + 2)"
+	$version = [W]::StatusTextGaps($hwnd, $status, 4)
+	Check-That "$what Version's left | right gap" "$($version[0]) | $($version[1])" ([math]::Abs($version[0] - $version[1]) -le 1 -and $version[0] -ge (S 8)) 'equal within 1, at least the padding'
 }
 
 function LParam([int]$x, [int]$y) { [IntPtr](($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)) }
@@ -310,6 +501,17 @@ try {
 	Start-Sleep -Milliseconds 300
 	Check '  and closes' ([W]::IsWindow($about)) 'False'
 	Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
+	Check-Bars 'Toolbar strip | status bar' $h
+	$strip = Get-ToolbarStrip $h
+	$toolbar = ([W]::Children($strip, 'ToolbarWindow32'))[0]
+	Check 'Toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
+	$buttonHeight = ([int64][W]::SendMessageW($toolbar, 0x43A, [IntPtr]::Zero, [IntPtr]::Zero)) -shr 16
+	$r = [W]::RectIn($toolbar, $strip)
+	Check '  button height, left, top (centered)' "$buttonHeight $($r.Left) $($r.Top)" "$(S 26) $(S 4) $([math]::Floor(((S 34) - 1 - (S 26)) / 2))"
+	Check '  spacing' ([W]::ToolbarSpacing($toolbar)) "gaps $(S 1) $(S 1) $(S 1) $(S 1) | separator $(S 11)"
+	$status = Get-StatusBar $h
+	Check-StatusParts 'Status bar part edges' $h
+	Check-StatusTexts ' ' $h
 	$cw = Get-ClientWidth $h
 	$g = S 5
 	Check-Widths 'Initial widths' $h @((S 250), ($cw - (S 250) - (S 290) - 2 * $g), (S 290))
@@ -330,6 +532,9 @@ try {
 	Check 'Minimum window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1100)x$(S 680)"
 	$cw = Get-ClientWidth $h
 	Check-Widths 'At minimum size: inspector gives way first' $h @((S 250), (S 400), ($cw - (S 250) - (S 400) - 2 * $g))
+	Check-Bars '  toolbar strip | status bar' $h
+	Check-StatusParts '  status bar part edges' $h
+	Check-StatusTexts ' ' $h
 	Set-Bounds $h 100 100 (S 1200) (S 750)
 	$cw = Get-ClientWidth $h
 	Check-Widths 'Window grows: inspector back to 500' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
@@ -345,6 +550,7 @@ try {
 	$cw = Get-ClientWidth $h
 	Check 'Restored bounds' (Get-Bounds $h) "100,100 $(S 1200)x$(S 750)"
 	Check-Widths 'Restored widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
+	Check-Bars '  toolbar strip | status bar' $h
 	if ($Screenshot) { Save-Screenshot $h $Screenshot }
 	[void][W]::ShowWindow($h, 3)
 	Start-Sleep -Milliseconds 300
@@ -355,6 +561,8 @@ try {
 	$app = Start-App
 	$h = $app.Hwnd
 	Check 'Starts maximized' ([W]::IsZoomed($h)) 'True'
+	Check-StatusParts '  status bar part edges (no grip)' $h
+	Check-StatusTexts ' ' $h
 	[void][W]::ShowWindow($h, 9)
 	Start-Sleep -Milliseconds 300
 	Check 'Restore goes back to the saved bounds' (Get-Bounds $h) "100,100 $(S 1200)x$(S 750)"

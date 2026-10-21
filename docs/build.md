@@ -30,8 +30,14 @@ file names such as `Win32Error.cpp`.
 
 ## Resources (`res/`)
 
-- `WestieLib.rc` holds the icon, the manifest and `VERSIONINFO`. Resource IDs are macros in `src/ResourceIds.h`,
-  shared by the `.rc` and C++ (`IDI_APP_ICON`).
+- `WestieLib.rc` holds the app icon, the glyph icons, the manifest and `VERSIONINFO`. Resource IDs are macros in
+  `src/ResourceIds.h`, shared by the `.rc` and C++ (`IDI_APP_ICON`, `IDI_PLUS`, …).
+- `res/glyphs/*.ico` are the UI's glyphs, rendered by `res/make-glyphs.ps1` from the icon table in
+  `plan/ui-mockup.html`. WPF draws each glyph's SVG markup at 16–48 px (100–300% scaling). Glyphs marked in the
+  script's table also get a `-disabled` copy (grayscale at 45% opacity) for disabled toolbar buttons. The files are
+  committed. To add a glyph, add its name to the table and run the script, then add an `ICON` line to the `.rc` and
+  an `IDI_` macro. CMake globs `res/glyphs` for the `.rc`'s dependencies.
+- `make-icon.ps1` and `make-glyphs.ps1` share the ICO writer in `res/IconFile.ps1`.
 - `WestieLib.manifest` declares Per-Monitor V2 DPI, ComCtl32 v6 and the Windows 10 `supportedOS`. MSYS2 links its own
   `default-manifest.o` too; ours takes precedence, which `tests/ui/ui-checks.ps1` confirms (DPI awareness 2).
 - windres doesn't track the `.ico` and `.manifest`, so `OBJECT_DEPENDS` in CMake does.

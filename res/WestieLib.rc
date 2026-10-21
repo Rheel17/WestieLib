@@ -5,6 +5,15 @@
 
 IDI_APP_ICON ICON "WestieLib.ico"
 
+IDI_PLUS             ICON "glyphs/plus.ico"
+IDI_PLUS_DISABLED    ICON "glyphs/plus-disabled.ico"
+IDI_SYNCING          ICON "glyphs/syncing.ico"
+IDI_SYNCING_DISABLED ICON "glyphs/syncing-disabled.ico"
+IDI_STOP             ICON "glyphs/stop.ico"
+IDI_STOP_DISABLED    ICON "glyphs/stop-disabled.ico"
+IDI_GEAR             ICON "glyphs/gear.ico"
+IDI_GEAR_DISABLED    ICON "glyphs/gear-disabled.ico"
+
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "WestieLib.manifest"
 
 VS_VERSION_INFO VERSIONINFO

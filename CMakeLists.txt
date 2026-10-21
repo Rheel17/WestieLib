@@ -19,12 +19,18 @@ add_executable(WestieLib WIN32
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/framework/AcceleratorTable.cpp
+	src/ui/framework/CommonControls.cpp
+	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
+	src/ui/framework/IconImageList.cpp
+	src/ui/framework/MessageFont.cpp
 	src/ui/framework/MessageLoop.cpp
 	src/ui/framework/Panel.cpp
 	src/ui/framework/PendingException.cpp
 	src/ui/framework/PopupMenu.cpp
 	src/ui/framework/Splitter.cpp
+	src/ui/framework/StatusBar.cpp
+	src/ui/framework/Toolbar.cpp
 	src/ui/framework/Window.cpp
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp
@@ -35,13 +41,16 @@ add_executable(WestieLib WIN32
 	src/ui/main/MainWindow.cpp
 	src/ui/main/WindowState.cpp
 	src/ui/playlists/PlaylistPanel.cpp
+	src/ui/statusbar/MainStatusBar.cpp
+	src/ui/toolbar/MainToolbar.cpp
 	src/ui/tracks/TrackPanel.cpp
 	res/WestieLib.rc
 )
 
 # windres doesn't track the files the .rc pulls in
+file(GLOB GLYPH_ICONS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/glyphs/*.ico")
 set_source_files_properties(res/WestieLib.rc PROPERTIES OBJECT_DEPENDS
-	"${CMAKE_CURRENT_SOURCE_DIR}/res/WestieLib.ico;${CMAKE_CURRENT_SOURCE_DIR}/res/WestieLib.manifest")
+	"${CMAKE_CURRENT_SOURCE_DIR}/res/WestieLib.ico;${CMAKE_CURRENT_SOURCE_DIR}/res/WestieLib.manifest;${GLYPH_ICONS}")
 
 # windres also searches these directories for the files named in the .rc
 target_include_directories(WestieLib PRIVATE src res "${GENERATED_DIR}")

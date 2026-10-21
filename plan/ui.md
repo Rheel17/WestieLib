@@ -92,6 +92,13 @@ View **L**og, **C**olumns; Tools **S**ettings, **U**pdates, **R**ebuild, **M**ov
 
 The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Settings`.
 
+- It is a white strip, 34 px tall including a 1 px `#D9D9D9` rule along its bottom, and as wide as the window.
+- The buttons are flat, 26 px tall and centered in the strip, starting 4 px from its left edge. Each has 8 px on
+  either side, a 16 px icon, 5 px, then its text. Buttons sit 1 px apart. A separator between Cancel and Settings
+  takes 11 px: a 1 px `#D5D5D5` line, 20 px tall and centered, with 5 px on either side.
+- A disabled button shows its icon in grayscale at 45% opacity, and its text in gray.
+- The strip grows when the system font needs taller buttons.
+
 - `Sync all ▾` is a split button. Its dropdown lists "Sync selected playlist" and then every playlist by name.
 - The menu bar, the toolbar and the shortcuts share one set of rules, so a command is enabled everywhere or nowhere:
   - `Cancel` is enabled only while a sync runs. `Sync all` and `Sync selected playlist` are disabled during that
@@ -271,6 +278,12 @@ The inspector scrolls vertically when its content is taller than the panel.
 | Library | `100 tracks · D:\Music\WestieLib` |
 | Tools   | `Tools ✓`, `Installing tools… ffmpeg 45%`, `Updating tools…` or `Tools ⚠`; the tooltip lists the releases |
 | Version | `v1.2.0` |
+
+- The status bar is the native one, 23 px tall, or taller when the system font needs it. It ends in a size grip.
+- Run, Library and Tools are 270, 300 and 220 px wide, from the left. Version is 80 px wide against the right edge,
+  with its text centered between its separator and the grip, or the window edge when maximized. No separator
+  follows it. The space between Tools and Version stays empty.
+- Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit.
 
 ## Dialogs
 
