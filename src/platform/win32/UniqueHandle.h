@@ -35,5 +35,11 @@ using UniqueMemoryDc = UniqueHandle<HDC, DeleteDC>;
 using UniqueImageList = UniqueHandle<HIMAGELIST, ImageList_Destroy>;
 using UniqueCoTaskString = UniqueHandle<PWSTR, CoTaskMemFree>;
 using UniqueTheme = UniqueHandle<HTHEME, CloseThemeData>;
+using UniqueFile = UniqueHandle<HANDLE, CloseHandle>;
+
+// CreateFileW fails with INVALID_HANDLE_VALUE, not null
+inline UniqueFile adopt_file(HANDLE file) noexcept {
+    return UniqueFile(file == INVALID_HANDLE_VALUE ? nullptr : file);
+}
 
 }

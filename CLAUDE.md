@@ -68,5 +68,6 @@ Use the session scratchpad as `$build`; `cmake-build-debug/` belongs to CLion. T
 - Because of that, every drag step repaints the panels it touches. A window that paints its own content uses
   `BufferedPaint` and doesn't erase its background first, or its text blinks while a splitter moves.
 - Give struct fields default member initializers. Otherwise GCC warns whenever a designated initializer leaves one out.
-- The app saves `HKCU\Software\WestieLib\Window` on every close. Anything that starts it must put the user's values
-  back afterwards; see `docs/testing.md`.
+- The app saves `HKCU\Software\WestieLib\Window` on every close, and `%LOCALAPPDATA%\WestieLib\settings.json` when the
+  library folder changes. Anything that starts it must put the user's values and file back afterwards; see
+  `docs/testing.md`.

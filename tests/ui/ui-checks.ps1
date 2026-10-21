@@ -1,10 +1,12 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
 # states, commands and shortcuts, the toolbar and status bar, the side panels' first-run content, sizes, splitter drags
-# and limits, the log pane, painting during a drag, and saving/restoring the window state across restarts.
+# and limits, the log pane, painting during a drag, the library folder, and saving/restoring the window state and
+# settings.json across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
-# The exit code is the number of failed checks. The user's saved window state is set aside and put back afterwards.
+# The exit code is the number of failed checks. The user's saved window state and settings.json are set aside and put
+# back afterwards.
 
 param(
 	[Parameter(Mandatory)] [string]$Exe,
@@ -445,6 +447,18 @@ public static class W {
 	}
 
 	// Whether a child's text is drawn in red (the error color) in a PrintWindow capture
+	// A visible top-level window of a process, such as a message box shown before any other window
+	public static IntPtr WindowOfProcess(int pid, string cls) {
+		IntPtr found = IntPtr.Zero;
+		EnumWindows((h, l) => {
+			int owner;
+			GetWindowThreadProcessId(h, out owner);
+			if (owner == pid && IsWindowVisible(h) && ClassOf(h) == cls) { found = h; return false; }
+			return true;
+		}, IntPtr.Zero);
+		return found;
+	}
+
 	public static bool RedInk(IntPtr window, IntPtr child) {
 		RECT client;
 		GetClientRect(child, out client);
@@ -542,6 +556,7 @@ if (Get-Process WestieLib -ErrorAction SilentlyContinue) { throw 'WestieLib is r
 
 $KeyPath = 'HKCU:\Software\WestieLib\Window'
 $StateNames = 'Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible'
+$SettingsFile = Join-Path $env:LOCALAPPDATA 'WestieLib\settings.json'
 $script:failures = 0
 $script:dpi = 96
 $app = $null
@@ -846,6 +861,10 @@ $HintNotFullPath = "Enter a full folder path, such as $DefaultLibrary."
 $HintNoSuchDrive = "That drive isn't on this PC."
 $HintNotAFolder = "That's a file, not a folder."
 $HintWillBeCreated = "This folder doesn't exist yet. WestieLib creates it when it first syncs."
+# Folders no test leaves behind: they're only typed, never created
+$Unique = [guid]::NewGuid().ToString('N').Substring(0, 8)
+$MissingFolder = "C:\WestieLib-check-$Unique"
+$ClosedFolder = "C:\WestieLib-$([char]0x00FC)-closed-$Unique"
 
 function Get-FolderHint($hwnd) { ([W]::Children([W]::GetAncestor((Get-FolderEdit $hwnd), 1), 'WestieLib.Label'))[0] }
 
@@ -882,11 +901,10 @@ function Check-LibraryFolder($hwnd) {
 	Check '  hint for the default folder' ([W]::TextOf((Get-FolderHint $hwnd))) $expected
 
 	$drive = @([char[]]'QRSTUVWXYZ' | Where-Object { -not (Test-Path "$($_):\") })[0]
-	$missing = "C:\WestieLib-check-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 	Check '  typing a relative path' (Get-HintFor $hwnd 'Music\WestieLib') "$HintNotFullPath | red True | moved False"
 	Check '  typing a path on a missing drive' (Get-HintFor $hwnd "$($drive):\Music") "$HintNoSuchDrive | red True | moved False"
 	Check '  typing the path of a file' (Get-HintFor $hwnd (Resolve-Path $Exe).Path) "$HintNotAFolder | red True | moved False"
-	Check '  typing a folder that does not exist' (Get-HintFor $hwnd $missing) "$HintWillBeCreated | red False | moved False"
+	Check '  typing a folder that does not exist' (Get-HintFor $hwnd $MissingFolder) "$HintWillBeCreated | red False | moved False"
 	Check '  typing a folder that exists' (Get-HintFor $hwnd $music) ' | red False | moved False'
 
 	[void](Get-HintFor $hwnd 'Music\WestieLib')
@@ -919,10 +937,36 @@ function Check-LibraryFolder($hwnd) {
 	Check-FolderInEffect "  picking a folder in the picker (Folder boxes: $($boxes.Count))" $hwnd $music $music
 	Check '  and its hint' ([W]::TextOf((Get-FolderHint $hwnd))) ''
 
-	Check '  typing a quoted folder that does not exist' (Get-HintFor $hwnd "  `"$missing\`"  ") "$HintWillBeCreated | red False | moved False"
+	Check '  typing a quoted folder that does not exist' (Get-HintFor $hwnd "  `"$MissingFolder\`"  ") "$HintWillBeCreated | red False | moved False"
 	[void][W]::SendMessageW($edit, 0x8, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
-	Check-FolderInEffect '  leaving it: the folder takes effect, cleaned up' $hwnd $missing $missing
+	Check-FolderInEffect '  leaving it: the folder takes effect, cleaned up' $hwnd $MissingFolder $MissingFolder
+}
+
+# settings.json's version and library folder, read as UTF-8
+function Get-SavedSettings {
+	if (-not (Test-Path $SettingsFile)) { return 'no file' }
+	$json = Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+	"version $($json.version), $($json.libraryPath)"
+}
+
+# Starts the app with a settings.json that isn't JSON: it shows the error instead of its window, exits with 1, and
+# leaves the file as it was
+function Check-BrokenSettings {
+	$broken = '{"version": 1, "libraryPath": '
+	[IO.File]::WriteAllText($SettingsFile, $broken)
+	$process = Start-Process -FilePath $Exe -PassThru
+	$box = [IntPtr]::Zero
+	for ($i = 0; $i -lt 50 -and $box -eq [IntPtr]::Zero; $i++) {
+		Start-Sleep -Milliseconds 100
+		$box = [W]::WindowOfProcess($process.Id, '#32770')
+	}
+	$message = @([W]::Children($box, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like '*settings.json*' })
+	$window = [W]::FindWindowW('WestieLib.MainWindow', [NullString]::Value) -ne [IntPtr]::Zero
+	Check 'A broken settings.json: error, names the file, no window' "$([W]::TextOf($box)) $($message.Count) $window" 'WestieLib 1 False'
+	[void][W]::PostMessageW($box, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	if (-not $process.WaitForExit(5000)) { $process.Kill(); throw 'Process did not exit' }
+	Check '  exit code, file kept' "$($process.ExitCode) $([IO.File]::ReadAllText($SettingsFile) -eq $broken)" '1 True'
 }
 
 # Splitter drags don't make text blink on screen: the left panel's content stays exactly as it was while the playlists
@@ -1050,12 +1094,16 @@ function Measure-UnpaintedDragSteps($hwnd) {
 
 $userState = if (Test-Path $KeyPath) { Get-ItemProperty $KeyPath } else { $null }
 Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
+$userSettings = if (Test-Path $SettingsFile) { [IO.File]::ReadAllBytes($SettingsFile) } else { $null }
+$hadSettingsFolder = Test-Path (Split-Path $SettingsFile)
+Remove-Item $SettingsFile -ErrorAction SilentlyContinue
 
 try {
 	"--- Run 1: no saved state"
 	$app = Start-App
 	$h = $app.Hwnd
 	"DPI $script:dpi"
+	Check 'A start writes no settings.json' (Get-SavedSettings) 'no file'
 	Check 'DPI awareness (2 = per monitor)' ([W]::GetAwarenessFromDpiAwarenessContext([W]::GetWindowDpiAwarenessContext($h))) 2
 	Check 'Big and small icons set' "$([W]::SendMessageW($h, 0x7F, [IntPtr]1, [IntPtr]::Zero) -ne 0) $([W]::SendMessageW($h, 0x7F, [IntPtr]0, [IntPtr]::Zero) -ne 0)" 'True True'
 	$menu = [W]::GetMenu($h)
@@ -1096,6 +1144,7 @@ try {
 	Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $h
 	Check-Welcome 'Welcome screen' $h
 	Check-LibraryFolder $h
+	Check '  saved in settings.json' (Get-SavedSettings) "version 1, $MissingFolder"
 	Check 'Drag steps left unpainted' (Measure-UnpaintedDragSteps $h) 0
 	Check-NoBlinking $h
 	Move-Splitter $h 0 0
@@ -1149,8 +1198,10 @@ try {
 	[void][W]::SendMessageW(([W]::Children((Get-RowPanels $h)[0], 'Button'))[0], 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
 	Check 'Add playlist button: no dialog yet, still running' "$([W]::OwnedWindow($h) -eq [IntPtr]::Zero) $($app.Process.HasExited)" 'True False'
-	"File > Exit"
+	[W]::SetEditText((Get-FolderEdit $h), $ClosedFolder)
+	"File > Exit, with a folder typed but the field never left"
 	Stop-App $app -ExitCommand
+	Check '  the folder is saved, in UTF-8' (Get-SavedSettings) "version 1, $ClosedFolder"
 	$saved = Get-ItemProperty $KeyPath
 	Check '  saved bounds' "$($saved.Left),$($saved.Top),$($saved.Right),$($saved.Bottom)" "100,100,$(100 + (S 1200)),$(100 + (S 750))"
 	Check '  saved maximized, widths (DIPs)' "$($saved.Maximized) $($saved.PlaylistsWidthDips) $($saved.InspectorWidthDips)" '0 250 500'
@@ -1164,19 +1215,25 @@ try {
 	Check-Widths 'Restored widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 	Check-Bars '  toolbar strip | status bar' $h
 	Check-Log 'Restored log' $h (S 200)
+	Check-FolderInEffect 'Restored library folder' $h $ClosedFolder $ClosedFolder
 	if ($Screenshot) { Save-Screenshot $h $Screenshot }
 	Send-Command $h '&Log'
 	Start-Sleep -Milliseconds 200
 	Check 'View > Log hides it' (Get-LogVisibility $h) 'False False'
 	[void][W]::ShowWindow($h, 3)
 	Start-Sleep -Milliseconds 300
+	[W]::SetEditText((Get-FolderEdit $h), 'Music\WestieLib')
+	"Closed with a relative path typed"
 	Stop-App $app
 	$saved = Get-ItemProperty $KeyPath
 	Check '  saved maximized, log visible' "$($saved.Maximized) $($saved.LogVisible)" '1 0'
+	Check '  the relative path is not saved' (Get-SavedSettings) "version 1, $ClosedFolder"
 
 	"--- Run 3: restore a maximized window"
+	$written = (Get-Item $SettingsFile).LastWriteTimeUtc
 	$app = Start-App
 	$h = $app.Hwnd
+	Check 'Library folder still the saved one' ([W]::EditText((Get-FolderEdit $h))) $ClosedFolder
 	Check 'Starts maximized' ([W]::IsZoomed($h)) 'True'
 	Check '  log stays hidden' (Get-LogVisibility $h) 'False False'
 	Check-StatusParts '  status bar part edges (no grip)' $h
@@ -1190,6 +1247,7 @@ try {
 	Start-Sleep -Milliseconds 300
 	Stop-App $app
 	Check '  minimized from maximized saves maximized' (Get-ItemProperty $KeyPath).Maximized 1
+	Check '  settings.json untouched without a change' ((Get-Item $SettingsFile).LastWriteTimeUtc -eq $written) 'True'
 
 	"--- Run 4: closed while minimized"
 	$app = Start-App
@@ -1197,7 +1255,11 @@ try {
 	Check 'Comes back maximized, not minimized' "$([W]::IsZoomed($h)) $([W]::IsIconic($h))" 'True False'
 	Stop-App $app
 
-	"--- Run 5: moved to a monitor with another DPI"
+	"--- Run 5: settings.json doesn't read"
+	Check-BrokenSettings
+	Remove-Item $SettingsFile
+
+	"--- Run 6: moved to a monitor with another DPI"
 	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
 	$app = Start-App
 	$h = $app.Hwnd
@@ -1214,7 +1276,7 @@ try {
 		Check-Scaled $h
 		Stop-App $app
 
-		"--- Run 6: restored onto that monitor"
+		"--- Run 7: restored onto that monitor"
 		$app = Start-App
 		$h = $app.Hwnd
 		"DPI $script:dpi"
@@ -1230,6 +1292,14 @@ try {
 			if ($null -ne $userState.$name) { New-ItemProperty $KeyPath -Name $name -PropertyType DWord -Value $userState.$name | Out-Null }
 		}
 		"Put the user's saved window state back"
+	}
+	Remove-Item $SettingsFile -ErrorAction SilentlyContinue
+	if ($userSettings) {
+		[IO.File]::WriteAllBytes($SettingsFile, $userSettings)
+		"Put the user's settings.json back"
+	} elseif (-not $hadSettingsFolder) {
+		# Only when nothing else came to live in it
+		try { [IO.Directory]::Delete((Split-Path $SettingsFile)) } catch {}
 	}
 }
 

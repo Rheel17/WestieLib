@@ -25,8 +25,10 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 
 }
 
-MainWindow::MainWindow(const std::filesystem::path& default_library_folder) :
+MainWindow::MainWindow(core::SettingsStore& settings_store, core::Settings settings) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
+        settings_store_(settings_store),
+        settings_(std::move(settings)),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
@@ -36,8 +38,8 @@ MainWindow::MainWindow(const std::filesystem::path& default_library_folder) :
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
         welcome_(
-                hwnd(), default_library_folder, [this](CommandId command) { run_command(command); },
-                [this](const std::filesystem::path& folder) { status_bar_.set_library_folder(folder); }
+                hwnd(), settings_store.defaults().library_path, [this](CommandId command) { run_command(command); },
+                [this](const std::filesystem::path& folder) { change_library_folder(folder); }
         ),
         inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),
         inspector_(hwnd()),
@@ -47,8 +49,8 @@ MainWindow::MainWindow(const std::filesystem::path& default_library_folder) :
     apply_dpi(framework::Dpi::of(hwnd()));
     attach_menu();
     show_track_counts({});
-    welcome_.set_library_folder(default_library_folder);
-    status_bar_.set_library_folder(default_library_folder);
+    welcome_.set_library_folder(settings_.library_path);
+    status_bar_.set_library_folder(settings_.library_path);
 
     if (std::optional<WindowState> state = load_window_state()) {
         panels_ = state->panels;
@@ -117,6 +119,12 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
 void MainWindow::show_track_counts(const TrackCounts& counts) {
     playlists_.set_track_counts(counts);
     status_bar_.set_track_count(counts.total);
+}
+
+void MainWindow::change_library_folder(const std::filesystem::path& folder) {
+    settings_.library_path = folder;
+    settings_store_.save(settings_);
+    status_bar_.set_library_folder(folder);
 }
 
 void MainWindow::save_state() const {
@@ -248,6 +256,8 @@ LRESULT MainWindow::on_non_client_paint(UINT message, WPARAM wparam, LPARAM lpar
 
 void MainWindow::on_destroy() {
     save_state();
+    // A folder typed into the field takes effect when the field loses focus, which a close doesn't wait for
+    welcome_.commit_library_folder();
     PostQuitMessage(0);
 }
 

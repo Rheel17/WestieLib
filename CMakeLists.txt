@@ -9,14 +9,25 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 configure_file(src/Version.h.in "${GENERATED_DIR}/Version.h" @ONLY)
 
+# JSON for settings.json; SYSTEM keeps its headers out of the warnings
+include(FetchContent)
+FetchContent_Declare(glaze
+	GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+	GIT_TAG v9.0.0
+	GIT_SHALLOW TRUE
+	SYSTEM)
+FetchContent_MakeAvailable(glaze)
+
 add_executable(WestieLib WIN32
 	src/main.cpp
+	src/core/SettingsStore.cpp
 	src/platform/win32/ComApartment.cpp
 	src/platform/win32/KnownFolder.cpp
 	src/platform/win32/PathProbe.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
+	src/platform/win32/Win32FileOps.cpp
 	src/ui/FatalError.cpp
 	src/ui/TrackCountText.cpp
 	src/ui/commands/CommandMenu.cpp
@@ -78,4 +89,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE comctl32 uxtheme shell32 ole32 uuid)
+target_link_libraries(WestieLib PRIVATE glaze::glaze comctl32 uxtheme shell32 ole32 uuid)

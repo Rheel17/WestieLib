@@ -26,6 +26,7 @@ public:
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void set_library_folder(const std::filesystem::path& folder);
+    void commit_library_folder();
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

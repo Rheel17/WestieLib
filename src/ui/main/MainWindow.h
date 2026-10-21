@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include "core/Settings.h"
+#include "core/SettingsStore.h"
 #include "ui/TrackCounts.h"
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
@@ -27,7 +29,7 @@ namespace westie::ui {
 
 class MainWindow final : public framework::Window {
 public:
-    explicit MainWindow(const std::filesystem::path& default_library_folder);
+    MainWindow(core::SettingsStore& settings_store, core::Settings settings);
 
     void show(int show_command) override;
 
@@ -40,6 +42,7 @@ private:
     void attach_menu();
     void apply_dpi(framework::Dpi dpi);
     void show_track_counts(const TrackCounts& counts);
+    void change_library_folder(const std::filesystem::path& folder);
     void save_state() const;
     MainLayout current_layout() const;
     void layout_panels();
@@ -59,6 +62,8 @@ private:
     LRESULT on_non_client_paint(UINT message, WPARAM wparam, LPARAM lparam);
     void on_destroy();
 
+    core::SettingsStore& settings_store_;
+    core::Settings settings_;
     WindowPlacement placement_;
     framework::WindowIcon icon_;
     framework::MenuBarPainter menu_bar_;

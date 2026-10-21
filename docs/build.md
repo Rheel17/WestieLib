@@ -24,7 +24,12 @@ file names such as `Win32Error.cpp`.
 - `-municode` (entry point `wWinMain`), `-static`, WIN32 subsystem.
 - Links `comctl32` (TaskDialog and the common controls) and `uxtheme` (the menu bar's drawing). The manifest selects
   ComCtl32 v6, which `TaskDialogIndirect` needs. MinGW's `uxtheme` import library has no `OpenThemeDataForDpi`, so
-  the code uses `OpenThemeData` and reopens the theme after a DPI change.
+  the code uses `OpenThemeData` and reopens the theme after a DPI change. `shell32`, `ole32` and `uuid` bring the
+  known folders, COM and the folder picker.
+- [glaze](https://github.com/stephenberry/glaze) reads and writes JSON. `FetchContent` clones it at a pinned tag
+  (`GIT_TAG` in `CMakeLists.txt`) into `<build>/_deps`, so the first configure of a build folder needs the network.
+  It's header-only, and `SYSTEM` keeps its headers out of the warnings. To update it, change the tag; its release
+  notes list breaking changes.
 - `CMAKE_CXX_SCAN_FOR_MODULES OFF`: the project uses headers, not C++20 modules, because windows.h is macro-based.
 - `project(VERSION)` feeds `src/Version.h.in` → `<build>/generated/Version.h` (`WESTIELIB_VERSION_*` macros), which
   the resource script uses for `VERSIONINFO`.

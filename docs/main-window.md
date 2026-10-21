@@ -27,15 +27,18 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 `WindowPlacement` (`WindowPlacement.cpp`) handles the window's bounds and maximized state; `MainWindow` hands it the
 saved `Placement` and asks it for the current one.
 
-1. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
-2. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
+1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/`) with the defaults and loads the `Settings`;
+   a `settings.json` that doesn't read ends the app there. `MainWindow` gets the store and the loaded settings.
+2. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
+3. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
    `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
    saved state, `apply_initial_size` uses `InitialWindowDips`, clamped to the monitor's work area.
-3. `main.cpp` calls `show(nCmdShow)`. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` / `SW_SHOWDEFAULT` into
+4. `main.cpp` calls `show(nCmdShow)`. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` / `SW_SHOWDEFAULT` into
    `SW_SHOWMAXIMIZED` when the saved window was maximized; any other show command, say from a shortcut, wins.
-4. `WM_DESTROY` → `save_state()` → `PostQuitMessage(0)`. `WindowPlacement::current` reads `GetWindowPlacement` and
-   also counts a window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window torn down by an exception
-   saves nothing, because `~Window` detaches before destroying.
+5. `WM_DESTROY` → `save_state()` → `WelcomePanel::commit_library_folder()` → `PostQuitMessage(0)`. The commit is for
+   a folder still being typed, since a close doesn't take the focus from the field first. `WindowPlacement::current`
+   reads `GetWindowPlacement` and also counts a window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window
+   torn down by an exception saves nothing, because `~Window` detaches before destroying.
 
 ## Toolbar and status bar
 
@@ -82,8 +85,9 @@ saved `Placement` and asks it for the current one.
     in its cleaned-up form and, when it changed, goes to the callback. Anything else leaves the folder in effect alone.
   - The hint label keeps the height of the longest hint (`ShownFolderHints`) at the field's width, so the column
     doesn't move while the user types.
-- `MainWindow` gets the default folder from `main.cpp`. It hands it to the welcome panel, which starts the field at it
-  and uses it in the hint's example, and to the status bar. The field's callback updates the status bar.
+- `MainWindow` hands the welcome panel the default folder (`SettingsStore::defaults()`) for the hint's example, and
+  the saved folder (`Settings::library_path`) to start the field and the status bar at. The field's callback,
+  `change_library_folder`, saves the settings and updates the status bar.
 
 ## Layout
 

@@ -81,11 +81,18 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
 
 | Field                       | Meaning                                                                       |
 |-----------------------------|-------------------------------------------------------------------------------|
+| `version`                   | the file's layout, 1 for now                                                  |
+| `libraryPath`               | the library folder; `Music\WestieLib` in the user's profile by default        |
 | `format`                    | `opus` or `flac`; applies to new downloads, existing files keep their format  |
 | `embedCover`                | write the cover art into the file                                             |
 | `concurrency`               | number of parallel downloads (1–4)                                            |
 | `delayBetweenTracksSeconds` | pause between track starts                                                    |
 | `autoUpdateTools`           | update installed tools at startup (see ToolManager)                           |
+
+So far the app reads and writes `version` and `libraryPath`; the other fields arrive with their features. The file
+is pretty-printed UTF-8, indented by 4 spaces. Keys it doesn't know are skipped and missing ones keep their
+defaults, so files from other versions still load. Without a file the app runs on the defaults and writes nothing
+until a setting changes.
 
 ### state.json
 
@@ -291,7 +298,12 @@ inside the platform services.
 
 ### Settings and StateStore
 
-`Settings` loads and saves `settings.json`. `StateStore` owns `state.json` in memory behind a mutex. Every write
+`SettingsStore` (`src/core/`) loads and saves `settings.json` as a `Settings`, through `FileOps`, and holds the
+defaults that `main.cpp` gives it. `main.cpp` loads it before any window shows. A file that doesn't read stops the
+app with a message that names the file, rather than writing the defaults over it. Each change is saved at once:
+`FileOps::replace_file` writes `settings.json.tmp`, flushes it, and renames it over `settings.json`.
+
+`StateStore` owns `state.json` in memory behind a mutex. Every write
 goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which keeps the previous version as
 `state.json.bak`. The SyncEngine saves after every finished track, so an interrupted run resumes where it stopped.
 

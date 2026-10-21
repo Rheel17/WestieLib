@@ -63,6 +63,10 @@ void WelcomePanel::set_library_folder(const std::filesystem::path& folder) {
     folder_.set_folder(folder);
 }
 
+void WelcomePanel::commit_library_folder() {
+    folder_.commit();
+}
+
 LRESULT WelcomePanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE:       layout(); return 0;

@@ -33,6 +33,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - The app writes `HKCU\Software\WestieLib\Window` every time it closes. Any script that starts it must set the user's
   values aside first and put them back in a `finally` block, as `ui-checks.ps1` does. Never delete that key without
   restoring it. When the app saves a new value, add its name to `$StateNames`, or it won't be put back.
+- The same goes for `%LOCALAPPDATA%\WestieLib\settings.json`, which the app writes whenever the library folder
+  changes, closing included. `ui-checks.ps1` keeps the user's file's bytes and writes them back. When the user had no
+  file, it deletes the one the checks made, and the `WestieLib` folder too if the checks created it and nothing else
+  is in it. The checks only type library folders (`C:\WestieLib-check-<random>`, …), and never create them.
 - Never cut such a script's output short (`| Select-Object -First n`): PowerShell then stops the script before its
   `finally` block, so the app keeps running and the user's values stay set aside. Filter with `Where-Object` or
   `Select-String`, which read to the end.
