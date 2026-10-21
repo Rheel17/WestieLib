@@ -17,6 +17,8 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
   `command_state()`.
 - `MainAccelerators.cpp` holds the shortcut table. `main.cpp` builds it and hands it to `MessageLoop::run`. Esc and
   Enter appear in the menu text but aren't in the table: they belong to the sync and the track list.
+- `MainWindow::handle_message` first offers every message to its `MenuBarPainter`, which draws the menu bar in white
+  so it runs into the toolbar.
 - Menus and accelerators arrive as `WM_COMMAND` with no control. `run_command` drops a command that
   `command_state()` says is disabled, then acts on it. Commands without a feature yet do nothing.
 

@@ -271,6 +271,30 @@ public static class W {
 		}
 	}
 
+	[StructLayout(LayoutKind.Sequential)] public struct MENUBARINFO { public int Size; public RECT Bar; public IntPtr Menu, MenuWindow; public int Flags; }
+	[DllImport("user32.dll")] public static extern bool GetMenuBarInfo(IntPtr h, int idObject, int idItem, ref MENUBARINFO info);
+
+	// The colors in the menu bar's last row and the rows below it down to the client area, most common first
+	public static string MenuBarEdgeColors(IntPtr window) {
+		var bar = new MENUBARINFO();
+		bar.Size = Marshal.SizeOf(bar);
+		GetMenuBarInfo(window, unchecked((int)0xFFFFFFFD), 0, ref bar);
+		RECT frame;
+		GetWindowRect(window, out frame);
+		var counts = new Dictionary<string, int>();
+		int dx, dy;
+		using (var bitmap = Capture(window, window, out dx, out dy)) {
+			for (int y = bar.Bar.Bottom - 1 - frame.Top; y < dy; y++) {
+				for (int x = bar.Bar.Left - frame.Left; x < bar.Bar.Right - frame.Left; x++) {
+					var p = bitmap.GetPixel(x, y);
+					var key = String.Format("#{0:X2}{1:X2}{2:X2}", p.R, p.G, p.B);
+					counts[key] = counts.ContainsKey(key) ? counts[key] + 1 : 1;
+				}
+			}
+		}
+		return String.Join(" ", counts.OrderByDescending(c => c.Value).Select(c => c.Key));
+	}
+
 	// The bounds of a toolbar button's text (the pixels that aren't white, textOffset into the button), and whether its
 	// edges have ClearType's colored fringes
 	public static string ToolbarTextInk(IntPtr window, IntPtr toolbar, int index, int textOffset) {
@@ -570,9 +594,27 @@ function Check-Toolbar([string]$what, $hwnd) {
 	Check "$what disabled text, against enabled" $disabled $enabled
 }
 
+# The menu bar runs into the toolbar: no gray from its last row down to the client area. Windows redraws the bar's
+# items as the keyboard moves through the menus, and in another color for an inactive window, so with -Menus this
+# checks after that too. Posted keys reach the app's menu loop only, never another window.
+function Check-MenuBarEdge([string]$what, $hwnd, [switch]$Menus) {
+	Check $what ([W]::MenuBarEdgeColors($hwnd)) '#FFFFFF'
+	if (-not $Menus) { return }
+	$keys = @(@(0x112, 0xF100, 0), @(0x100, 0x27, 0), @(0x100, 0x1B, 0), @(0x112, 0xF100, 0x76), @(0x100, 0x1B, 0), @(0x100, 0x1B, 0))
+	foreach ($key in $keys) {
+		[void][W]::PostMessageW($hwnd, $key[0], [IntPtr]$key[1], [IntPtr]$key[2])
+		Start-Sleep -Milliseconds 250
+	}
+	Check '  after F10, Right, Esc, Alt+V, Esc, Esc' ([W]::MenuBarEdgeColors($hwnd)) '#FFFFFF'
+	[void][W]::SendMessageW($hwnd, 0x86, [IntPtr]::Zero, [IntPtr]::Zero)
+	Check '  while the window looks inactive' ([W]::MenuBarEdgeColors($hwnd)) '#FFFFFF'
+	[void][W]::SendMessageW($hwnd, 0x86, [IntPtr]1, [IntPtr]::Zero)
+}
+
 # Everything that scales with the DPI: bars, toolbar, status bar, and the default panel widths
 function Check-Scaled($hwnd) {
 	$cw = Get-ClientWidth $hwnd
+	Check-MenuBarEdge 'Menu bar runs into the toolbar' $hwnd
 	Check-Bars 'Toolbar strip | status bar' $hwnd
 	Check-Toolbar ' ' $hwnd
 	Check-StatusParts 'Status bar part edges' $hwnd
@@ -716,6 +758,7 @@ try {
 	[void][W]::PostMessageW($about, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 300
 	Check '  and closes' ([W]::IsWindow($about)) 'False'
+	Check-MenuBarEdge 'Menu bar runs into the toolbar' $h -Menus
 	Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
 	Check-Bars 'Toolbar strip | status bar' $h
 	$toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]

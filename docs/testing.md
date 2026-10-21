@@ -31,6 +31,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - The app writes `HKCU\Software\WestieLib\Window` every time it closes. Any script that starts it must set the user's
   values aside first and put them back in a `finally` block, as `ui-checks.ps1` does. Never delete that key without
   restoring it. When the app saves a new value, add its name to `$StateNames`, or it won't be put back.
+- Never cut such a script's output short (`| Select-Object -First n`): PowerShell then stops the script before its
+  `finally` block, so the app keeps running and the user's values stay set aside. Filter with `Where-Object` or
+  `Select-String`, which read to the end.
 - Refuse to run while WestieLib is open, since `FindWindowW` would find the user's window. Kill only the process the
   script started.
 
@@ -46,6 +49,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - The log pane is a `WestieLib.Panel` too, and its splitter a `WestieLib.Splitter`. `EnumChildWindows` also returns
   hidden windows. So the helpers find the panel row by its top edge (`Get-RowPanels`), tell splitters apart by shape
   (`Get-ColumnSplitters`, `Get-LogSplitter`), and skip what isn't visible.
+- To drive the menu bar, post `WM_SYSCOMMAND` `SC_KEYMENU` (with a mnemonic in `lparam` to open that menu) and then
+  `WM_KEYDOWN` keys; the app's menu loop picks them up. End with enough Esc presses to leave the menu loop, or the
+  next checks run against a window stuck in menu mode (`Check-MenuBarEdge -Menus`).
 - `PostCtrlKey` presses a Ctrl shortcut without real input, so nothing can reach the user's other windows: it attaches
   to the app's input thread, sets Ctrl in the shared key state, and posts the key's `WM_KEYDOWN`. The app's
   `TranslateAccelerator` sees Ctrl held, as with a real key press.

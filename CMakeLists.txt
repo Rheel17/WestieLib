@@ -23,6 +23,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
 	src/ui/framework/IconImageList.cpp
+	src/ui/framework/MenuBarPainter.cpp
 	src/ui/framework/MessageFont.cpp
 	src/ui/framework/MessageLoop.cpp
 	src/ui/framework/Panel.cpp
@@ -61,4 +62,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE comctl32)
+target_link_libraries(WestieLib PRIVATE comctl32 uxtheme)

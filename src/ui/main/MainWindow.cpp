@@ -29,6 +29,7 @@ MainWindow::MainWindow() :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
+        menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
         font_(framework::Dpi::of(hwnd())),
         toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
         playlists_(hwnd()),
@@ -56,6 +57,10 @@ void MainWindow::show(int show_command) {
 }
 
 LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (menu_bar_.draw(message, lparam)) {
+        return TRUE;
+    }
+
     switch (message) {
     case WM_COMMAND:       on_command(wparam, lparam); return 0;
     case WM_INITMENUPOPUP: on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
@@ -64,6 +69,9 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     case WM_SIZE:          layout_panels(); return 0;
     case WM_DPICHANGED:    on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
     case WM_SETTINGCHANGE: on_setting_change(wparam); return Window::handle_message(message, wparam, lparam);
+    case WM_NCPAINT:
+    case WM_NCACTIVATE:    return on_non_client_paint(message, wparam, lparam);
+    case WM_THEMECHANGED:  menu_bar_.load_theme(); return Window::handle_message(message, wparam, lparam);
     case WM_DESTROY:       on_destroy(); return 0;
     default:               return Window::handle_message(message, wparam, lparam);
     }
@@ -87,6 +95,7 @@ void MainWindow::attach_menu() {
 
 void MainWindow::apply_dpi(framework::Dpi dpi) {
     icon_.apply_to(hwnd(), dpi);
+    menu_bar_.load_theme();
 
     // The controls keep using the old font until they have the new one
     framework::MessageFont font(dpi);
@@ -212,6 +221,12 @@ void MainWindow::on_setting_change(WPARAM setting) {
         apply_dpi(framework::Dpi::of(hwnd()));
         layout_panels();
     }
+}
+
+LRESULT MainWindow::on_non_client_paint(UINT message, WPARAM wparam, LPARAM lparam) {
+    LRESULT result = Window::handle_message(message, wparam, lparam);
+    menu_bar_.cover_edge();
+    return result;
 }
 
 void MainWindow::on_destroy() {

@@ -94,6 +94,9 @@ share T). The items, in order: File **A**dd, **R**emove, **O**pen, E**x**it; Syn
 Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **M**ove, **S**how, **Y**ouTube, source **P**age;
 View **L**og, **C**olumns; Tools **S**ettings, **U**pdates, **R**ebuild, **M**oved, **L**og folder; Help **A**bout.
 
+The menu bar is white and runs straight into the toolbar, without the gray line Windows draws under a menu bar. Its
+items look as usual: the same font, hover and open highlights, and gray text while the window is inactive.
+
 The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Settings`.
 
 - It is a white strip, 34 px tall including a 1 px `#D9D9D9` rule along its bottom, and as wide as the window.
@@ -376,7 +379,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 
 | Element | Implementation |
 |---------|----------------|
-| Frame | HMENU + accelerator table; three custom splitters |
+| Frame | HMENU + accelerator table; the menu bar painted through the undocumented `WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM` with the `Menu` theme; three custom splitters |
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with parts and an embedded `PROGRESS_CLASS` |

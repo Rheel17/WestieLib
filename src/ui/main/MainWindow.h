@@ -5,6 +5,7 @@
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
 #include "ui/framework/Dpi.h"
+#include "ui/framework/MenuBarPainter.h"
 #include "ui/framework/MessageFont.h"
 #include "ui/framework/Splitter.h"
 #include "ui/framework/Window.h"
@@ -50,10 +51,12 @@ private:
     void on_get_min_max_info(MINMAXINFO& info) const;
     void on_dpi_changed(UINT dpi, const RECT& suggested);
     void on_setting_change(WPARAM setting);
+    LRESULT on_non_client_paint(UINT message, WPARAM wparam, LPARAM lparam);
     void on_destroy();
 
     WindowPlacement placement_;
     framework::WindowIcon icon_;
+    framework::MenuBarPainter menu_bar_;
     framework::MessageFont font_;
     MainToolbar toolbar_;
     PlaylistPanel playlists_;

@@ -22,8 +22,9 @@ file names such as `Win32Error.cpp`.
 - Include roots: `src/` (so `#include "ui/framework/Window.h"`), `res/`, and `<build>/generated/`.
 - Definitions: `UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00` (Windows 10).
 - `-municode` (entry point `wWinMain`), `-static`, WIN32 subsystem.
-- Links `comctl32` (TaskDialog and, later, the common controls). The manifest selects ComCtl32 v6, which
-  `TaskDialogIndirect` needs.
+- Links `comctl32` (TaskDialog and the common controls) and `uxtheme` (the menu bar's drawing). The manifest selects
+  ComCtl32 v6, which `TaskDialogIndirect` needs. MinGW's `uxtheme` import library has no `OpenThemeDataForDpi`, so
+  the code uses `OpenThemeData` and reopens the theme after a DPI change.
 - `CMAKE_CXX_SCAN_FOR_MODULES OFF`: the project uses headers, not C++20 modules, because windows.h is macro-based.
 - `project(VERSION)` feeds `src/Version.h.in` → `<build>/generated/Version.h` (`WESTIELIB_VERSION_*` macros), which
   the resource script uses for `VERSIONINFO`.
