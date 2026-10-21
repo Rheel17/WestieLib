@@ -186,7 +186,14 @@ void MainWindow::toggle_log() {
 }
 
 void MainWindow::show_settings() {
-    SettingsDialog(settings_).edit(hwnd());
+    // A folder typed into the welcome field takes effect when the field loses focus, which comes only after the dialog
+    // has read the settings
+    welcome_.commit_library_folder();
+    std::optional<core::Settings> settings = SettingsDialog(settings_).edit(hwnd());
+    if (settings && settings->library_path != settings_.library_path) {
+        change_library_folder(settings->library_path);
+        welcome_.set_library_folder(settings->library_path);
+    }
 }
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {

@@ -903,6 +903,26 @@ function Check-FolderInEffect([string]$what, $hwnd, [string]$field, [string]$fol
 	Check-That $what "$text | $width" ($text -eq $field -and [math]::Abs($width - $expected) -le 3) "$field | $expected within 3"
 }
 
+function Wait-Closed($window) {
+	for ($i = 0; $i -lt 30 -and [W]::IsWindow($window); $i++) { Start-Sleep -Milliseconds 100 }
+	Start-Sleep -Milliseconds 300
+}
+
+# Picks $folder in an open folder picker: its only visible edit is its Folder box, and its button for picking is IDOK.
+# Returns how many Folder boxes it found; with any other count than 1 it cancels the picker instead.
+function Select-InPicker($picker, [string]$folder) {
+	Start-Sleep -Milliseconds 500
+	$boxes = @([W]::Children($picker, 'Edit') | Where-Object { [W]::IsWindowVisible($_) })
+	if ($boxes.Count -eq 1) {
+		[W]::SetEditText($boxes[0], $folder)
+		[void][W]::PostMessageW([W]::GetDlgItem($picker, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	} else {
+		[void][W]::PostMessageW($picker, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	}
+	Wait-Closed $picker
+	$boxes.Count
+}
+
 # The field starts at the default folder. The hint line follows the typing. Leaving the field takes a folder into
 # effect, unless its hint is red. Browse works whatever the field says, and picking a folder takes effect at once.
 function Check-LibraryFolder($hwnd) {
@@ -934,20 +954,9 @@ function Check-LibraryFolder($hwnd) {
 	Start-Sleep -Milliseconds 500
 	Check-FolderInEffect '  and Cancel keeps the text and the folder' $hwnd 'Music\WestieLib' $DefaultLibrary
 
-	# The picker's only visible edit is its Folder box, and its button for picking is IDOK
 	[void][W]::PostMessageW($browse, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	$picker = Wait-OwnedWindow $hwnd
-	Start-Sleep -Milliseconds 500
-	$boxes = @([W]::Children($picker, 'Edit') | Where-Object { [W]::IsWindowVisible($_) })
-	if ($boxes.Count -eq 1) {
-		[W]::SetEditText($boxes[0], $music)
-		[void][W]::PostMessageW([W]::GetDlgItem($picker, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	} else {
-		[void][W]::PostMessageW($picker, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
-	}
-	for ($i = 0; $i -lt 30 -and [W]::IsWindow($picker); $i++) { Start-Sleep -Milliseconds 100 }
-	Start-Sleep -Milliseconds 300
-	Check-FolderInEffect "  picking a folder in the picker (Folder boxes: $($boxes.Count))" $hwnd $music $music
+	$boxes = Select-InPicker (Wait-OwnedWindow $hwnd) $music
+	Check-FolderInEffect "  picking a folder in the picker (Folder boxes: $boxes)" $hwnd $music $music
 	Check '  and its hint' ([W]::TextOf((Get-FolderHint $hwnd))) ''
 
 	Check '  typing a quoted folder that does not exist' (Get-HintFor $hwnd "  `"$MissingFolder\`"  ") "$HintWillBeCreated | red False | moved False"
@@ -992,9 +1001,48 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 			if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-settings.png") }
 		}
 		& $closes[$i].Close $dialog
-		for ($j = 0; $j -lt 20 -and [W]::IsWindow($dialog); $j++) { Start-Sleep -Milliseconds 100 }
+		Wait-Closed $dialog
 		Check "  $($closes[$i].Name) closes it" ([W]::IsWindow($dialog)) 'False'
 	}
+}
+
+# Settings starts from a folder typed into the welcome field but not yet in effect. Change... opens the picker over the
+# dialog, and a picked folder shows in the dialog at once but takes effect only on OK.
+function Check-SettingsLibraryFolder($hwnd) {
+	$music = [Environment]::GetFolderPath('MyMusic')
+	$typed = "$MissingFolder-typed"
+	$field = Get-FolderEdit $hwnd
+	[W]::Focus($field)
+	[W]::SetEditText($field, $typed)
+	Send-Command $hwnd '&Settings...'
+	$dialog = Wait-OwnedWindow $hwnd
+	$edit = ([W]::Children($dialog, 'Edit'))[0]
+	$change = [W]::GetDlgItem($dialog, 1001)
+	Check 'Settings, with a folder typed into the field' ([W]::EditText($edit)) $typed
+
+	[void][W]::PostMessageW($change, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	$picker = Wait-OwnedWindow $dialog
+	Check '  Change opens the picker over the dialog' "$([W]::ClassOf($picker)) $([W]::TextOf($picker))" '#32770 Library folder'
+	[void][W]::PostMessageW($picker, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $picker
+	Check '  closing the picker keeps the folder' ([W]::EditText($edit)) $typed
+
+	[void][W]::PostMessageW($change, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	$boxes = Select-InPicker (Wait-OwnedWindow $dialog) $music
+	Check "  a picked folder shows (Folder boxes: $boxes)" ([W]::EditText($edit)) $music
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	Check-FolderInEffect '  Cancel: the typed folder stays in effect' $hwnd $typed $typed
+	Check '  and in settings.json' (Get-SavedSettings) "version 1, $typed"
+
+	Send-Command $hwnd '&Settings...'
+	$dialog = Wait-OwnedWindow $hwnd
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1001), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	[void](Select-InPicker (Wait-OwnedWindow $dialog) $music)
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	Check-FolderInEffect '  OK: the picked folder takes effect' $hwnd $music $music
+	Check '  and is saved' (Get-SavedSettings) "version 1, $music"
 }
 
 # settings.json's version and library folder, read as UTF-8
@@ -1201,6 +1249,7 @@ try {
 	Check-Welcome 'Welcome screen' $h
 	Check-LibraryFolder $h
 	Check '  saved in settings.json' (Get-SavedSettings) "version 1, $MissingFolder"
+	Check-SettingsLibraryFolder $h
 	Check 'Drag steps left unpainted' (Measure-UnpaintedDragSteps $h) 0
 	Check-NoBlinking $h
 	Move-Splitter $h 0 0
