@@ -44,6 +44,7 @@ It is a single, statically linked Win32 executable written in C++26.
 <anywhere>\WestieLib.exe                 the application; runs from any folder
 
 %LOCALAPPDATA%\WestieLib\
+                                          (or the folder WESTIELIB_DATA_DIR names; the UI checks use that)
     settings.json                         library location and sync tuning
     state.json                            playlists and tracks (human-readable)
     state.json.bak                        previous version of state.json
@@ -89,7 +90,8 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
 | `delayBetweenTracksSeconds` | pause between track starts                                                    |
 | `autoUpdateTools`           | update installed tools at startup (see ToolManager)                           |
 
-So far the app reads and writes `version` and `libraryPath`; the other fields arrive with their features. The file
+So far the app reads and writes `version`, `libraryPath` and `autoUpdateTools`; the other fields arrive with their
+features. The file
 is pretty-printed UTF-8, indented by 4 spaces. Keys it doesn't know are skipped and missing ones keep their
 defaults, so files from other versions still load. Without a file the app runs on the defaults and writes nothing
 until a setting changes.
@@ -275,11 +277,21 @@ The cover art comes from the first of:
 
 ```json
 {
-  "yt-dlp": { "release": "2026.09.30", "digest": "sha256:..." },
-  "ffmpeg": { "release": "n8.0",       "digest": "sha256:..." },
-  "deno":   { "release": "v2.5.4",     "digest": "sha256:..." }
+  "version": 1,
+  "checkedAt": "2026-10-22T09:12:00Z",
+  "tools": {
+    "yt-dlp": { "release": "2026.10.21", "digest": "sha256:..." },
+    "ffmpeg": { "release": "n9.0",       "digest": "sha256:..." },
+    "deno":   { "release": "v2.5.4",     "digest": "sha256:..." }
+  }
 }
 ```
+
+- `tools` has one entry per download, keyed by its name. The ffmpeg entry covers `ffmpeg.exe` and `ffprobe.exe`,
+  which come from one archive. `digest` is the downloaded asset's.
+- `checkedAt` is when the releases were last looked up for an update, and is left out until then.
+- `ToolsStore` (`src/core/tools/`) reads and writes it through `FileOps`, in the same way as `SettingsStore`: pretty-printed,
+  unknown keys skipped. A file that doesn't read counts as no file, because the tools can always be downloaded again.
 
 ## Platform services
 
@@ -298,7 +310,7 @@ inside the platform services.
 
 ### Settings and StateStore
 
-`SettingsStore` (`src/core/`) loads and saves `settings.json` as a `Settings`, through `FileOps`, and holds the
+`SettingsStore` (`src/core/settings/`) loads and saves `settings.json` as a `Settings`, through `FileOps`, and holds the
 defaults that `main.cpp` gives it. `main.cpp` loads it before any window shows. A file that doesn't read stops the
 app with a message that names the file, rather than writing the defaults over it. Each change is saved at once:
 `FileOps::replace_file` writes `settings.json.tmp`, flushes it, and renames it over `settings.json`.
@@ -334,8 +346,14 @@ ToolManager installs and updates the external tools in `tools\` from their GitHu
 | Tool             | Repository             | Asset                                   | Updated when                  |
 |------------------|------------------------|-----------------------------------------|-------------------------------|
 | yt-dlp           | `yt-dlp/yt-dlp`        | `yt-dlp.exe`                            | release tag changes           |
-| ffmpeg, ffprobe  | `yt-dlp/FFmpeg-Builds` | `ffmpeg-nX.Y-latest-win64-gpl-X.Y.zip`  | release branch `X.Y` changes  |
+| ffmpeg, ffprobe  | `BtbN/FFmpeg-Builds`   | `ffmpeg-nX.Y-latest-win64-gpl-X.Y.zip`, the highest `X.Y` | release branch `X.Y` changes  |
 | deno             | `denoland/deno`        | `deno-x86_64-pc-windows-msvc.zip`       | release tag changes           |
+
+`yt-dlp/FFmpeg-Builds` stopped publishing release-branch builds and now only has daily master builds, so ffmpeg
+comes from BtbN, the upstream that repository forks. Its `latest` release is rebuilt daily too, which is why the
+branch, and not the digest, decides an update.
+
+So far the app knows yt-dlp and ffmpeg; deno follows.
 
 Flow per tool:
 
@@ -352,6 +370,18 @@ ToolManager runs at startup and before the first sync of a session.
 
 The SyncEngine starts only when all tools are installed. ToolManager exposes the absolute tool paths to the other
 components.
+
+- `run(update_installed)` starts a run on a worker thread (`std::jthread`), which `stop()` asks to stop. The
+  destructor joins it. The UI starts a run only while none is active.
+- A run starts and ends with `ToolsRunChanged`. `run` emits the first one itself, so the UI knows of the run before
+  anything else it reports.
+- Each step emits a `ToolStatus` (download, state, release, percent, error), so the UI can show
+  `Missing`, `Installed`, `Checking`, `Downloading`, `Installing`, `UpToDate` or `Failed`. A run reports the saved
+  `checkedAt` as `ToolsChecked`, and a look-up of the releases ends with a new one.
+- An exception on the worker would end the process, so the run turns it into a `Failed` status for each tool.
+- A failed install or update leaves the previous files in place.
+
+So far a run only reads `tools.json` and checks that each tool's files exist; the downloads come next.
 
 ### SelfUpdater
 
@@ -580,12 +610,16 @@ and their work folders are cleaned.
 | `TracksMerged`                 | deleted track key, surviving track key          |
 | `VideoSearchResults`           | query, filter, results                          |
 | `RemovalsPending`              | list of orphaned track keys                     |
-| `ToolStatus`                   | tool, installed release, update state           |
+| `ToolsRunChanged`              | whether a ToolManager run is going              |
+| `ToolStatus`                   | tool, state, installed release, percent, error  |
+| `ToolsChecked`                 | when the releases were last looked up           |
 | `AppUpdate`                    | available version, update state                 |
 | `LogLine`                      | level, text, optional playlist id and track key |
 
-Events are emitted from any thread through an `EventSink` interface. The Win32 implementation posts each event to
-the main window with `PostMessageW`, transferring ownership of a heap-allocated payload to the UI thread.
+Events are emitted from any thread through an `EventSink` interface, as a `CoreEvent` (a `std::variant` of the event
+structs). The Win32 implementation, `CoreEventQueue` (`src/ui/events/`), appends each event to a queue behind a
+mutex. When the queue was empty, it posts one message without a payload to the main window, which then takes every
+queued event at once. The queue owns the events, so nothing leaks when the window is gone before it takes them.
 
 ## Startup sequence
 
@@ -611,8 +645,13 @@ the main window with `PostMessageW`, transferring ownership of a heap-allocated 
 
 ```
 src/
-    core/           SyncEngine, sources, Matcher, Downloader, Tagger, Library, StateStore, Settings,
-                    ToolManager, SelfUpdater, RemoteConfig, EventSink
+    core/           the logic, in namespace westie::core, one folder per area:
+        events/     CoreEvent, EventSink
+        json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
+        settings/   Settings, SettingsStore
+        tools/      ToolManager, ToolsStore and the tool types
+                    later areas get folders of their own: SyncEngine, sources, Matcher, Downloader, Tagger,
+                    Library, StateStore, SelfUpdater, RemoteConfig
     platform/       service interfaces
     platform/win32/ Win32 implementations of the platform services
     ui/             Win32 windows, EventSink implementation

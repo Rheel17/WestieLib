@@ -33,7 +33,7 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 ├────────────────────────┴────────────────────────────────────────┴────────────────┤
 │ log pane (hidden by default, View › Log, Ctrl+L)                                 │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Syncing 12 of 40 ▓▓▓▓░░░ │ 412 tracks │ D:\Music\WestieLib │ Tools ✓ │ v1.2.0      │ status bar
+│ Syncing 12 of 40 ▓▓▓▓░░░ │ 412 tracks │ D:\Music\WestieLib │    │ Tools ✓ │ v1.2.0 │ status bar
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -110,9 +110,10 @@ The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Sett
 - `Sync all ▾` is a split button. Its dropdown lists "Sync selected playlist" and then every playlist by name.
 - The menu bar, the toolbar and the shortcuts share one set of rules, so a command is enabled everywhere or nowhere:
   - `Cancel` is enabled only while a sync runs. `Sync all` and `Sync selected playlist` are disabled during that
-    time, and until every tool is installed.
+    time, until every tool is installed, and while tools are checked or updated.
   - `Remove playlist…` and `Sync selected playlist` need a selected playlist.
   - Track items need a selected track.
+  - `Check for updates` is disabled while tools are checked, installed or updated, and while a sync runs.
   - Everything else is always enabled.
 - View › Log shows a check mark while the log pane is shown.
 
@@ -332,13 +333,40 @@ The inspector scrolls vertically when its content is taller than the panel.
 | Run     | `Ready · last sync today 14:05`, or `Syncing 6 of 25` with an embedded progress bar |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
-| Tools   | `Tools ✓`, `Installing tools… ffmpeg 45%`, `Updating tools…` or `Tools ⚠`; the tooltip lists the releases |
+| Progress | while tools are checked, installed or updated (see below) |
+| Tools   | `Tools ✓`, `Tools ⟳` or `Tools ⚠`: the word, 7 px, and a 12 px icon (see below) |
 | Version | `v1.2.0` |
 
+```
+│ Ready      │ 0 tracks    │ C:\path            │                          │ Tools ⚠      │  v0.1.0 │
+│ Ready      │ 0 tracks    │ C:\path            │    │ Installing tools… ffmpeg 45% ▓▓▓░ │ Tools ⟳      │  v0.1.0 │
+```
+
 - The status bar is the native one, 23 px tall, or taller when the system font needs it. It ends in a size grip.
-- Run, Tracks, Library and Tools are 270, 150, 450 and 120 px wide, from the left. Version is 80 px wide against the
-  right edge, with its text centered between its separator and the grip, or the window edge when maximized. No
-  separator follows it. The space between Tools and Version stays empty.
+- Run, Tracks and Library are 270, 150 and 450 px wide, from the left. Tools (120 px) and Version (80 px) sit against
+  the right edge, Version last, with its text centered between its separator and the grip, or the window edge when
+  maximized. No separator follows it. The space between Library and the right-hand parts stays empty.
+- Progress sits right before Tools and is only there while tools are at work. It is as wide as its content: the
+  text, 7 px, and a 60 × 16 px progress bar. It takes its width from the empty space first, and from the Library part when
+  the window is too narrow for that.
+
+**Tools.** The part shows the first that applies:
+
+| Text      | Icon                 | Shown when                                     |
+|-----------|----------------------|------------------------------------------------|
+| `Tools ⟳` | blue sync arrows     | tools are being checked, installed or updated  |
+| `Tools ⚠` | amber warning        | a tool is missing, or its last install failed  |
+| `Tools ✓` | green check          | every tool is installed                        |
+
+Its tooltip has a line per tool: `yt-dlp 2026.10.21`, `ffmpeg n9.0`, `yt-dlp: not installed`, or
+`ffmpeg: <error>` after a failed install or update.
+
+**Progress.** It names the work and the tool at hand:
+
+- `Installing tools… ffmpeg 45%` while a missing tool downloads, or `Updating tools… yt-dlp 12%` for one that is
+  installed. The bar shows the download's percentage.
+- `Installing tools… ffmpeg`, with a full bar, while the download is unpacked and put in place.
+- `Checking for tool updates…`, without the bar, while the releases are looked up.
 - Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit. The library folder
   loses its middle instead (`C:\Users\...\WestieLib`), so its last folder stays readable.
 
@@ -385,10 +413,19 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - **Downloads**: `Parallel downloads` spin (1–4) and `Pause between tracks` spin (seconds).
   - **Tools**: a list of tool, release and status. Under it, an `Update tools automatically` check box (on by
     default), `Check for updates`, and "Last checked …".
+    - One row per download: `yt-dlp` and `ffmpeg` (ffmpeg brings ffprobe along). The release is empty for a tool
+      that isn't installed.
+    - The status is an icon and a word, as in the Tools part: ✓ `Up to date` (checked since the app started) or
+      `Installed`; ⟳ `Checking…`, `Downloading 45%` or `Installing…`; ⚠ `Not installed` or `Failed: <error>`.
+    - The list follows the tools while the dialog is open.
+    - `Check for updates` starts at once, without waiting for `OK`, and updates installed tools even when the check
+      box is off. It is disabled as in the Tools menu.
+    - "Last checked" reads like a playlist's last sync: `Last checked today 14:03`, `Last checked yesterday`,
+      `Last checked 12 Oct` (`12 Oct 2025` in another year), or `Never checked`.
   - **Maintenance**: `Rebuild library from files…`.
   - The footer shows the version on the left, and `OK` / `Cancel`.
-  - So far the dialog has only the Library group; the other groups come with their features. A folder chosen with
-    `Change…` takes effect on `OK`.
+  - So far the dialog has the Library and Tools groups; the other groups come with their features. A folder chosen
+    with `Change…` and the check box take effect on `OK`.
 - **About** is a TaskDialog with the app icon, `WestieLib` as the main instruction, `Version 1.2.0` (the build's
   version) and OK.
 - **Confirmations** use a TaskDialog:
@@ -428,7 +465,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Frame | HMENU + accelerator table; the menu bar painted through the undocumented `WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM` with the `Menu` theme; three custom splitters |
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
-| Status bar | `STATUSCLASSNAME` with parts and an embedded `PROGRESS_CLASS` |
+| Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
 | Left panel | All tracks is a custom-painted row window above the list. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon. The playlist list is a `LISTBOX` with `LBS_OWNERDRAWVARIABLE` (its items are at most 255 px tall, which a playlist row passes above ~260% scaling; settle this with the playlist rows); rows, bars and icons drawn in `WM_DRAWITEM`. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |

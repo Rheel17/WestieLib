@@ -1,6 +1,6 @@
 # Renders glyphs from the icon table in plan/ui-mockup.html (the `name: SVG('...')` entries) into
-# res/glyphs/<name>.ico. Glyphs marked below also get <name>-disabled.ico: grayscale at 45% opacity, like the
-# mockup's disabled toolbar buttons.
+# res/glyphs/<name>.ico. Glyphs marked Disabled below also get <name>-disabled.ico: grayscale at 45% opacity, like
+# the mockup's disabled toolbar buttons. Glyphs marked Small also get the sizes of a 12 px glyph, as in the status bar.
 #
 #   powershell -ExecutionPolicy Bypass -File res/make-glyphs.ps1
 #
@@ -16,17 +16,20 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore, WindowsBase
 . (Join-Path $PSScriptRoot 'IconFile.ps1')
 
-# Glyph name in the mockup, and whether it needs a disabled copy
+# Glyph name in the mockup, whether it needs a disabled copy, and whether it is also drawn at 12 px
 $Glyphs = [ordered]@{
-	plus = $true
-	syncing = $true
-	stop = $true
-	gear = $true
-	lib = $false
+	plus = @{ Disabled = $true }
+	syncing = @{ Disabled = $true; Small = $true }
+	stop = @{ Disabled = $true }
+	gear = @{ Disabled = $true }
+	lib = @{}
+	synced = @{ Small = $true }
+	warn = @{ Small = $true }
 }
 
-# 100% to 300% display scaling of a 16 px glyph
+# 100% to 300% display scaling of a 16 px glyph, and of a 12 px one
 $Sizes = 16, 20, 24, 28, 32, 40, 48
+$SmallSizes = 12, 15, 18, 21, 24, 30, 36
 $DisabledOpacity = 0.45
 $InheritedAttributes = 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'
 
@@ -129,18 +132,20 @@ $html = [System.IO.File]::ReadAllText((Resolve-Path $Mockup))
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 foreach ($name in $Glyphs.Keys) {
+	$options = $Glyphs[$name]
 	$glyph = Get-GlyphMarkup $html $name
+	$glyphSizes = if ($options.Small) { $Sizes + $SmallSizes | Sort-Object -Unique } else { $Sizes }
 	$frames = @()
 	$disabledFrames = @()
-	foreach ($size in $Sizes) {
+	foreach ($size in $glyphSizes) {
 		$pixels = Get-GlyphPixels $glyph $size
 		$frames += [pscustomobject]@{ Size = $size; Bytes = [byte[]](ConvertTo-DibBytes $pixels $size ($size * 4)) }
-		if ($Glyphs[$name]) {
+		if ($options.Disabled) {
 			$disabledFrames += [pscustomobject]@{ Size = $size; Bytes = [byte[]](ConvertTo-DibBytes (ConvertTo-Disabled $pixels) $size ($size * 4)) }
 		}
 	}
 
 	Write-IconFile (Join-Path $OutDir "$name.ico") $frames
-	if ($Glyphs[$name]) { Write-IconFile (Join-Path $OutDir "$name-disabled.ico") $disabledFrames }
-	Write-Host "Wrote $name ($($Sizes -join ', ') px)$(if ($Glyphs[$name]) { ' and its disabled copy' })"
+	if ($options.Disabled) { Write-IconFile (Join-Path $OutDir "$name-disabled.ico") $disabledFrames }
+	Write-Host "Wrote $name ($($glyphSizes -join ', ') px)$(if ($options.Disabled) { ' and its disabled copy' })"
 }

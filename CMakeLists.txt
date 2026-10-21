@@ -20,21 +20,31 @@ FetchContent_MakeAvailable(glaze)
 
 add_executable(WestieLib WIN32
 	src/main.cpp
-	src/core/SettingsStore.cpp
+	src/core/json/IsoTime.cpp
+	src/core/json/Utf8Path.cpp
+	src/core/settings/SettingsStore.cpp
+	src/core/tools/ToolManager.cpp
+	src/core/tools/ToolPackage.cpp
+	src/core/tools/ToolsStore.cpp
 	src/platform/win32/ComApartment.cpp
+	src/platform/win32/Environment.cpp
 	src/platform/win32/KnownFolder.cpp
+	src/platform/win32/LocalTime.cpp
 	src/platform/win32/PathProbe.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32FileOps.cpp
 	src/ui/FatalError.cpp
+	src/ui/RelativeDayText.cpp
 	src/ui/TrackCountText.cpp
 	src/ui/commands/CommandMenu.cpp
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/dialogs/FolderPicker.cpp
 	src/ui/dialogs/SettingsDialog.cpp
+	src/ui/dialogs/ToolListView.cpp
+	src/ui/events/CoreEventQueue.cpp
 	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/BufferedPaint.cpp
 	src/ui/framework/Button.cpp
@@ -53,9 +63,11 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Panel.cpp
 	src/ui/framework/PendingException.cpp
 	src/ui/framework/PopupMenu.cpp
+	src/ui/framework/ProgressBar.cpp
 	src/ui/framework/Splitter.cpp
 	src/ui/framework/StatusBar.cpp
 	src/ui/framework/Toolbar.cpp
+	src/ui/framework/Tooltip.cpp
 	src/ui/framework/Window.cpp
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp
@@ -71,6 +83,9 @@ add_executable(WestieLib WIN32
 	src/ui/playlists/PlaylistPanel.cpp
 	src/ui/statusbar/MainStatusBar.cpp
 	src/ui/toolbar/MainToolbar.cpp
+	src/ui/tools/ToolBoard.cpp
+	src/ui/tools/ToolMark.cpp
+	src/ui/tools/ToolStatusText.cpp
 	src/ui/tracks/TrackPanel.cpp
 	src/ui/welcome/LibraryFolderCheck.cpp
 	src/ui/welcome/LibraryFolderField.cpp

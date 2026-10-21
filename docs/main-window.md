@@ -9,7 +9,8 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 
 - Every menu item, toolbar button and shortcut is a `CommandId` (`src/ui/commands/`). The values double as Win32
   command IDs.
-- `CommandState` holds what the commands depend on (a sync running, the selection, whether the log shows).
+- `CommandState` holds what the commands depend on (a sync running, whether the tools are installed or at work, the
+  selection, whether the log shows).
   `enabled(id)` and `checked(id)` are the only enable rules, so the menu, the toolbar and the shortcuts can't
   disagree. `MainWindow::command_state()` builds it from the window's current state.
 - `MainMenu.cpp` lists the menus as tables of `command_item(id, text)`, with the shortcut after a tab. On
@@ -27,15 +28,22 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 `WindowPlacement` (`WindowPlacement.cpp`) handles the window's bounds and maximized state; `MainWindow` hands it the
 saved `Placement` and asks it for the current one.
 
-1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/`) with the defaults and loads the `Settings`;
-   a `settings.json` that doesn't read ends the app there. `MainWindow` gets the store and the loaded settings.
+1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/settings/`) with the defaults and loads the `Settings`;
+   a `settings.json` that doesn't read ends the app there. Its files live in `%LOCALAPPDATA%\WestieLib`, or in the
+   folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue` and the
+   `ToolManager`, so both outlive the window. `MainWindow` gets the store, the loaded settings, the queue and the tool
+   manager, and makes itself the queue's target.
 2. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
 3. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
    `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
    saved state, `apply_initial_size` uses `InitialWindowDips`, clamped to the monitor's work area.
-4. `main.cpp` calls `show(nCmdShow)`. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` / `SW_SHOWDEFAULT` into
-   `SW_SHOWMAXIMIZED` when the saved window was maximized; any other show command, say from a shortcut, wins.
-5. `WM_DESTROY` → `save_state()` → `WelcomePanel::commit_library_folder()` → `PostQuitMessage(0)`. The commit is for
+4. `main.cpp` starts a tool run (`ToolManager::run`), then calls `show(nCmdShow)`. Posted messages go before
+   `WM_PAINT`, so the first paint already shows the run. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` /
+   `SW_SHOWDEFAULT` into `SW_SHOWMAXIMIZED` when the saved window was maximized; any other show command, say from a
+   shortcut, wins.
+5. `WM_DESTROY` → `ToolManager::stop()` and `CoreEventQueue::set_target(nullptr)` → `save_state()` →
+   `WelcomePanel::commit_library_folder()` → `PostQuitMessage(0)`. The worker winds down while the window goes, and
+   `main.cpp` joins it after the window is gone; what it still reports stays in the queue. The commit is for
    a folder still being typed, since a close doesn't take the focus from the field first. `WindowPlacement::current`
    reads `GetWindowPlacement` and also counts a window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window
    torn down by an exception saves nothing, because `~Window` detaches before destroying.
@@ -45,11 +53,31 @@ saved `Placement` and asks it for the current one.
 - `MainToolbar` (`src/ui/toolbar/`) is a strip window. It paints the white background and the bottom rule, and hosts
   a `Toolbar` control. A button click, or a choice from the Sync all dropdown, goes to the callback `MainWindow`
   gives it, which is `run_command`. `update(CommandState)` enables the buttons and keeps the state for the dropdown.
-- `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths, its text padding, and the part texts:
-  Run, Tracks, Library and Tools from the left, an empty part, and Version against the right edge with its text
-  centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows the folder
-  `main.cpp` hands the window (`Music\WestieLib` for now), with a path ellipsis. The texts are owner-drawn, so
-  `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
+- `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths, its spacing, and the part texts:
+  Run, Tracks and Library from the left, an empty part, then Progress, Tools and Version against the right edge, with
+  Version's text centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows
+  the folder in effect, with a path ellipsis, and is the part that gives way when Progress needs the room. The texts
+  are owner-drawn, so `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
+- `MainStatusBar::set_tools` takes the `ToolBoard`. Tools gets the word, an icon for the board's `ToolMark` and the
+  tooltip. Progress gets the text from `tools_progress`, a width measured from that text, and the embedded
+  `ProgressBar` when the work has a percentage. Without work, Progress is 0 wide and its separator lies on the empty
+  part's. It starts at Working, since `main.cpp` starts a run right away.
+
+## Core events and tools
+
+- `CoreEventQueue` (`src/ui/events/`) is the core's `EventSink`. Any thread can `emit`; when the queue was empty it
+  posts `CoreEventsMessage` to the window, and `MainWindow::on_core_events` takes every queued event and `std::visit`s
+  each one onto an `apply_event` overload. Then `show_tools` updates the status bar, the commands and an open
+  Settings dialog.
+- `ToolBoard` (`src/ui/tools/`) is the UI's view of the tools: a `ToolStatus` per download, whether a run is going
+  (`ToolsRunChanged`) and when the releases were last checked (`ToolsChecked`). `ready()` means every tool has a
+  release, which gates Sync. `ToolMark` turns a status, or the board, into Ready, Working or Attention.
+  `ToolStatusText.cpp` has all the wording, and `RelativeDayText.cpp` the `today 14:03` / `yesterday` / `12 Oct`
+  style the playlist rows will share.
+- `Check for updates` calls `ToolManager::run(true)`. The run itself reports that it started, so the command grays
+  until it reports that it ended.
+- `show_settings` keeps the dialog in `settings_dialog_` while it's open, so tool events reach its list. It saves the
+  settings when anything in them changed.
 - Both measure their height in `apply_dpi`. `MainWindow::apply_dpi` makes the `FontSet` and hands the regular font
   and the DPI to both, and the set to the side panels. It runs in the constructor, on `WM_DPICHANGED`, and on
   `WM_SETTINGCHANGE` with `SPI_SETNONCLIENTMETRICS` (a new system font size).

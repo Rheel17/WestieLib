@@ -859,14 +859,17 @@ function statusBar(s, cfg) {
 		const { done, total } = runProgress(s);
 		run = `Syncing ${done} of ${total}<span class="pbar ctl" style="width:120px"><i style="width:${done / total * 100}%"></i></span>`;
 	}
-	const tools = cfg.firstRun
-		? `Installing tools… ffmpeg 45%<span class="pbar ctl" style="width:60px"><i style="width:45%"></i></span>`
-		: `Tools ${ic('synced', 's12')}`;
+	const tools = cfg.firstRun ? `Tools ${ic('syncing', 's12')}` : `Tools ${ic('synced', 's12')}`;
+	// Tools and Version sit against the right edge. While tools install, a part sized to its content comes before Tools.
+	const progress = cfg.firstRun
+		? `<div class="p" style="border-left:1px solid #cfcfcf">Installing tools… ffmpeg 45%<span class="pbar ctl" style="width:60px"><i style="width:45%"></i></span></div>`
+		: '';
 	return `<div class="statusbar"><div class="p" style="width:270px">${run}</div>
 		<div class="p" style="width:150px">${s.tracks.size} tracks</div>
 		<div class="p" style="width:450px">${LIBRARY}</div>
-		<div class="p" style="width:120px">${tools}</div>
-		<div class="p" style="margin-left:auto;width:80px;justify-content:center;border-left:1px solid #cfcfcf;border-right:0">v1.2.0</div><div class="grip" style="margin-left:0">${ic('grip')}</div></div>`;
+		<div style="margin-left:auto"></div>${progress}
+		<div class="p" style="width:120px;${progress ? '' : 'border-left:1px solid #cfcfcf'}">${tools}</div>
+		<div class="p" style="width:80px;justify-content:center;border-right:0">v1.2.0</div><div class="grip" style="margin-left:0">${ic('grip')}</div></div>`;
 }
 
 // ---------- dialogs ----------
@@ -884,7 +887,7 @@ function addDialog() {
 
 function settingsDialog() {
 	const spin = n => `<span class="spin"><span class="edit">${n}</span><span class="ud"><i>${UP}</i><i>${DOWN}</i></span></span>`;
-	const tools = [['yt-dlp', '2026.09.30'], ['ffmpeg', 'n8.0'], ['ffprobe', 'n8.0'], ['deno', 'v2.5.4']];
+	const tools = [['yt-dlp', '2026.10.21'], ['ffmpeg', 'n9.0'], ['deno', 'v2.5.4']];
 	return `<div class="dlg" style="width:540px">${dlgTitle('Settings')}
 		<div class="db">
 			<fieldset class="gbox"><legend>Library</legend>

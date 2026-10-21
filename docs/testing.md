@@ -33,10 +33,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - The app writes `HKCU\Software\WestieLib\Window` every time it closes. Any script that starts it must set the user's
   values aside first and put them back in a `finally` block, as `ui-checks.ps1` does. Never delete that key without
   restoring it. When the app saves a new value, add its name to `$StateNames`, or it won't be put back.
-- The same goes for `%LOCALAPPDATA%\WestieLib\settings.json`, which the app writes whenever the library folder
-  changes, closing included. `ui-checks.ps1` keeps the user's file's bytes and writes them back. When the user had no
-  file, it deletes the one the checks made, and the `WestieLib` folder too if the checks created it and nothing else
-  is in it. The checks only type library folders (`C:\WestieLib-check-<random>`, …), and never create them.
+- The app's files (`settings.json`, `tools\`) go to the folder `WESTIELIB_DATA_DIR` names, when it's set.
+  `ui-checks.ps1` sets it to a new folder under `%TEMP%` for the apps it starts, and deletes that folder in its
+  `finally` block, so `%LOCALAPPDATA%\WestieLib` is never touched. Any other script that starts the app does the same.
+  The checks only type library folders (`C:\WestieLib-check-<random>`, …), and never create them.
+- The checks never reach the network. Run 1 starts without tools. Run 2 starts with fake ones (`Install-FakeTools`):
+  a `tools.json` and empty executables.
 - Never cut such a script's output short (`| Select-Object -First n`): PowerShell then stops the script before its
   `finally` block, so the app keeps running and the user's values stay set aside. Filter with `Where-Object` or
   `Select-String`, which read to the end.
@@ -73,7 +75,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - The app sets menu item states when a popup opens, so send `WM_INITMENUPOPUP` before reading them
   (`Update-MenuStates`). `Send-Command` looks a command up by its menu text, so the scripts don't repeat IDs.
 - Common controls don't marshal pointers across processes. A message that fills a buffer (`TB_GETBUTTON`,
-  `SB_GETTEXTW`, …) needs the buffer in the app's process: use `SendForBuffer`.
+  `SB_GETTEXTW`, …) needs the buffer in the app's process: use `SendForBuffer`. A message that takes a struct pointing
+  at a text buffer (`TTM_GETTEXTW`, `LVM_GETITEMTEXTW`) needs both there: `SendForText` writes the struct into the
+  app's process. `TooltipText` and `ListViewRow` build on it.
+- A tooltip's owner is the top-level window, not the window its tools are in, so `TooltipText` asks each of the
+  process's tooltip windows for the tool.
+- `StatusIconColor` tells which icon a status bar part draws, by its color in a `PrintWindow` capture.
 - Text the app draws itself (the owner-drawn status bar parts) can't be read back with messages. The checks find it
   in a `PrintWindow` capture instead, as the columns darker than mid-gray (`StatusTextGaps`). `StatusSeparators` finds
   the bar's separator lines the same way. `Check-That` is for checks that pass within a range.

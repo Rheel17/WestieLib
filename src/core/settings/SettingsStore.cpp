@@ -1,14 +1,15 @@
-#include "core/SettingsStore.h"
+#include "core/settings/SettingsStore.h"
 
-#include <cstdint>
 #include <format>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <utility>
 
 #include <glaze/glaze.hpp>
+
+#include "core/json/JsonOptions.h"
+#include "core/json/Utf8Path.h"
 
 namespace westie::core {
 
@@ -16,33 +17,12 @@ namespace {
 
 constexpr int SettingsVersion = 1;
 
-// settings.json as it is on disk: camelCase keys, and the paths in UTF-8
+// settings.json as it is on disk: camelCase keys, and the paths in UTF-8. Missing keys keep their defaults.
 struct SettingsJson {
     int version = SettingsVersion;
     std::string library_path{};
+    std::optional<bool> auto_update_tools{};
 };
-
-// Files from a later version may have keys this one doesn't know
-constexpr glz::opts ReadOptions{.error_on_unknown_keys = false};
-
-struct WriteOptions : glz::opts {
-    std::uint8_t indentation_width = 4;
-};
-
-constexpr WriteOptions PrettyWriteOptions = [] {
-    WriteOptions options;
-    options.prettify = true;
-    return options;
-}();
-
-std::string to_utf8(const std::filesystem::path& path) {
-    std::u8string text = path.u8string();
-    return {text.begin(), text.end()};
-}
-
-std::filesystem::path from_utf8(std::string_view text) {
-    return std::u8string(text.begin(), text.end());
-}
 
 }
 
@@ -50,8 +30,8 @@ std::filesystem::path from_utf8(std::string_view text) {
 
 template<>
 struct glz::meta<westie::core::SettingsJson> {
-    static constexpr auto value =
-            glz::object("version", &westie::core::SettingsJson::version, "libraryPath", &westie::core::SettingsJson::library_path);
+    using T = westie::core::SettingsJson;
+    static constexpr auto value = glz::object("version", &T::version, "libraryPath", &T::library_path, "autoUpdateTools", &T::auto_update_tools);
 };
 
 namespace westie::core {
@@ -71,7 +51,7 @@ Settings SettingsStore::load() const {
 
     // A file that doesn't read is the user's to fix; writing the defaults over it would lose it
     SettingsJson json;
-    if (glz::error_ctx error = glz::read<ReadOptions>(json, *contents)) {
+    if (glz::error_ctx error = glz::read<JsonReadOptions>(json, *contents)) {
         throw std::runtime_error(
                 std::format("Couldn't read {}. Fix or delete it, then start WestieLib again.\n\n{}", to_utf8(file_), glz::format_error(error, *contents))
         );
@@ -79,14 +59,15 @@ Settings SettingsStore::load() const {
 
     Settings settings = defaults_;
     if (!json.library_path.empty()) {
-        settings.library_path = from_utf8(json.library_path);
+        settings.library_path = path_from_utf8(json.library_path);
     }
+    settings.auto_update_tools = json.auto_update_tools.value_or(defaults_.auto_update_tools);
     return settings;
 }
 
 void SettingsStore::save(const Settings& settings) {
-    SettingsJson json{.library_path = to_utf8(settings.library_path)};
-    glz::expected<std::string, glz::error_ctx> contents = glz::write<PrettyWriteOptions>(json);
+    SettingsJson json{.library_path = to_utf8(settings.library_path), .auto_update_tools = settings.auto_update_tools};
+    glz::expected<std::string, glz::error_ctx> contents = glz::write<PrettyJsonWriteOptions>(json);
     if (!contents) {
         throw std::runtime_error(std::format("Couldn't write {}: {}", to_utf8(file_), glz::format_error(contents.error())));
     }

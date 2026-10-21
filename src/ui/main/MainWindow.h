@@ -1,14 +1,21 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 
 #include <windows.h>
 
-#include "core/Settings.h"
-#include "core/SettingsStore.h"
+#include "core/settings/Settings.h"
+#include "core/settings/SettingsStore.h"
+#include "core/tools/ToolManager.h"
+#include "core/tools/ToolStatus.h"
+#include "core/tools/ToolsChecked.h"
+#include "core/tools/ToolsRunChanged.h"
 #include "ui/TrackCounts.h"
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
+#include "ui/dialogs/SettingsDialog.h"
+#include "ui/events/CoreEventQueue.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/FontSet.h"
 #include "ui/framework/MenuBarPainter.h"
@@ -22,6 +29,7 @@
 #include "ui/playlists/PlaylistPanel.h"
 #include "ui/statusbar/MainStatusBar.h"
 #include "ui/toolbar/MainToolbar.h"
+#include "ui/tools/ToolBoard.h"
 #include "ui/tracks/TrackPanel.h"
 #include "ui/welcome/WelcomePanel.h"
 
@@ -29,7 +37,7 @@ namespace westie::ui {
 
 class MainWindow final : public framework::Window {
 public:
-    MainWindow(core::SettingsStore& settings_store, core::Settings settings);
+    MainWindow(core::SettingsStore& settings_store, core::Settings settings, CoreEventQueue& events, core::ToolManager& tools);
 
     void show(int show_command) override;
 
@@ -51,6 +59,11 @@ private:
     void run_command(CommandId command);
     void toggle_log();
     void show_settings();
+    void show_tools();
+    void on_core_events();
+    void apply_event(const core::ToolsRunChanged& event);
+    void apply_event(const core::ToolStatus& status);
+    void apply_event(const core::ToolsChecked& event);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
     LRESULT on_draw_item(const DRAWITEMSTRUCT& item) const;
@@ -65,6 +78,9 @@ private:
 
     core::SettingsStore& settings_store_;
     core::Settings settings_;
+    CoreEventQueue& events_;
+    core::ToolManager& tools_;
+    ToolBoard tool_board_;
     WindowPlacement placement_;
     framework::WindowIcon icon_;
     framework::MenuBarPainter menu_bar_;
@@ -80,6 +96,8 @@ private:
     LogPanel log_;
     MainStatusBar status_bar_;
     PanelState panels_;
+    // Only while it's open, so tool events can reach it
+    std::optional<SettingsDialog> settings_dialog_;
 };
 
 }

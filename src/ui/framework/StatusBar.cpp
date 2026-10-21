@@ -1,31 +1,45 @@
 #include "ui/framework/StatusBar.h"
 
 #include <algorithm>
+#include <numeric>
 #include <utility>
 
 #include <windows.h>
 #include <commctrl.h>
 
+#include "platform/win32/UniqueHandle.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/framework/SavedDc.h"
 
 namespace westie::ui::framework {
+
+namespace {
+
+int measure(HDC dc, std::wstring_view text) {
+    SIZE size{};
+    platform::win32::check(GetTextExtentPoint32W(dc, text.data(), static_cast<int>(text.size()), &size), "GetTextExtentPoint32W");
+    return size.cx;
+}
+
+}
 
 StatusBar::StatusBar(HWND parent) :
         Control({
             .class_name = STATUSCLASSNAMEW,
             .style = WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP | CCS_NORESIZE | CCS_NOPARENTALIGN,
             .parent = parent,
-        }) {}
+        }),
+        tooltip_(hwnd()) {}
 
-void StatusBar::set_parts(std::span<const int> left_widths, int right_width) {
-    left_widths_.assign(left_widths.begin(), left_widths.end());
-    right_width_ = right_width;
+void StatusBar::set_parts(StatusParts parts) {
+    parts_ = std::move(parts);
     apply_parts();
 }
 
-void StatusBar::set_text_padding(int padding) {
-    text_padding_ = padding;
+void StatusBar::set_spacing(int padding, int gap) {
+    padding_ = padding;
+    gap_ = gap;
+    place_embedded();
     platform::win32::check(InvalidateRect(hwnd(), nullptr, TRUE), "InvalidateRect");
 }
 
@@ -36,11 +50,30 @@ void StatusBar::set_text(int part, std::wstring text, const PartFormat& format) 
     texts_[part] = {.text = std::move(text), .format = format};
 
     // The native part text sits 3 px from the edge with no way to pad it, so the parent's WM_DRAWITEM draws it. The
-    // right part would draw its own separator at the window's edge.
-    int flags = SBT_OWNERDRAW | (is_right_part(part) ? SBT_NOBORDERS : 0);
+    // last part would draw its own separator at the window's edge.
+    int flags = SBT_OWNERDRAW | (is_last_part(part) ? SBT_NOBORDERS : 0);
     platform::win32::check(SendMessageW(hwnd(), SB_SETTEXTW, part | flags, 0), "SB_SETTEXTW");
     RECT bounds = part_rect(part).to_rect();
     platform::win32::check(InvalidateRect(hwnd(), &bounds, TRUE), "InvalidateRect");
+}
+
+void StatusBar::set_tip(int part, std::wstring text) {
+    std::wstring& tip = tips_[part];
+    tip = std::move(text);
+    tooltip_.set_tool(part, part_rect(part), tip);
+}
+
+void StatusBar::embed(int part, HWND window, std::optional<Size> size) {
+    embedded_[part] = {.window = window, .size = size};
+    place_embedded();
+}
+
+int StatusBar::text_width(std::wstring_view text) const {
+    platform::win32::UniqueMemoryDc dc(platform::win32::check(CreateCompatibleDC(nullptr), "CreateCompatibleDC"));
+    if (auto font = reinterpret_cast<HFONT>(SendMessageW(hwnd(), WM_GETFONT, 0, 0))) {
+        SelectObject(dc.get(), font);
+    }
+    return measure(dc.get(), text);
 }
 
 void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
@@ -58,11 +91,21 @@ void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
 
     // The rect for a part that runs to the edge reaches under the size grip; the bar's own rect for it stops there
     RECT bounds = item.rcItem;
-    bounds.left += text_padding_;
-    bounds.right = std::min(bounds.right, static_cast<LONG>(part_rect(static_cast<int>(item.itemID)).right)) - text_padding_;
+    bounds.left += padding_;
+    bounds.right = std::min(bounds.right, static_cast<LONG>(part_rect(static_cast<int>(item.itemID)).right)) - padding_;
+    const IconResource* icon = part.format.icon;
+    if (icon) {
+        // The icon follows the text, so the text gets what's left after it, and no more than it needs
+        int text_right = std::max<int>(bounds.left, bounds.right - gap_ - icon->size());
+        bounds.right = std::min<int>(text_right, bounds.left + measure(item.hDC, part.text));
+    }
+
     UINT ellipsis = part.format.ellipsis == TextEllipsis::Path ? DT_PATH_ELLIPSIS : DT_END_ELLIPSIS;
     UINT alignment = part.format.alignment == TextAlignment::Center ? DT_CENTER : DT_LEFT;
     DrawTextW(item.hDC, part.text.c_str(), static_cast<int>(part.text.size()), &bounds, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | ellipsis | alignment);
+    if (icon) {
+        icon->draw(item.hDC, bounds.right + gap_, (item.rcItem.top + item.rcItem.bottom - icon->size()) / 2);
+    }
 }
 
 LRESULT StatusBar::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -77,27 +120,71 @@ void StatusBar::apply_parts() {
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
 
-    // The left parts, then one that takes up the slack, then the right part. -1 runs that one to the edge without a
-    // separator, and its rect, which the text is drawn in, stops at the size grip.
+    // When the window is too narrow, the yielding part gives up what's missing
+    std::vector<int> left_widths = parts_.left_widths;
+    int right_total = std::reduce(parts_.right_widths.begin(), parts_.right_widths.end());
+    int room = std::max(0, static_cast<int>(client.right) - right_total);
+    int missing = std::reduce(left_widths.begin(), left_widths.end()) - room;
+    if (missing > 0 && std::cmp_less(parts_.yielding, left_widths.size())) {
+        left_widths[parts_.yielding] = std::max(0, left_widths[parts_.yielding] - missing);
+    }
+
+    // The left parts, then one that takes up the slack, then the right parts. -1 runs the last one to the edge without
+    // a separator, and its rect, which the text is drawn in, stops at the size grip.
     std::vector<int> right_edges;
     int right = 0;
-    for (int width : left_widths_) {
+    for (int width : left_widths) {
         right += width;
         right_edges.push_back(right);
     }
-    right_edges.push_back(std::max(right, static_cast<int>(client.right) - right_width_));
+    right = std::max(right, static_cast<int>(client.right) - right_total);
+    right_edges.push_back(right);
+    for (std::size_t index = 0; index + 1 < parts_.right_widths.size(); ++index) {
+        right += parts_.right_widths[index];
+        right_edges.push_back(right);
+    }
     right_edges.push_back(-1);
     platform::win32::check(SendMessageW(hwnd(), SB_SETPARTS, right_edges.size(), reinterpret_cast<LPARAM>(right_edges.data())), "SB_SETPARTS");
+
+    place_embedded();
+    place_tips();
 }
 
-bool StatusBar::is_right_part(int part) const noexcept {
-    return std::cmp_equal(part, left_widths_.size() + 1);
+void StatusBar::place_embedded() const {
+    for (const auto& [part, embedded] : embedded_) {
+        Rect bounds = padded_rect(part);
+        if (!embedded.size || bounds.width() < embedded.size->width) {
+            platform::win32::check(SetWindowPos(embedded.window, nullptr, 0, 0, 0, 0, SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE), "SetWindowPos");
+            continue;
+        }
+        Size size = *embedded.size;
+        int top = bounds.top + (bounds.height() - size.height) / 2;
+        platform::win32::check(
+                SetWindowPos(embedded.window, nullptr, bounds.right - size.width, top, size.width, size.height, SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOACTIVATE),
+                "SetWindowPos"
+        );
+    }
+}
+
+void StatusBar::place_tips() {
+    for (const auto& [part, tip] : tips_) {
+        tooltip_.set_tool(part, part_rect(part), tip);
+    }
+}
+
+bool StatusBar::is_last_part(int part) const noexcept {
+    return std::cmp_equal(part, parts_.left_widths.size() + parts_.right_widths.size());
 }
 
 Rect StatusBar::part_rect(int part) const {
     RECT rect;
     platform::win32::check(SendMessageW(hwnd(), SB_GETRECT, part, reinterpret_cast<LPARAM>(&rect)), "SB_GETRECT");
     return Rect::from_rect(rect);
+}
+
+Rect StatusBar::padded_rect(int part) const {
+    Rect bounds = part_rect(part);
+    return {bounds.left + padding_, bounds.top, bounds.right - padding_, bounds.bottom};
 }
 
 }

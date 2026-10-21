@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <utility>
+#include <variant>
 
 #include "ResourceIds.h"
 #include "platform/win32/UniqueHandle.h"
@@ -26,10 +27,12 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 
 }
 
-MainWindow::MainWindow(core::SettingsStore& settings_store, core::Settings settings) :
+MainWindow::MainWindow(core::SettingsStore& settings_store, core::Settings settings, CoreEventQueue& events, core::ToolManager& tools) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
         settings_(std::move(settings)),
+        events_(events),
+        tools_(tools),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
@@ -60,6 +63,7 @@ MainWindow::MainWindow(core::SettingsStore& settings_store, core::Settings setti
         placement_.apply_initial_size(InitialWindowDips);
     }
     update_commands();
+    events_.set_target(hwnd());
 }
 
 void MainWindow::show(int show_command) {
@@ -72,18 +76,19 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     }
 
     switch (message) {
-    case WM_COMMAND:       on_command(wparam, lparam); return 0;
-    case WM_INITMENUPOPUP: on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
-    case WM_DRAWITEM:      return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
-    case WM_GETMINMAXINFO: on_get_min_max_info(*reinterpret_cast<MINMAXINFO*>(lparam)); return 0;
-    case WM_SIZE:          layout_panels(); return 0;
-    case WM_DPICHANGED:    on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
-    case WM_SETTINGCHANGE: on_setting_change(wparam); return Window::handle_message(message, wparam, lparam);
+    case CoreEventsMessage: on_core_events(); return 0;
+    case WM_COMMAND:        on_command(wparam, lparam); return 0;
+    case WM_INITMENUPOPUP:  on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
+    case WM_DRAWITEM:       return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
+    case WM_GETMINMAXINFO:  on_get_min_max_info(*reinterpret_cast<MINMAXINFO*>(lparam)); return 0;
+    case WM_SIZE:           layout_panels(); return 0;
+    case WM_DPICHANGED:     on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
+    case WM_SETTINGCHANGE:  on_setting_change(wparam); return Window::handle_message(message, wparam, lparam);
     case WM_NCPAINT:
-    case WM_NCACTIVATE:    return on_non_client_paint(message, wparam, lparam);
-    case WM_THEMECHANGED:  menu_bar_.load_theme(); return Window::handle_message(message, wparam, lparam);
-    case WM_DESTROY:       on_destroy(); return 0;
-    default:               return Window::handle_message(message, wparam, lparam);
+    case WM_NCACTIVATE:     return on_non_client_paint(message, wparam, lparam);
+    case WM_THEMECHANGED:   menu_bar_.load_theme(); return Window::handle_message(message, wparam, lparam);
+    case WM_DESTROY:        on_destroy(); return 0;
+    default:                return Window::handle_message(message, wparam, lparam);
     }
 }
 
@@ -158,7 +163,7 @@ void MainWindow::layout_panels() {
 }
 
 CommandState MainWindow::command_state() const {
-    return {.log_visible = panels_.log_visible};
+    return {.tools_ready = tool_board_.ready(), .tools_busy = tool_board_.running(), .log_visible = panels_.log_visible};
 }
 
 void MainWindow::update_commands() {
@@ -171,11 +176,12 @@ void MainWindow::run_command(CommandId command) {
     }
 
     switch (command) {
-    case CommandId::Exit:      SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
-    case CommandId::ToggleLog: toggle_log(); return;
-    case CommandId::Settings:  show_settings(); return;
-    case CommandId::About:     show_about_dialog(hwnd()); return;
-    default:                   return;
+    case CommandId::Exit:            SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::ToggleLog:       toggle_log(); return;
+    case CommandId::Settings:        show_settings(); return;
+    case CommandId::CheckForUpdates: tools_.run(true); return;
+    case CommandId::About:           show_about_dialog(hwnd()); return;
+    default:                         return;
     }
 }
 
@@ -189,11 +195,48 @@ void MainWindow::show_settings() {
     // A folder typed into the welcome field takes effect when the field loses focus, which comes only after the dialog
     // has read the settings
     welcome_.commit_library_folder();
-    std::optional<core::Settings> settings = SettingsDialog(settings_).edit(hwnd());
-    if (settings && settings->library_path != settings_.library_path) {
-        change_library_folder(settings->library_path);
-        welcome_.set_library_folder(settings->library_path);
+    settings_dialog_.emplace(settings_, tool_board_, [this] { run_command(CommandId::CheckForUpdates); });
+    settings_dialog_->show_tools(command_state().enabled(CommandId::CheckForUpdates));
+    std::optional<core::Settings> settings = settings_dialog_->edit(hwnd());
+    settings_dialog_.reset();
+    if (!settings || *settings == settings_) {
+        return;
     }
+
+    bool folder_changed = settings->library_path != settings_.library_path;
+    settings_ = std::move(*settings);
+    settings_store_.save(settings_);
+    if (folder_changed) {
+        status_bar_.set_library_folder(settings_.library_path);
+        welcome_.set_library_folder(settings_.library_path);
+    }
+}
+
+void MainWindow::show_tools() {
+    status_bar_.set_tools(tool_board_);
+    update_commands();
+    if (settings_dialog_) {
+        settings_dialog_->show_tools(command_state().enabled(CommandId::CheckForUpdates));
+    }
+}
+
+void MainWindow::on_core_events() {
+    for (const core::CoreEvent& event : events_.take()) {
+        std::visit([this](const auto& payload) { apply_event(payload); }, event);
+    }
+    show_tools();
+}
+
+void MainWindow::apply_event(const core::ToolsRunChanged& event) {
+    tool_board_.set_running(event.running);
+}
+
+void MainWindow::apply_event(const core::ToolStatus& status) {
+    tool_board_.apply(status);
+}
+
+void MainWindow::apply_event(const core::ToolsChecked& event) {
+    tool_board_.set_checked_at(event.checked_at);
 }
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
@@ -268,6 +311,9 @@ LRESULT MainWindow::on_non_client_paint(UINT message, WPARAM wparam, LPARAM lpar
 }
 
 void MainWindow::on_destroy() {
+    // The worker winds down while the window goes, and whatever it still reports stays in the queue
+    tools_.stop();
+    events_.set_target(nullptr);
     save_state();
     // A folder typed into the field takes effect when the field loses focus, which a close doesn't wait for
     welcome_.commit_library_folder();

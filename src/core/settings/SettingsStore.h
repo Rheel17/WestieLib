@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-#include "core/Settings.h"
+#include "core/settings/Settings.h"
 #include "platform/FileOps.h"
 
 namespace westie::core {

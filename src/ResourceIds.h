@@ -10,8 +10,14 @@
 #define IDI_GEAR             8
 #define IDI_GEAR_DISABLED    9
 #define IDI_LIBRARY          10
+#define IDI_SYNCED           11
+#define IDI_WARN             12
 
 #define IDD_SETTINGS              100
 #define IDC_LIBRARY_FOLDER        1000
 #define IDC_CHANGE_LIBRARY_FOLDER 1001
 #define IDC_VERSION               1002
+#define IDC_TOOLS                 1003
+#define IDC_AUTO_UPDATE_TOOLS     1004
+#define IDC_CHECK_FOR_UPDATES     1005
+#define IDC_LAST_CHECKED          1006

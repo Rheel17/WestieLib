@@ -24,6 +24,18 @@ void write_flushed(const std::filesystem::path& file, std::string_view contents)
 
 }
 
+bool Win32FileOps::is_file(const std::filesystem::path& file) const {
+    DWORD attributes = GetFileAttributesW(file.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+            return false;
+        }
+        throw_error(error, "GetFileAttributesW");
+    }
+    return (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
 std::optional<std::string> Win32FileOps::read_file(const std::filesystem::path& file) const {
     UniqueFile handle = adopt_file(CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!handle) {

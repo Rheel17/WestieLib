@@ -40,8 +40,9 @@ file names such as `Win32Error.cpp`.
   IDs are macros in `src/ResourceIds.h`, shared by the `.rc` and C++ (`IDI_APP_ICON`, `IDI_PLUS`, …; `IDD_` dialogs
   from 100, `IDC_` dialog controls from 1000). The `.rc` is UTF-8 (`#pragma code_page(65001)`), so labels can hold `…`.
 - `res/glyphs/*.ico` are the UI's glyphs, rendered by `res/make-glyphs.ps1` from the icon table in
-  `plan/ui-mockup.html`. WPF draws each glyph's SVG markup at 16–48 px (100–300% scaling). Glyphs marked in the
-  script's table also get a `-disabled` copy (grayscale at 45% opacity) for disabled toolbar buttons. The files are
+  `plan/ui-mockup.html`. WPF draws each glyph's SVG markup at 16–48 px (100–300% scaling), and glyphs marked `Small`
+  also at 12–36 px, for the status bar's 12 px icons. Glyphs marked `Disabled` also get a `-disabled` copy (grayscale
+  at 45% opacity) for disabled toolbar buttons. The files are
   committed. To add a glyph, add its name to the table and run the script, then add an `ICON` line to the `.rc` and
   an `IDI_` macro. CMake globs `res/glyphs` for the `.rc`'s dependencies.
 - `make-icon.ps1` and `make-glyphs.ps1` share the ICO writer in `res/IconFile.ps1`.

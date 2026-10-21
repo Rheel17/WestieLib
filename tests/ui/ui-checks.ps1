@@ -1,12 +1,12 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
 # states, commands and shortcuts, the toolbar and status bar, the side panels' first-run content, sizes, splitter drags
-# and limits, the log pane, painting during a drag, the library folder, the Settings dialog, and saving/restoring the
-# window state and settings.json across restarts.
+# and limits, the log pane, painting during a drag, the library folder, the Settings dialog, the tools' state, and
+# saving/restoring the window state and settings.json across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
-# The exit code is the number of failed checks. The user's saved window state and settings.json are set aside and put
-# back afterwards.
+# The exit code is the number of failed checks. The user's saved window state is set aside and put back afterwards. The
+# app's files go to a scratch folder (WESTIELIB_DATA_DIR), which is deleted at the end.
 
 param(
 	[Parameter(Mandatory)] [string]$Exe,
@@ -51,6 +51,7 @@ public static class W {
 	[DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
 	[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
 	[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+	[DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
 	[DllImport("user32.dll")] public static extern int MapWindowPoints(IntPtr from, IntPtr to, ref RECT r, int count);
 	[DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
 	[DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
@@ -112,6 +113,77 @@ public static class W {
 		var s = Encoding.Unicode.GetString(bytes);
 		int end = s.IndexOf('\0');
 		return end < 0 ? s : s.Substring(0, end);
+	}
+
+	[DllImport("kernel32.dll")] static extern bool WriteProcessMemory(IntPtr process, IntPtr address, byte[] buffer, IntPtr size, out IntPtr written);
+
+	// Sends a message whose lparam is a struct that points at a text buffer, both in the window's process. `build` fills
+	// the struct, given the buffer's address; the text comes back from the buffer.
+	static string SendForText(IntPtr h, uint msg, IntPtr w, int structSize, Func<long, byte[]> build) {
+		const int TextOffset = 256, TextBytes = 2048;
+		int pid;
+		GetWindowThreadProcessId(h, out pid);
+		IntPtr process = OpenProcess(0x38, false, pid);
+		IntPtr remote = VirtualAllocEx(process, IntPtr.Zero, (IntPtr)(TextOffset + TextBytes), 0x3000, 0x04);
+		try {
+			var request = build((long)remote + TextOffset);
+			IntPtr done;
+			WriteProcessMemory(process, remote, request, (IntPtr)structSize, out done);
+			SendMessageW(h, msg, w, remote);
+			var text = new byte[TextBytes];
+			ReadProcessMemory(process, (IntPtr)((long)remote + TextOffset), text, (IntPtr)TextBytes, out done);
+			return Utf16(text);
+		} finally {
+			VirtualFreeEx(process, remote, IntPtr.Zero, 0x8000);
+			CloseHandle(process);
+		}
+	}
+
+	// The text of tool `id` of `window`, from whichever of its process's tooltip windows has it. A tooltip's owner is
+	// the top-level window, not the window its tools are in. TOOLINFOW on x64: hwnd at 8, uId at 16, lpszText at 48,
+	// 72 bytes.
+	public static string TooltipText(IntPtr window, int id) {
+		int pid, owner;
+		GetWindowThreadProcessId(window, out pid);
+		var tooltips = new List<IntPtr>();
+		EnumWindows((h, l) => {
+			GetWindowThreadProcessId(h, out owner);
+			if (owner == pid && ClassOf(h) == "tooltips_class32") tooltips.Add(h);
+			return true;
+		}, IntPtr.Zero);
+		foreach (var tooltip in tooltips) {
+			var found = SendForText(tooltip, 0x438, (IntPtr)1024, 72, text => {
+				var info = new byte[72];
+				BitConverter.GetBytes(72).CopyTo(info, 0);
+				BitConverter.GetBytes((long)window).CopyTo(info, 8);
+				BitConverter.GetBytes((long)id).CopyTo(info, 16);
+				BitConverter.GetBytes(text).CopyTo(info, 48);
+				return info;
+			});
+			if (found.Length > 0) return found;
+		}
+		return "";
+	}
+
+	// A list view row's cells in display order, joined with " | ". LVITEMW on x64: iSubItem at 8, pszText at 24,
+	// cchTextMax at 32, 88 bytes.
+	public static string ListViewRow(IntPtr list, int item) {
+		var header = SendMessageW(list, 0x101F, IntPtr.Zero, IntPtr.Zero);
+		int count = (int)SendMessageW(header, 0x1200, IntPtr.Zero, IntPtr.Zero);
+		long result;
+		var order = SendForBuffer(list, 0x103B, (IntPtr)count, count * 4, out result);
+		var cells = new List<string>();
+		for (int i = 0; i < count; i++) {
+			int column = BitConverter.ToInt32(order, i * 4);
+			cells.Add(SendForText(list, 0x1073, (IntPtr)item, 88, text => {
+				var row = new byte[88];
+				BitConverter.GetBytes(column).CopyTo(row, 8);
+				BitConverter.GetBytes(text).CopyTo(row, 24);
+				BitConverter.GetBytes(1024).CopyTo(row, 32);
+				return row;
+			}));
+		}
+		return String.Join(" | ", cells);
 	}
 
 	// Button texts, with " v" for a dropdown and " (disabled)"; separators show as "-"
@@ -272,6 +344,25 @@ public static class W {
 			}
 			return new[] { first - area.Left, area.Right - 1 - last };
 		}
+	}
+
+	// The color of the icon in a status bar part: green (ready), blue (working), amber (attention), or none
+	public static string StatusIconColor(IntPtr window, IntPtr bar, int part) {
+		RECT area = StatusPartRect(bar, part);
+		int dx, dy, green = 0, blue = 0, amber = 0;
+		using (var bitmap = Capture(window, bar, out dx, out dy)) {
+			for (int x = area.Left; x < area.Right; x++) {
+				for (int y = area.Top; y < area.Bottom; y++) {
+					var p = bitmap.GetPixel(x + dx, y + dy);
+					if (p.G > p.R + 40 && p.G > p.B + 40) green++;
+					else if (p.B > p.R + 60 && p.B > p.G + 30) blue++;
+					else if (p.R > 200 && p.G > 120 && p.G < 220 && p.B < 90) amber++;
+				}
+			}
+		}
+		int most = Math.Max(green, Math.Max(blue, amber));
+		if (most < 8) return "none";
+		return most == green ? "green" : most == blue ? "blue" : "amber";
 	}
 
 	[StructLayout(LayoutKind.Sequential)] public struct MENUBARINFO { public int Size; public RECT Bar; public IntPtr Menu, MenuWindow; public int Flags; }
@@ -569,7 +660,11 @@ if (Get-Process WestieLib -ErrorAction SilentlyContinue) { throw 'WestieLib is r
 
 $KeyPath = 'HKCU:\Software\WestieLib\Window'
 $StateNames = 'Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible'
-$SettingsFile = Join-Path $env:LOCALAPPDATA 'WestieLib\settings.json'
+# The app keeps its files here instead of %LOCALAPPDATA%\WestieLib, so the user's settings and tools stay untouched
+$DataDir = Join-Path ([IO.Path]::GetTempPath()) "WestieLib-checks-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+$env:WESTIELIB_DATA_DIR = $DataDir
+$SettingsFile = Join-Path $DataDir 'settings.json'
+$ToolsDir = Join-Path $DataDir 'tools'
 $script:failures = 0
 $script:dpi = 96
 $app = $null
@@ -772,19 +867,25 @@ function Check-Scaled($hwnd) {
 	Check-Welcome 'Welcome screen' $hwnd
 }
 
-# Run, Tracks, Library and Tools from the left, then Version running to the right edge. Version's rect stops where the
-# size grip starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but
-# Version.
+# Status bar parts from the left; Progress has no width while no tools are at work
+$ToolsPart = 5
+$VersionPart = 6
+
+# Run, Tracks and Library from the left, then the empty Progress, Tools, and Version running to the right edge.
+# Version's rect stops where the size grip starts, or at the edge when the window is maximized and shows no grip.
+# Separators follow every part but Version, the empty part's on top of the slack's.
 function Check-StatusParts([string]$what, $hwnd) {
 	$status = Get-StatusBar $hwnd
 	$cw = Get-ClientWidth $hwnd
 	$edges = @()
 	$right = 0
-	foreach ($width in 270, 150, 450, 120) { $right += S $width; $edges += $right }
+	foreach ($width in 270, 150, 450) { $right += S $width; $edges += $right }
+	$edges += $cw - (S 120) - (S 80)
+	$parts = $edges + @($edges[-1], ($cw - (S 80)))
 	$edges += $cw - (S 80)
-	$grip = $cw - [W]::StatusPartRect($status, 5).Right
+	$grip = $cw - [W]::StatusPartRect($status, $VersionPart).Right
 	$fits = if ([W]::IsZoomed($hwnd)) { $grip -eq 0 } else { $grip -gt 0 -and $grip -le (S 20) }
-	Check $what "$([W]::StatusParts($status)) | stops at grip: $fits" "$($edges -join ' ') -1 | stops at grip: True"
+	Check $what "$([W]::StatusParts($status)) | stops at grip: $fits" "$($parts -join ' ') -1 | stops at grip: True"
 
 	$lines = @([W]::StatusSeparators($hwnd, $status))
 	$matching = $lines.Count -eq $edges.Count
@@ -799,7 +900,7 @@ function Check-StatusTexts([string]$what, $hwnd) {
 	$gaps = @(0, 1, 2 | ForEach-Object { [W]::StatusTextGaps($hwnd, $status, $_)[0] })
 	$padded = @($gaps | Where-Object { $_ -ge (S 8) -and $_ -le (S 8) + 2 }).Count -eq 3
 	Check-That "$what Ready's | tracks' | folder's left gap" ($gaps -join ' | ') $padded "$(S 8) to $((S 8) + 2) each"
-	$version = [W]::StatusTextGaps($hwnd, $status, 5)
+	$version = [W]::StatusTextGaps($hwnd, $status, $VersionPart)
 	Check-That "$what Version's left | right gap" "$($version[0]) | $($version[1])" ([math]::Abs($version[0] - $version[1]) -le 1 -and $version[0] -ge (S 8)) 'equal within 1, at least the padding'
 }
 
@@ -998,6 +1099,7 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 			$version = @([W]::Children($dialog, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like 'WestieLib *' })
 			Check '  the version' ($version -join ', ') "WestieLib $((Get-Item $Exe).VersionInfo.ProductVersion)"
 			Check '  starts on Change, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Change$([char]0x2026) 0"
+			Check '  tools, none installed' (Get-SettingsTools $dialog) 'yt-dlp |  | Not installed / ffmpeg |  | Not installed | auto 1 | Never checked | check True'
 			if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-settings.png") }
 		}
 		& $closes[$i].Close $dialog
@@ -1050,6 +1152,77 @@ function Get-SavedSettings {
 	if (-not (Test-Path $SettingsFile)) { return 'no file' }
 	$json = Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
 	"version $($json.version), $($json.libraryPath)"
+}
+
+function Get-SavedAutoUpdate {
+	if (-not (Test-Path $SettingsFile)) { return 'no file' }
+	(Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json).autoUpdateTools
+}
+
+$Invariant = [Globalization.CultureInfo]::InvariantCulture
+$CheckedAt = [DateTime]::UtcNow.AddDays(-10)
+
+# What Settings says for a check at $CheckedAt: the local day and month, and the year when it isn't this one
+function Get-LastCheckedText {
+	$local = $CheckedAt.ToLocalTime()
+	$year = if ($local.Year -ne [DateTime]::Now.Year) { " $($local.Year)" } else { '' }
+	"Last checked $($local.Day) $($local.ToString('MMM', $Invariant))$year"
+}
+
+# Installed tools as the app would leave them: tools.json, checked at $CheckedAt, and the executables, here empty
+function Install-FakeTools {
+	New-Item -ItemType Directory -Force $ToolsDir | Out-Null
+	foreach ($file in 'yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
+	$json = '{"version": 1, "checkedAt": "' + $CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $Invariant) + '", "tools": {' +
+		'"yt-dlp": {"release": "2026.10.21", "digest": "sha256:0"}, "ffmpeg": {"release": "n9.0", "digest": "sha256:0"}}}'
+	[IO.File]::WriteAllText((Join-Path $ToolsDir 'tools.json'), $json)
+}
+
+# The Tools part's icon color and tooltip lines
+function Check-ToolsPart([string]$what, $hwnd, [string]$expected) {
+	$status = Get-StatusBar $hwnd
+	$tip = [W]::TooltipText($status, $ToolsPart) -replace "`r`n", ' / '
+	Check $what "$([W]::StatusIconColor($hwnd, $status, $ToolsPart)) | $tip" $expected
+}
+
+# The Settings dialog's Tools group: the list's rows, the check box, Last checked, and whether Check for updates is
+# enabled
+function Get-SettingsTools($dialog) {
+	$list = [W]::GetDlgItem($dialog, 1003)
+	$count = [int][W]::SendMessageW($list, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
+	$rows = @(0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) }) -join ' / '
+	$auto = [W]::SendMessageW([W]::GetDlgItem($dialog, 1004), 0xF0, [IntPtr]::Zero, [IntPtr]::Zero)
+	"$rows | auto $auto | $([W]::TextOf([W]::GetDlgItem($dialog, 1006))) | check $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1005)))"
+}
+
+# The Tools group with the tools installed. Check for updates runs at once and comes back to the same list; the check
+# box takes effect on OK, and is saved.
+function Check-SettingsTools($hwnd) {
+	$installed = "yt-dlp | 2026.10.21 | Installed / ffmpeg | n9.0 | Installed"
+	Send-Command $hwnd '&Settings...'
+	$dialog = Wait-OwnedWindow $hwnd
+	Check 'Settings, tools installed' (Get-SettingsTools $dialog) "$installed | auto 1 | $(Get-LastCheckedText) | check True"
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1005), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 500
+	Check '  after Check for updates' (Get-SettingsTools $dialog) "$installed | auto 1 | $(Get-LastCheckedText) | check True"
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 200
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	Check '  unchecking Update tools automatically, then Cancel' (Get-SavedAutoUpdate) 'True'
+
+	Send-Command $hwnd '&Settings...'
+	$dialog = Wait-OwnedWindow $hwnd
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 200
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	Check '  then OK saves it' (Get-SavedAutoUpdate) 'False'
+	Send-Command $hwnd '&Settings...'
+	$dialog = Wait-OwnedWindow $hwnd
+	Check '  and the dialog shows it' ((Get-SettingsTools $dialog) -replace '^.* \| (auto \d) \|.*$', '$1') 'auto 0'
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
 }
 
 # Starts the app with a settings.json that isn't JSON: it shows the error instead of its window, exits with 1, and
@@ -1196,9 +1369,6 @@ function Measure-UnpaintedDragSteps($hwnd) {
 
 $userState = if (Test-Path $KeyPath) { Get-ItemProperty $KeyPath } else { $null }
 Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
-$userSettings = if (Test-Path $SettingsFile) { [IO.File]::ReadAllBytes($SettingsFile) } else { $null }
-$hadSettingsFolder = Test-Path (Split-Path $SettingsFile)
-Remove-Item $SettingsFile -ErrorAction SilentlyContinue
 
 try {
 	"--- Run 1: no saved state"
@@ -1222,8 +1392,9 @@ try {
 		Check "  $(([W]::MenuText($menu) -split ' ')[$i]) items" ([W]::PopupText([W]::GetSubMenu($menu, $i))) $popups[$i]
 	}
 	Update-MenuStates $h
-	Check 'Grayed while idle with nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &selected playlist, &Cancel, &Confirm match, C&hoose video..., ' +
-		'&Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
+	Check 'Grayed while idle, no tools, nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &all, Sync &selected playlist, &Cancel, ' +
+		'&Confirm match, C&hoose video..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
+	Check-ToolsPart 'No tools installed: Tools icon | tooltip' $h 'amber | yt-dlp: not installed / ffmpeg: not installed'
 	Check 'Checked items' ([W]::ItemsWithState($menu, 0x8)) ''
 	Send-Command $h '&About WestieLib'
 	$about = Wait-OwnedWindow $h
@@ -1237,7 +1408,7 @@ try {
 	Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
 	Check-Bars 'Toolbar strip | status bar' $h
 	$toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
-	Check 'Toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
+	Check 'Toolbar buttons, no tools' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v (disabled), Cancel (disabled), -, Settings'
 	Check-Toolbar ' ' $h
 	Check-StatusParts 'Status bar part edges' $h
 	Check-StatusTexts ' ' $h
@@ -1312,10 +1483,15 @@ try {
 	Check '  saved maximized, widths (DIPs)' "$($saved.Maximized) $($saved.PlaylistsWidthDips) $($saved.InspectorWidthDips)" '0 250 500'
 	Check '  saved log visible, height (DIPs)' "$($saved.LogVisible) $($saved.LogHeightDips)" '1 200'
 
-	"--- Run 2: restore a normal window"
+	"--- Run 2: restore a normal window, with tools installed"
+	Install-FakeTools
 	$app = Start-App
 	$h = $app.Hwnd
 	$cw = Get-ClientWidth $h
+	Check-ToolsPart 'Tools installed: Tools icon | tooltip' $h 'green | yt-dlp 2026.10.21 / ffmpeg n9.0'
+	$toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
+	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
+	Check-SettingsTools $h
 	Check 'Restored bounds' (Get-Bounds $h) "100,100 $(S 1200)x$(S 750)"
 	Check-Widths 'Restored widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 	Check-Bars '  toolbar strip | status bar' $h
@@ -1398,14 +1574,7 @@ try {
 		}
 		"Put the user's saved window state back"
 	}
-	Remove-Item $SettingsFile -ErrorAction SilentlyContinue
-	if ($userSettings) {
-		[IO.File]::WriteAllBytes($SettingsFile, $userSettings)
-		"Put the user's settings.json back"
-	} elseif (-not $hadSettingsFolder) {
-		# Only when nothing else came to live in it
-		try { [IO.Directory]::Delete((Split-Path $SettingsFile)) } catch {}
-	}
+	Remove-Item $DataDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 "--- $($script:failures) failure(s)"
