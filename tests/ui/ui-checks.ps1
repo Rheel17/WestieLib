@@ -271,6 +271,28 @@ public static class W {
 		}
 	}
 
+	// The bounds of a toolbar button's text (the pixels that aren't white, textOffset into the button), and whether its
+	// edges have ClearType's colored fringes
+	public static string ToolbarTextInk(IntPtr window, IntPtr toolbar, int index, int textOffset) {
+		long result;
+		var item = SendForBuffer(toolbar, 0x41D, (IntPtr)index, 16, out result);
+		int left = BitConverter.ToInt32(item, 0) + textOffset, top = BitConverter.ToInt32(item, 4);
+		int right = BitConverter.ToInt32(item, 8), bottom = BitConverter.ToInt32(item, 12);
+		int dx, dy;
+		using (var bitmap = Capture(window, toolbar, out dx, out dy)) {
+			int x0 = int.MaxValue, y0 = int.MaxValue, x1 = -1, y1 = -1;
+			bool colored = false;
+			for (int x = left; x < right; x++) {
+				for (int y = top; y < bottom; y++) {
+					var p = bitmap.GetPixel(x + dx, y + dy);
+					if (p.R < 0xF0 || p.G < 0xF0 || p.B < 0xF0) { x0 = Math.Min(x0, x); y0 = Math.Min(y0, y); x1 = Math.Max(x1, x); y1 = Math.Max(y1, y); }
+					if (Math.Abs(p.R - p.B) > 12) colored = true;
+				}
+			}
+			return x0 + "," + y0 + ".." + x1 + "," + y1 + (colored ? " ClearType" : " grayscale");
+		}
+	}
+
 	// The x of each separator line in the status bar: a run of columns darker than the bar's face over at least 80% of
 	// a part's height. The grip's dots and text don't reach that.
 	public static int[] StatusSeparators(IntPtr window, IntPtr bar) {
@@ -536,6 +558,16 @@ function Check-Toolbar([string]$what, $hwnd) {
 	$extras = @([regex]::Matches($actual, '\+(-?\d+)') | ForEach-Object { [int]$_.Groups[1].Value })
 	$ok = $extras.Count -eq 3 -and @($extras | Select-Object -Unique).Count -eq 1 -and $extras[0] -ge $least -and $extras[0] -le $least + (S 4)
 	Check-That "$what width beyond the text" $actual $ok "the same for each, $least to $($least + (S 4))"
+
+	# Disabled Cancel's text against the same text enabled, for a moment: same place, same antialiasing
+	$offset = (S 8) + (S 16) + (S 5)
+	$disabled = [W]::ToolbarTextInk($hwnd, $toolbar, 2, $offset)
+	$cancel = [IntPtr][int][W]::CommandOf([W]::GetMenu($hwnd), '&Cancel')
+	[void][W]::SendMessageW($toolbar, 0x401, $cancel, [IntPtr]1)
+	Start-Sleep -Milliseconds 200
+	$enabled = [W]::ToolbarTextInk($hwnd, $toolbar, 2, $offset)
+	[void][W]::SendMessageW($toolbar, 0x401, $cancel, [IntPtr]0)
+	Check "$what disabled text, against enabled" $disabled $enabled
 }
 
 # Everything that scales with the DPI: bars, toolbar, status bar, and the default panel widths

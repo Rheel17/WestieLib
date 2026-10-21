@@ -100,7 +100,8 @@ The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Sett
 - The buttons are flat, 26 px tall and centered in the strip, starting 4 px from its left edge. Each has 8 px on
   either side, a 16 px icon, 5 px, then its text. Buttons sit 1 px apart. A separator between Cancel and Settings
   takes 11 px: a 1 px `#D5D5D5` line, 20 px tall and centered, with 5 px on either side.
-- A disabled button shows its icon in grayscale at 45% opacity, and its text in gray.
+- A disabled button shows its icon in grayscale at 45% opacity, and its text in `#A0A0A0`, antialiased like all other
+  text.
 - The strip grows when the system font needs taller buttons.
 
 - `Sync all ▾` is a split button. Its dropdown lists "Sync selected playlist" and then every playlist by name.

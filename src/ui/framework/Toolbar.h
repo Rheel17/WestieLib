@@ -38,6 +38,7 @@ public:
     void apply_metrics(const ToolbarMetrics& metrics, HFONT font);
     void set_enabled(WORD command, bool enabled);
     Size button_size() const;
+    void redraw_text(const NMCUSTOMDRAW& item, COLORREF color, HBRUSH background) const;
     std::vector<Rect> separator_rects() const;
 
 private:
@@ -47,6 +48,8 @@ private:
     void measure_texts();
 
     std::vector<ToolbarButton> buttons_;
+    ToolbarMetrics metrics_;
+    int icon_width_ = 0;
 };
 
 }

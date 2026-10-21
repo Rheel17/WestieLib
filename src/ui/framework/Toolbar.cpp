@@ -7,6 +7,7 @@
 #include <commctrl.h>
 
 #include "platform/win32/Win32Error.h"
+#include "ui/framework/SavedDc.h"
 
 namespace westie::ui::framework {
 
@@ -42,9 +43,12 @@ void Toolbar::add_buttons(std::span<const ToolbarButton> buttons) {
 void Toolbar::set_image_lists(HIMAGELIST normal, HIMAGELIST disabled) {
     SendMessageW(hwnd(), TB_SETIMAGELIST, 0, reinterpret_cast<LPARAM>(normal));
     SendMessageW(hwnd(), TB_SETDISABLEDIMAGELIST, 0, reinterpret_cast<LPARAM>(disabled));
+    int height = 0;
+    platform::win32::check(ImageList_GetIconSize(normal, &icon_width_, &height), "ImageList_GetIconSize");
 }
 
 void Toolbar::apply_metrics(const ToolbarMetrics& metrics, HFONT font) {
+    metrics_ = metrics;
     SendMessageW(hwnd(), TB_SETLISTGAP, metrics.icon_gap, 0);
     set_separator_widths(metrics.separator_width);
 
@@ -80,6 +84,33 @@ void Toolbar::set_enabled(WORD command, bool enabled) {
 Size Toolbar::button_size() const {
     auto size = static_cast<DWORD>(SendMessageW(hwnd(), TB_GETBUTTONSIZE, 0, 0));
     return {LOWORD(size), HIWORD(size)};
+}
+
+void Toolbar::redraw_text(const NMCUSTOMDRAW& item, COLORREF color, HBRUSH background) const {
+    auto command = static_cast<WORD>(item.dwItemSpec);
+    auto button = std::ranges::find(buttons_, command, &ToolbarButton::command);
+    if (button == buttons_.end() || !button->text) {
+        return;
+    }
+
+    // Where the toolbar puts the text: after the padding, the icon and the gap, and before a dropdown's arrow
+    RECT bounds = item.rc;
+    bounds.left += metrics_.side_padding + icon_width_ + metrics_.icon_gap;
+    if (button->dropdown) {
+        auto index = static_cast<WPARAM>(SendMessageW(hwnd(), TB_COMMANDTOINDEX, command, 0));
+        RECT arrow;
+        platform::win32::check(SendMessageW(hwnd(), TB_GETITEMDROPDOWNRECT, index, reinterpret_cast<LPARAM>(&arrow)), "TB_GETITEMDROPDOWNRECT");
+        bounds.right = arrow.left;
+    }
+    FillRect(item.hdc, &bounds, background);
+
+    SavedDc saved(item.hdc);
+    if (auto font = reinterpret_cast<HFONT>(SendMessageW(hwnd(), WM_GETFONT, 0, 0))) {
+        SelectObject(item.hdc, font);
+    }
+    SetBkMode(item.hdc, TRANSPARENT);
+    SetTextColor(item.hdc, color);
+    DrawTextW(item.hdc, button->text, -1, &bounds, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 }
 
 std::vector<Rect> Toolbar::separator_rects() const {

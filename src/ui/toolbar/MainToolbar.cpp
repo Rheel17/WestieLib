@@ -31,6 +31,7 @@ constexpr int LeftPaddingDips = 4;
 constexpr int HairlinePixels = 1;
 constexpr COLORREF RuleColor = RGB(0xD9, 0xD9, 0xD9);
 constexpr COLORREF SeparatorColor = RGB(0xD5, 0xD5, 0xD5);
+constexpr COLORREF DisabledTextColor = RGB(0xA0, 0xA0, 0xA0);
 
 constexpr std::array Glyphs = {IDI_PLUS, IDI_SYNCING, IDI_STOP, IDI_GEAR};
 constexpr std::array DisabledGlyphs = {IDI_PLUS_DISABLED, IDI_SYNCING_DISABLED, IDI_STOP_DISABLED, IDI_GEAR_DISABLED};
@@ -137,7 +138,14 @@ LRESULT MainToolbar::on_custom_draw(const NMCUSTOMDRAW& draw) const {
     if (draw.dwDrawStage == CDDS_PREPAINT) {
         // Otherwise the toolbar keeps its own gray background
         FillRect(draw.hdc, &draw.rc, GetSysColorBrush(COLOR_WINDOW));
-        return CDRF_NOTIFYPOSTPAINT;
+        return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
+    }
+    if (draw.dwDrawStage == CDDS_ITEMPREPAINT) {
+        return draw.uItemState & CDIS_DISABLED ? CDRF_NOTIFYPOSTPAINT : CDRF_DODEFAULT;
+    }
+    if (draw.dwDrawStage == CDDS_ITEMPOSTPAINT) {
+        // The toolbar draws a disabled button's text without ClearType, and no custom draw color reaches it
+        toolbar_.redraw_text(draw, DisabledTextColor, GetSysColorBrush(COLOR_WINDOW));
     }
     if (draw.dwDrawStage == CDDS_POSTPAINT) {
         paint_separators(draw.hdc);
