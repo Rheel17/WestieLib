@@ -17,9 +17,11 @@ public:
 protected:
     struct CreateParams {
         const wchar_t* class_name = nullptr;
+        const wchar_t* text = nullptr;
         DWORD style = 0;
         DWORD ex_style = 0;
         HWND parent = nullptr;
+        WORD id = 0;
     };
 
     explicit Control(const CreateParams& params);

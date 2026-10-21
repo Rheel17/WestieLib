@@ -62,5 +62,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - Text the app draws itself (the owner-drawn status bar parts) can't be read back with messages. The checks find it
   in a `PrintWindow` capture instead, as the columns darker than mid-gray (`StatusTextGaps`). `StatusSeparators` finds
   the bar's separator lines the same way. `Check-That` is for checks that pass within a range.
+- A `Label`, the All tracks row and buttons keep their text as the window text, which `GetWindowTextW` (`TextOf`) reads
+  from another process without a message.
+- Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
+  window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
+  the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area
+  blinks when any pixel differs from the capture before the drag, and moving text blinks when it loses half its dark
+  pixels. It says `covered` when another window lies over the area, because the screen then shows that window instead.
 - Keep the scripts ASCII. Windows PowerShell reads a `.ps1` without a BOM as ANSI, so a `…` in it turns into
   mojibake. In embedded C#, write such characters as `(char)0x2026`.

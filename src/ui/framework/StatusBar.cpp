@@ -29,11 +29,11 @@ void StatusBar::set_text_padding(int padding) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, TRUE), "InvalidateRect");
 }
 
-void StatusBar::set_text(int part, std::wstring text, TextAlignment alignment) {
+void StatusBar::set_text(int part, std::wstring text, const PartFormat& format) {
     if (std::cmp_greater_equal(part, texts_.size())) {
         texts_.resize(part + 1);
     }
-    texts_[part] = {.text = std::move(text), .alignment = alignment};
+    texts_[part] = {.text = std::move(text), .format = format};
 
     // The native part text sits 3 px from the edge with no way to pad it, so the parent's WM_DRAWITEM draws it. The
     // right part would draw its own separator at the window's edge.
@@ -60,8 +60,9 @@ void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
     RECT bounds = item.rcItem;
     bounds.left += text_padding_;
     bounds.right = std::min(bounds.right, static_cast<LONG>(part_rect(static_cast<int>(item.itemID)).right)) - text_padding_;
-    UINT format = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS | (part.alignment == TextAlignment::Center ? DT_CENTER : DT_LEFT);
-    DrawTextW(item.hDC, part.text.c_str(), static_cast<int>(part.text.size()), &bounds, format);
+    UINT ellipsis = part.format.ellipsis == TextEllipsis::Path ? DT_PATH_ELLIPSIS : DT_END_ELLIPSIS;
+    UINT alignment = part.format.alignment == TextAlignment::Center ? DT_CENTER : DT_LEFT;
+    DrawTextW(item.hDC, part.text.c_str(), static_cast<int>(part.text.size()), &bounds, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | ellipsis | alignment);
 }
 
 LRESULT StatusBar::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {

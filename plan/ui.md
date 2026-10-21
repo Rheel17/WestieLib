@@ -33,7 +33,7 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 ├────────────────────────┴────────────────────────────────────────┴────────────────┤
 │ log pane (hidden by default, View › Log, Ctrl+L)                                 │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Syncing 12 of 40 ▓▓▓▓░░░ │ 412 tracks · D:\Music\WestieLib │ Tools ✓ │ v1.2.0      │ status bar
+│ Syncing 12 of 40 ▓▓▓▓░░░ │ 412 tracks │ D:\Music\WestieLib │ Tools ✓ │ v1.2.0      │ status bar
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -133,9 +133,13 @@ row.
 
 ## Left panel
 
-The left panel is a list with two kinds of rows.
+The left panel has the All tracks row at the top, a separator under it, and then the list of playlists. All tracks
+stays where it is; only the playlist list scrolls.
 
-**All tracks** (glyph ▤): `All tracks`, then `100 tracks · 92 synced`. A separator follows it.
+**All tracks** (glyph ▤): `All tracks`, then `100 tracks · 92 synced`. It is selected while the main panel shows the
+whole library, which is always the case until there are playlists.
+
+With no playlists, the list reads `No playlists yet.` in gray.
 
 **Playlist rows** have variable height:
 
@@ -169,7 +173,8 @@ The left panel is a list with two kinds of rows.
     spins clockwise at about one turn per 1.2 s, and the status icon steps aside because the sync supersedes it.
   - A playlist that is in the run but hasn't started yet reads `Queued ⟳`, with the icon still and faded.
 
-An `+ Add playlist` button closes the list.
+An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
+so their left edge is where the All tracks name starts.
 
 A click scopes the main panel to that playlist. The context menu offers Sync, Open in browser, Copy URL and
 Remove playlist….
@@ -257,6 +262,8 @@ Default sort is Title in All tracks and # in a playlist scope. The row context m
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
+**No playlists yet** (first run): `Add a playlist to see its tracks here.`, in gray and centered, broken after "see".
+
 **Nothing selected**:
 
 - In a playlist scope it shows a playlist card with:
@@ -284,15 +291,17 @@ The inspector scrolls vertically when its content is taller than the panel.
 | Part    | Content |
 |---------|---------|
 | Run     | `Ready · last sync today 14:05`, or `Syncing 6 of 25` with an embedded progress bar |
-| Library | `100 tracks · D:\Music\WestieLib` |
+| Tracks  | `100 tracks` (`1 track`) |
+| Library | the library folder, `D:\Music\WestieLib` |
 | Tools   | `Tools ✓`, `Installing tools… ffmpeg 45%`, `Updating tools…` or `Tools ⚠`; the tooltip lists the releases |
 | Version | `v1.2.0` |
 
 - The status bar is the native one, 23 px tall, or taller when the system font needs it. It ends in a size grip.
-- Run, Library and Tools are 270, 300 and 220 px wide, from the left. Version is 80 px wide against the right edge,
-  with its text centered between its separator and the grip, or the window edge when maximized. No separator
-  follows it. The space between Tools and Version stays empty.
-- Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit.
+- Run, Tracks, Library and Tools are 270, 100, 300 and 220 px wide, from the left. Version is 80 px wide against the
+  right edge, with its text centered between its separator and the grip, or the window edge when maximized. No
+  separator follows it. The space between Tools and Version stays empty.
+- Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit. The library folder
+  loses its middle instead (`C:\Users\...\WestieLib`), so its last folder stays readable.
 
 ## Dialogs
 
@@ -383,7 +392,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with parts and an embedded `PROGRESS_CLASS` |
-| Left panel | `LISTBOX` with `LBS_OWNERDRAWVARIABLE`; rows, bars and icons drawn in `WM_DRAWITEM`. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| Left panel | All tracks is a custom-painted row window above the list. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon. The playlist list is a `LISTBOX` with `LBS_OWNERDRAWVARIABLE` (its items are at most 255 px tall, which a playlist row passes above ~260% scaling; settle this with the playlist rows); rows, bars and icons drawn in `WM_DRAWITEM`. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |

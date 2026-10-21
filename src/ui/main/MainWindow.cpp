@@ -25,14 +25,14 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 
 }
 
-MainWindow::MainWindow() :
+MainWindow::MainWindow(const std::filesystem::path& library_folder) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
-        font_(framework::Dpi::of(hwnd())),
+        fonts_(framework::Dpi::of(hwnd())),
         toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
-        playlists_(hwnd()),
+        playlists_(hwnd(), [this](CommandId command) { run_command(command); }),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
         inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),
@@ -42,6 +42,8 @@ MainWindow::MainWindow() :
         status_bar_(hwnd()) {
     apply_dpi(framework::Dpi::of(hwnd()));
     attach_menu();
+    show_track_counts({});
+    status_bar_.set_library_folder(library_folder);
 
     if (std::optional<WindowState> state = load_window_state()) {
         panels_ = state->panels;
@@ -97,11 +99,18 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     icon_.apply_to(hwnd(), dpi);
     menu_bar_.load_theme();
 
-    // The controls keep using the old font until they have the new one
-    framework::MessageFont font(dpi);
-    toolbar_.apply_dpi(dpi, font);
-    status_bar_.apply_dpi(dpi, font);
-    font_ = std::move(font);
+    // The controls keep using the old fonts until they have the new ones
+    framework::FontSet fonts(dpi);
+    toolbar_.apply_dpi(dpi, fonts.regular());
+    playlists_.apply_dpi(dpi, fonts);
+    inspector_.apply_fonts(fonts);
+    status_bar_.apply_dpi(dpi, fonts.regular());
+    fonts_ = std::move(fonts);
+}
+
+void MainWindow::show_track_counts(const TrackCounts& counts) {
+    playlists_.set_track_counts(counts);
+    status_bar_.set_track_count(counts.total);
 }
 
 void MainWindow::save_state() const {

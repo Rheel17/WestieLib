@@ -22,6 +22,7 @@ $Glyphs = [ordered]@{
 	syncing = $true
 	stop = $true
 	gear = $true
+	lib = $false
 }
 
 # 100% to 300% display scaling of a 16 px glyph

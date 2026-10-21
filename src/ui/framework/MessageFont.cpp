@@ -6,10 +6,13 @@ namespace westie::ui::framework {
 
 namespace {
 
-platform::win32::UniqueFont create_font(Dpi dpi) {
+platform::win32::UniqueFont create_font(Dpi dpi, FontStyle style) {
     NONCLIENTMETRICSW metrics{};
     metrics.cbSize = sizeof(metrics);
     platform::win32::check(SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0, dpi.value()), "SystemParametersInfoForDpi");
+    if (style == FontStyle::Semibold) {
+        metrics.lfMessageFont.lfWeight = FW_SEMIBOLD;
+    }
     return platform::win32::UniqueFont(platform::win32::check(CreateFontIndirectW(&metrics.lfMessageFont), "CreateFontIndirectW"));
 }
 
@@ -23,7 +26,7 @@ int measure_line_height(HFONT font) {
 
 }
 
-MessageFont::MessageFont(Dpi dpi) : font_(create_font(dpi)), line_height_(measure_line_height(font_.get())) {}
+MessageFont::MessageFont(Dpi dpi, FontStyle style) : font_(create_font(dpi, style)), line_height_(measure_line_height(font_.get())) {}
 
 HFONT MessageFont::handle() const noexcept {
     return font_.get();

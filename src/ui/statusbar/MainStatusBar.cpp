@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "Version.h"
+#include "ui/TrackCountText.h"
 
 namespace westie::ui {
 
@@ -13,10 +14,10 @@ namespace {
 constexpr int HeightDips = 23;
 constexpr int TextHeightPaddingDips = 7;
 constexpr int TextSidePaddingDips = 8;
-constexpr std::array LeftPartWidthsDips = {270, 300, 220};
+constexpr std::array LeftPartWidthsDips = {270, 150, 450, 120};
 constexpr int VersionWidthDips = 80;
 
-enum class Part { Run, Library, Tools, Slack, Version };
+enum class Part { Run, Tracks, Library, Tools, Slack, Version };
 
 }
 
@@ -24,7 +25,7 @@ MainStatusBar::MainStatusBar(HWND parent) : status_bar_(parent) {
     // A part has to exist before it takes text
     set_parts(framework::Dpi::of(parent));
     status_bar_.set_text(std::to_underlying(Part::Run), L"Ready");
-    status_bar_.set_text(std::to_underlying(Part::Version), L"v" WESTIELIB_VERSION_STRING, framework::TextAlignment::Center);
+    status_bar_.set_text(std::to_underlying(Part::Version), L"v" WESTIELIB_VERSION_STRING, {.alignment = framework::TextAlignment::Center});
 }
 
 HWND MainStatusBar::hwnd() const noexcept {
@@ -40,6 +41,14 @@ void MainStatusBar::apply_dpi(framework::Dpi dpi, const framework::MessageFont& 
     status_bar_.set_text_padding(dpi.scale(TextSidePaddingDips));
     set_parts(dpi);
     height_ = std::max(dpi.scale(HeightDips), font.line_height() + dpi.scale(TextHeightPaddingDips));
+}
+
+void MainStatusBar::set_track_count(int count) {
+    status_bar_.set_text(std::to_underlying(Part::Tracks), track_count_text(count));
+}
+
+void MainStatusBar::set_library_folder(const std::filesystem::path& folder) {
+    status_bar_.set_text(std::to_underlying(Part::Library), folder.wstring(), {.ellipsis = framework::TextEllipsis::Path});
 }
 
 void MainStatusBar::draw(const DRAWITEMSTRUCT& item) const {

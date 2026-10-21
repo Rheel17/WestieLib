@@ -11,18 +11,25 @@ configure_file(src/Version.h.in "${GENERATED_DIR}/Version.h" @ONLY)
 
 add_executable(WestieLib WIN32
 	src/main.cpp
+	src/platform/win32/KnownFolder.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/ui/FatalError.cpp
+	src/ui/TrackCountText.cpp
 	src/ui/commands/CommandMenu.cpp
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/framework/AcceleratorTable.cpp
+	src/ui/framework/BufferedPaint.cpp
+	src/ui/framework/Button.cpp
 	src/ui/framework/CommonControls.cpp
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
+	src/ui/framework/FontSet.cpp
 	src/ui/framework/IconImageList.cpp
+	src/ui/framework/IconResource.cpp
+	src/ui/framework/Label.cpp
 	src/ui/framework/MenuBarPainter.cpp
 	src/ui/framework/MessageFont.cpp
 	src/ui/framework/MessageLoop.cpp
@@ -43,6 +50,7 @@ add_executable(WestieLib WIN32
 	src/ui/main/MainWindow.cpp
 	src/ui/main/WindowPlacement.cpp
 	src/ui/main/WindowState.cpp
+	src/ui/playlists/AllTracksRow.cpp
 	src/ui/playlists/PlaylistPanel.cpp
 	src/ui/statusbar/MainStatusBar.cpp
 	src/ui/toolbar/MainToolbar.cpp
@@ -62,4 +70,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE comctl32 uxtheme)
+target_link_libraries(WestieLib PRIVATE comctl32 uxtheme shell32 ole32 uuid)

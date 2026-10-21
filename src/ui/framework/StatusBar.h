@@ -13,13 +13,20 @@ namespace westie::ui::framework {
 
 enum class TextAlignment { Left, Center };
 
+enum class TextEllipsis { End, Path };
+
+struct PartFormat {
+    TextAlignment alignment = TextAlignment::Left;
+    TextEllipsis ellipsis = TextEllipsis::End;
+};
+
 class StatusBar final : public Control {
 public:
     explicit StatusBar(HWND parent);
 
     void set_parts(std::span<const int> left_widths, int right_width);
     void set_text_padding(int padding);
-    void set_text(int part, std::wstring text, TextAlignment alignment = TextAlignment::Left);
+    void set_text(int part, std::wstring text, const PartFormat& format = {});
     void draw(const DRAWITEMSTRUCT& item) const;
 
 protected:
@@ -28,7 +35,7 @@ protected:
 private:
     struct PartText {
         std::wstring text{};
-        TextAlignment alignment = TextAlignment::Left;
+        PartFormat format{};
     };
 
     void apply_parts();

@@ -7,9 +7,11 @@
 
 namespace westie::ui::framework {
 
+enum class FontStyle { Regular, Semibold };
+
 class MessageFont {
 public:
-    explicit MessageFont(Dpi dpi);
+    explicit MessageFont(Dpi dpi, FontStyle style = FontStyle::Regular);
 
     HFONT handle() const noexcept;
     int line_height() const noexcept;

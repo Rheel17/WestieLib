@@ -1,6 +1,6 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
-# states, commands and shortcuts, the toolbar and status bar, sizes, splitter drags and limits, the log pane, painting
-# during a drag, and saving/restoring the window state across restarts.
+# states, commands and shortcuts, the toolbar and status bar, the side panels' first-run content, sizes, splitter drags
+# and limits, the log pane, painting during a drag, and saving/restoring the window state across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
@@ -416,6 +416,77 @@ public static class W {
 		}
 		throw new ArgumentException("No menu item " + text);
 	}
+
+	[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+	[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+	[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
+
+	static IntPtr Pack(int x, int y) { return (IntPtr)(((y & 0xFFFF) << 16) | (x & 0xFFFF)); }
+
+	// Drags a splitter `by` pixels and back, one pixel per step, as a mouse would
+	public static void DragSplitter(IntPtr window, IntPtr splitter, int by) {
+		int from = RectIn(splitter, window).Left, step = by > 0 ? 1 : -1;
+		var lefts = new List<int>();
+		for (int d = step; d != by + step; d += step) lefts.Add(from + d);
+		for (int d = by - step; d != -step; d -= step) lefts.Add(from + d);
+		SendMessageW(splitter, 0x201, (IntPtr)1, Pack(2, 10));
+		foreach (int left in lefts) SendMessageW(splitter, 0x200, (IntPtr)1, Pack(left - RectIn(splitter, window).Left + 2, 10));
+		SendMessageW(splitter, 0x202, IntPtr.Zero, Pack(2, 10));
+	}
+
+	// The screen's pixels in a rect, as DWM composed them. Unlike PrintWindow, which paints the window afresh, this sees
+	// a window between an erase and a paint.
+	static byte[] ScreenPixels(RECT r) {
+		using (var bitmap = new System.Drawing.Bitmap(r.Right - r.Left, r.Bottom - r.Top))
+		using (var graphics = System.Drawing.Graphics.FromImage(bitmap)) {
+			graphics.CopyFromScreen(r.Left, r.Top, 0, 0, bitmap.Size);
+			var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly,
+				System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+			var bytes = new byte[data.Stride * bitmap.Height];
+			Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
+			bitmap.UnlockBits(data);
+			return bytes;
+		}
+	}
+
+	static int DarkPixels(byte[] p) {
+		int n = 0;
+		for (int i = 0; i < p.Length; i += 4) if ((p[i] + p[i + 1] + p[i + 2]) / 3 < 140) n++;
+		return n;
+	}
+
+	static bool Differ(byte[] a, byte[] b) {
+		for (int i = 0; i < a.Length; i++) if (Math.Abs(a[i] - b[i]) > 24) return true;
+		return false;
+	}
+
+	static volatile bool watching;
+
+	// Captures `area` (client coordinates of `window`) over and over while a splitter drag runs, and counts the captures
+	// that blinked: for a steady area, any that differ from the capture before the drag; for moving text, any with less
+	// than half the dark pixels. "covered" when another window is over the area, since then the screen shows that one.
+	public static string WatchDrag(IntPtr window, RECT area, IntPtr splitter, int by, bool moving) {
+		MapWindowPoints(window, IntPtr.Zero, ref area, 2);
+		foreach (var p in new[] { new POINT { X = area.Left, Y = area.Top }, new POINT { X = area.Right - 1, Y = area.Bottom - 1 } }) {
+			if (GetAncestor(WindowFromPoint(p), 2) != window) return "covered";
+		}
+		var before = ScreenPixels(area);
+		int ink = DarkPixels(before), frames = 0, blinked = 0;
+		watching = true;
+		var thread = new System.Threading.Thread(() => {
+			SetThreadDpiAwarenessContext((IntPtr)(-4));
+			while (watching) {
+				var now = ScreenPixels(area);
+				frames++;
+				if (moving ? DarkPixels(now) * 2 < ink : Differ(now, before)) blinked++;
+			}
+		});
+		thread.Start();
+		DragSplitter(window, splitter, by);
+		watching = false;
+		thread.Join();
+		return frames < 20 ? "only " + frames + " captures" : "blinked " + blinked;
+	}
 }
 '@
 
@@ -620,15 +691,21 @@ function Check-Scaled($hwnd) {
 	Check-StatusParts 'Status bar part edges' $hwnd
 	Check-StatusTexts ' ' $hwnd
 	Check-Widths 'Default widths' $hwnd @((S 250), ($cw - (S 250) - (S 290) - 2 * (S 5)), (S 290))
+	Check-PlaylistPanel 'Left panel:' $hwnd
+	Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $hwnd
 }
 
-# Run, Library and Tools from the left, then Version running to the right edge. Version's rect stops where the size
-# grip starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but Version.
+# Run, Tracks, Library and Tools from the left, then Version running to the right edge. Version's rect stops where the
+# size grip starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but
+# Version.
 function Check-StatusParts([string]$what, $hwnd) {
 	$status = Get-StatusBar $hwnd
 	$cw = Get-ClientWidth $hwnd
-	$edges = @((S 270), ((S 270) + (S 300)), ((S 270) + (S 300) + (S 220)), ($cw - (S 80)))
-	$grip = $cw - [W]::StatusPartRect($status, 4).Right
+	$edges = @()
+	$right = 0
+	foreach ($width in 270, 100, 300, 220) { $right += S $width; $edges += $right }
+	$edges += $cw - (S 80)
+	$grip = $cw - [W]::StatusPartRect($status, 5).Right
 	$fits = if ([W]::IsZoomed($hwnd)) { $grip -eq 0 } else { $grip -gt 0 -and $grip -le (S 20) }
 	Check $what "$([W]::StatusParts($status)) | stops at grip: $fits" "$($edges -join ' ') -1 | stops at grip: True"
 
@@ -638,13 +715,69 @@ function Check-StatusParts([string]$what, $hwnd) {
 	Check-That "$what, separators" ($lines -join ' ') $matching "one within 2 px of each of $($edges -join ' '), none after"
 }
 
-# Ready starts after the part's padding (glyphs may start a pixel or two later); Version is centered in its part
+# Ready, the track count and the library folder start after their part's padding (glyphs may start a pixel or two
+# later); Version is centered in its part
 function Check-StatusTexts([string]$what, $hwnd) {
 	$status = Get-StatusBar $hwnd
-	$run = [W]::StatusTextGaps($hwnd, $status, 0)
-	Check-That "$what Ready's left gap" "$($run[0])" ($run[0] -ge (S 8) -and $run[0] -le (S 8) + 2) "$(S 8) to $((S 8) + 2)"
-	$version = [W]::StatusTextGaps($hwnd, $status, 4)
+	$gaps = @(0, 1, 2 | ForEach-Object { [W]::StatusTextGaps($hwnd, $status, $_)[0] })
+	$padded = @($gaps | Where-Object { $_ -ge (S 8) -and $_ -le (S 8) + 2 }).Count -eq 3
+	Check-That "$what Ready's | tracks' | folder's left gap" ($gaps -join ' | ') $padded "$(S 8) to $((S 8) + 2) each"
+	$version = [W]::StatusTextGaps($hwnd, $status, 5)
 	Check-That "$what Version's left | right gap" "$($version[0]) | $($version[1])" ([math]::Abs($version[0] - $version[1]) -le 1 -and $version[0] -ge (S 8)) 'equal within 1, at least the padding'
+}
+
+# The left panel from the top: the All tracks row, the rule, "No playlists yet." and the Add playlist button, which is
+# as wide as its padding, icon, gap and text in the font at the window's DPI
+function Check-PlaylistPanel([string]$what, $hwnd) {
+	$panel = (Get-RowPanels $hwnd)[0]
+	$pw = Get-ClientWidth $panel
+	$row = ([W]::Children($panel, 'WestieLib.AllTracksRow'))[0]
+	$rowHeight = 2 + (S 5) + (S 18) + (S 16) + (S 6)
+	Check "$what All tracks row" "$([W]::TextOf($row)) $(Format-Rect ([W]::RectIn($row, $panel)))" "All tracks $(S 3),$(S 4) $($pw - 2 * (S 3))x$rowHeight"
+	# Where the row's name starts: its inset, border, padding, glyph and gap
+	$text = (S 3) + 1 + (S 7) + (S 16) + (S 6)
+	$empty = ([W]::Children($panel, 'WestieLib.Label'))[0]
+	$emptyTop = (S 4) + $rowHeight + (S 5) + 1 + (S 5) + (S 6)
+	Check "$what  empty list" "$([W]::TextOf($empty)) $(Format-Rect ([W]::RectIn($empty, $panel)))" "No playlists yet. $text,$emptyTop $($pw - $text - (S 12))x$(S 16)"
+	$button = ([W]::Children($panel, 'Button'))[0]
+	$width = 2 * (S 10) + (S 16) + (S 5) + [W]::TextWidth('Add playlist', $script:dpi)
+	$buttonTop = $emptyTop + (S 16) + (S 2) + (S 8)
+	Check "$what  button" "$([W]::TextOf($button)) $(Format-Rect ([W]::RectIn($button, $panel)))" "Add playlist $text,$buttonTop $($width)x$(S 23)"
+}
+
+# Splitter drags don't make text blink on screen: the left panel's content stays exactly as it was while the playlists
+# splitter moves, and the inspector's placeholder, which moves with the inspector, never loses its text
+function Check-NoBlinking($hwnd) {
+	$panel = (Get-RowPanels $hwnd)[0]
+	$button = [W]::RectIn(([W]::Children($panel, 'Button'))[0], $hwnd)
+	$left = New-Object W+RECT
+	$left.Right = S 150
+	$left.Top = Get-RowTop $hwnd
+	$left.Bottom = $button.Bottom + (S 8)
+	Check 'Playlists drag: left panel never blinks' ([W]::WatchDrag($hwnd, $left, (Get-Splitter $hwnd 0), (S 300), $false)) 'blinked 0'
+
+	$inspector = [W]::RectIn((Get-RowPanels $hwnd)[2], $hwnd)
+	$placeholder = [W]::RectIn(([W]::Children((Get-RowPanels $hwnd)[2], 'WestieLib.Label'))[0], $hwnd)
+	$band = New-Object W+RECT
+	$band.Left = $inspector.Left - (S 200)
+	$band.Right = $inspector.Right
+	$band.Top = $placeholder.Top
+	$band.Bottom = $placeholder.Bottom
+	Check 'Inspector drag: placeholder never blinks' ([W]::WatchDrag($hwnd, $band, (Get-Splitter $hwnd 1), -(S 200), $true)) 'blinked 0'
+}
+
+# The inspector's placeholder fills the panel's width inside the padding, its center within a pixel of the padded
+# area's
+function Check-InspectorPlaceholder([string]$what, $hwnd) {
+	$panel = (Get-RowPanels $hwnd)[2]
+	$label = ([W]::Children($panel, 'WestieLib.Label'))[0]
+	$r = [W]::RectIn($label, $panel)
+	$sides = "$($r.Left) $((Get-ClientWidth $panel) - $r.Right)"
+	# Twice the offset, so it stays whole
+	$offset = ($r.Top + $r.Bottom) - ((S 12) + (Get-ClientHeight $panel) - (S 10))
+	$text = [W]::TextOf($label) -replace "`n", ' / '
+	$ok = $text -eq 'Add a playlist to see / its tracks here.' -and $sides -eq "$(S 12) $(S 12)" -and [math]::Abs($offset) -le 2
+	Check-That $what "$text | $sides | $offset" $ok "the text | $(S 12) $(S 12) | -2 to 2"
 }
 
 function LParam([int]$x, [int]$y) { [IntPtr]([int64]($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)) }
@@ -769,7 +902,10 @@ try {
 	$cw = Get-ClientWidth $h
 	$g = S 5
 	Check-Widths 'Initial widths' $h @((S 250), ($cw - (S 250) - (S 290) - 2 * $g), (S 290))
+	Check-PlaylistPanel 'Left panel:' $h
+	Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $h
 	Check 'Drag steps left unpainted' (Measure-UnpaintedDragSteps $h) 0
+	Check-NoBlinking $h
 	Move-Splitter $h 0 0
 	Move-Splitter $h 0 (S 400)
 	Check-Widths 'Playlists splitter to 400' $h @((S 400), ($cw - (S 400) - (S 290) - 2 * $g), (S 290))
@@ -779,6 +915,7 @@ try {
 	Check-Widths 'Playlists far left: stops at 250' $h @((S 250), ($cw - (S 250) - (S 290) - 2 * $g), (S 290))
 	Move-Splitter $h 1 ($cw - $g - (S 500))
 	Check-Widths 'Inspector splitter for a 500 inspector' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
+	Check-InspectorPlaceholder '  placeholder | sides | center offset x2' $h
 	Move-Splitter $h 1 -1000
 	Check-Widths 'Inspector far left: tracks stops at 400' $h @((S 250), (S 400), ($cw - (S 250) - (S 400) - 2 * $g)) 1
 	Move-Splitter $h 1 ($cw - $g - (S 500))
@@ -816,6 +953,10 @@ try {
 	Check-Widths '  panels reach the status bar' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 	[W]::PostCtrlKey($h, 0x4C)
 	Check-Log '  and shows it again' $h (S 200)
+	Check-InspectorPlaceholder '  placeholder | sides | center offset x2' $h
+	[void][W]::SendMessageW(([W]::Children((Get-RowPanels $h)[0], 'Button'))[0], 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 200
+	Check 'Add playlist button: no dialog yet, still running' "$([W]::OwnedWindow($h) -eq [IntPtr]::Zero) $($app.Process.HasExited)" 'True False'
 	"File > Exit"
 	Stop-App $app -ExitCommand
 	$saved = Get-ItemProperty $KeyPath

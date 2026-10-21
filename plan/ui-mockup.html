@@ -75,7 +75,9 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .xbtn { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 
 .body { flex: 1; min-height: 0; display: flex; background: var(--face); }
-.left { width: 250px; flex: none; background: #fff; overflow-y: auto; padding: 3px 0; }
+.left { width: 250px; flex: none; display: flex; flex-direction: column; background: #fff; }
+.lhead { flex: none; padding-top: 3px; }
+.llist { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 3px; }
 .split-v { width: 5px; flex: none; background: var(--face); }
 .split-h { height: 5px; flex: none; background: var(--face); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
@@ -130,8 +132,9 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .ln.bar .pbar { flex: 1; }
 .ln.bar .n { font-variant-numeric: tabular-nums; }
 .lsep { height: 1px; background: var(--line); margin: 5px 10px; }
-.ladd { padding: 8px 10px; }
-.lempty { padding: 6px 12px 2px 32px; color: var(--gray); }
+/* Both start where the rows' text does: 3 margin + 1 border + 7 padding + 22 indent */
+.ladd { padding: 8px 10px 8px 33px; }
+.lempty { padding: 6px 12px 2px 33px; color: var(--gray); }
 
 /* ---------- main panel ---------- */
 .fbar { display: flex; align-items: center; gap: 8px; padding: 8px 8px 4px; }
@@ -570,12 +573,14 @@ function infobar(ib) {
 
 function leftPanel(s, cfg) {
 	const all = counts([...s.tracks.values()]);
-	let h = `<div class="lrow${cfg.scope === 'all' ? ' sel' : ''}"><div class="l1">${ic('lib')}<span class="nm">All tracks</span></div>
-		<div class="ln">${all.all} tracks · ${all.synced} synced</div></div><div class="lsep"></div>`;
+	// All tracks stays at the top; only the playlists scroll
+	const head = `<div class="lhead"><div class="lrow${cfg.scope === 'all' ? ' sel' : ''}"><div class="l1">${ic('lib')}<span class="nm">All tracks</span></div>
+		<div class="ln">${all.all} tracks · ${all.synced} synced</div></div><div class="lsep"></div></div>`;
+	let list = '';
 	const ids = PL_ORDER.filter(id => s.pl[id]);
-	if (!ids.length) h += `<div class="lempty">No playlists yet.</div>`;
-	for (const id of ids) h += playlistRow(s, s.pl[id], cfg.scope === id, cfg.hoverSync === id);
-	return h + `<div class="ladd">${btn('Add playlist', '', 'plus')}</div>`;
+	if (!ids.length) list += `<div class="lempty">No playlists yet.</div>`;
+	for (const id of ids) list += playlistRow(s, s.pl[id], cfg.scope === id, cfg.hoverSync === id);
+	return `${head}<div class="llist">${list}<div class="ladd">${btn('Add playlist', '', 'plus')}</div></div>`;
 }
 
 function playlistRow(s, p, selected, hot) {
@@ -854,7 +859,8 @@ function statusBar(s, cfg) {
 		? `Installing tools… ffmpeg 45%<span class="pbar ctl" style="width:60px"><i style="width:45%"></i></span>`
 		: `Tools ${ic('synced', 's12')}`;
 	return `<div class="statusbar"><div class="p" style="width:270px">${run}</div>
-		<div class="p" style="width:300px">${s.tracks.size} tracks · ${LIBRARY}</div>
+		<div class="p" style="width:100px">${s.tracks.size} tracks</div>
+		<div class="p" style="width:300px">${LIBRARY}</div>
 		<div class="p">${tools}</div>
 		<div class="p" style="margin-left:auto;width:80px;justify-content:center;border-left:1px solid #cfcfcf;border-right:0">v1.2.0</div><div class="grip" style="margin-left:0">${ic('grip')}</div></div>`;
 }

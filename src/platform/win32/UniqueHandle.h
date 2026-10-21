@@ -5,6 +5,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <objbase.h>
 #include <uxtheme.h>
 
 namespace westie::platform::win32 {
@@ -22,8 +23,10 @@ using UniqueMenu = UniqueHandle<HMENU, DestroyMenu>;
 using UniqueKey = UniqueHandle<HKEY, RegCloseKey>;
 using UniqueAcceleratorTable = UniqueHandle<HACCEL, DestroyAcceleratorTable>;
 using UniqueFont = UniqueHandle<HFONT, DeleteObject>;
+using UniqueBitmap = UniqueHandle<HBITMAP, DeleteObject>;
 using UniqueMemoryDc = UniqueHandle<HDC, DeleteDC>;
 using UniqueImageList = UniqueHandle<HIMAGELIST, ImageList_Destroy>;
+using UniqueCoTaskString = UniqueHandle<PWSTR, CoTaskMemFree>;
 using UniqueTheme = UniqueHandle<HTHEME, CloseThemeData>;
 
 }

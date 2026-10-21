@@ -16,7 +16,9 @@ constexpr UINT_PTR SubclassId = 1;
 }
 
 Control::Control(const CreateParams& params) {
-    HWND hwnd = CreateWindowExW(params.ex_style, params.class_name, nullptr, params.style, 0, 0, 0, 0, params.parent, nullptr, module_instance(), nullptr);
+    // A child's menu handle is its id
+    auto id = reinterpret_cast<HMENU>(static_cast<UINT_PTR>(params.id));
+    HWND hwnd = CreateWindowExW(params.ex_style, params.class_name, params.text, params.style, 0, 0, 0, 0, params.parent, id, module_instance(), nullptr);
     hwnd_ = platform::win32::check(hwnd, "CreateWindowExW");
 
     // The destructor doesn't run for a constructor that throws

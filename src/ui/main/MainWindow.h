@@ -1,12 +1,15 @@
 #pragma once
 
+#include <filesystem>
+
 #include <windows.h>
 
+#include "ui/TrackCounts.h"
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
 #include "ui/framework/Dpi.h"
+#include "ui/framework/FontSet.h"
 #include "ui/framework/MenuBarPainter.h"
-#include "ui/framework/MessageFont.h"
 #include "ui/framework/Splitter.h"
 #include "ui/framework/Window.h"
 #include "ui/framework/WindowIcon.h"
@@ -23,7 +26,7 @@ namespace westie::ui {
 
 class MainWindow final : public framework::Window {
 public:
-    MainWindow();
+    explicit MainWindow(const std::filesystem::path& library_folder);
 
     void show(int show_command) override;
 
@@ -35,6 +38,7 @@ private:
 
     void attach_menu();
     void apply_dpi(framework::Dpi dpi);
+    void show_track_counts(const TrackCounts& counts);
     void save_state() const;
     MainLayout current_layout() const;
     void layout_panels();
@@ -57,7 +61,7 @@ private:
     WindowPlacement placement_;
     framework::WindowIcon icon_;
     framework::MenuBarPainter menu_bar_;
-    framework::MessageFont font_;
+    framework::FontSet fonts_;
     MainToolbar toolbar_;
     PlaylistPanel playlists_;
     framework::Splitter playlists_splitter_;

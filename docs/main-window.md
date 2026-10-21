@@ -43,12 +43,25 @@ saved `Placement` and asks it for the current one.
   a `Toolbar` control. A button click, or a choice from the Sync all dropdown, goes to the callback `MainWindow`
   gives it, which is `run_command`. `update(CommandState)` enables the buttons and keeps the state for the dropdown.
 - `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths, its text padding, and the part texts:
-  Run, Library and Tools from the left, an empty part, and Version against the right edge with its text centered.
-  Until the core exists, Run reads `Ready` and Version shows the build's version. The texts are owner-drawn, so
+  Run, Tracks, Library and Tools from the left, an empty part, and Version against the right edge with its text
+  centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows the folder
+  `main.cpp` hands the window (`Music\WestieLib` for now), with a path ellipsis. The texts are owner-drawn, so
   `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
-- Both measure their height in `apply_dpi`. `MainWindow::apply_dpi` makes the message font and hands it and the DPI
-  to both. It runs in the constructor, on `WM_DPICHANGED`, and on `WM_SETTINGCHANGE` with `SPI_SETNONCLIENTMETRICS`
-  (a new system font size).
+- Both measure their height in `apply_dpi`. `MainWindow::apply_dpi` makes the `FontSet` and hands the regular font
+  and the DPI to both, and the set to the side panels. It runs in the constructor, on `WM_DPICHANGED`, and on
+  `WM_SETTINGCHANGE` with `SPI_SETNONCLIENTMETRICS` (a new system font size).
+
+## Side panels
+
+- `PlaylistPanel` (`src/ui/playlists/`) stacks the `AllTracksRow`, a rule it paints itself, the `No playlists yet.`
+  label and the `Add playlist` button. The label and the button start at `AllTracksRow::text_left()`, so they line up
+  with the row's text at every scale. The button's click goes to the callback `MainWindow` gives the panel, which is
+  `run_command`, as for the toolbar.
+- `AllTracksRow` is a window that paints the row: selection box, glyph, name in semibold, and the counts. It stays
+  selected until there are playlists to select instead.
+- `InspectorPanel` (`src/ui/inspector/`) centers its first-run placeholder inside its padding on every `WM_SIZE`.
+- `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
+  the constructor shows zeros.
 
 ## Layout
 

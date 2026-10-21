@@ -13,6 +13,7 @@ public:
     PaintScope& operator=(const PaintScope&) = delete;
 
     HDC dc() const noexcept { return dc_; }
+    const RECT& area() const noexcept { return paint_.rcPaint; }
 
 private:
     HWND hwnd_;

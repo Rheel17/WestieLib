@@ -9,3 +9,4 @@
 #define IDI_STOP_DISABLED    7
 #define IDI_GEAR             8
 #define IDI_GEAR_DISABLED    9
+#define IDI_LIBRARY          10

@@ -13,6 +13,7 @@ IDI_STOP             ICON "glyphs/stop.ico"
 IDI_STOP_DISABLED    ICON "glyphs/stop-disabled.ico"
 IDI_GEAR             ICON "glyphs/gear.ico"
 IDI_GEAR_DISABLED    ICON "glyphs/gear-disabled.ico"
+IDI_LIBRARY          ICON "glyphs/lib.ico"
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "WestieLib.manifest"
 
