@@ -1,5 +1,6 @@
-# Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menu, sizes,
-# splitter drags and limits, painting during a drag, and saving/restoring the window state across restarts.
+# Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
+# states, commands, sizes, splitter drags and limits, painting during a drag, and saving/restoring the window state
+# across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
@@ -38,19 +39,39 @@ public static class W {
 	[DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
 	[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
 	[DllImport("user32.dll")] public static extern IntPtr GetMenu(IntPtr h);
+	[DllImport("user32.dll")] public static extern IntPtr GetSubMenu(IntPtr menu, int pos);
 	[DllImport("user32.dll")] public static extern int GetMenuItemCount(IntPtr menu);
+	[DllImport("user32.dll")] public static extern uint GetMenuItemID(IntPtr menu, int pos);
+	[DllImport("user32.dll")] public static extern uint GetMenuState(IntPtr menu, uint item, uint flags);
 	[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(IntPtr menu, uint item, StringBuilder s, int n, uint flags);
 	[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
+	[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+	[DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
+	[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
+	[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
 	[DllImport("user32.dll")] public static extern int MapWindowPoints(IntPtr from, IntPtr to, ref RECT r, int count);
 	[DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
 	[DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
 	public delegate bool EnumProc(IntPtr h, IntPtr l);
 	[DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr l);
+	[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc, IntPtr l);
 
 	public static string ClassOf(IntPtr h) {
 		var s = new StringBuilder(256);
 		GetClassNameW(h, s, 256);
 		return s.ToString();
+	}
+
+	public static string TextOf(IntPtr h) {
+		var s = new StringBuilder(256);
+		GetWindowTextW(h, s, 256);
+		return s.ToString();
+	}
+
+	public static IntPtr OwnedWindow(IntPtr owner) {
+		IntPtr found = IntPtr.Zero;
+		EnumWindows((h, l) => { if (GetWindow(h, 4) == owner && IsWindowVisible(h)) { found = h; return false; } return true; }, IntPtr.Zero);
+		return found;
 	}
 
 	public static RECT RectIn(IntPtr child, IntPtr parent) {
@@ -74,6 +95,43 @@ public static class W {
 			parts.Add(s.ToString());
 		}
 		return String.Join(" ", parts);
+	}
+
+	// The item's text with "..." for the ellipsis, and its shortcut in brackets
+	public static string ItemText(IntPtr popup, int pos) {
+		var s = new StringBuilder(128);
+		GetMenuStringW(popup, (uint)pos, s, 128, 0x400);
+		var parts = s.ToString().Replace(new string((char)0x2026, 1), "...").Split('\t');
+		return parts.Length > 1 ? parts[0] + " [" + parts[1] + "]" : parts[0];
+	}
+
+	// Separators show as "-"
+	public static string PopupText(IntPtr popup) {
+		var parts = new List<string>();
+		for (int i = 0; i < GetMenuItemCount(popup); i++) parts.Add(GetMenuItemID(popup, i) == 0 ? "-" : ItemText(popup, i));
+		return String.Join(", ", parts);
+	}
+
+	// Items of every popup whose state has all the given MF_ flags, without their shortcuts
+	public static string ItemsWithState(IntPtr menuBar, uint flags) {
+		var parts = new List<string>();
+		for (int m = 0; m < GetMenuItemCount(menuBar); m++) {
+			var popup = GetSubMenu(menuBar, m);
+			for (int i = 0; i < GetMenuItemCount(popup); i++) {
+				if (GetMenuItemID(popup, i) != 0 && (GetMenuState(popup, (uint)i, 0x400) & flags) == flags) parts.Add(ItemText(popup, i).Split('[')[0].Trim());
+			}
+		}
+		return String.Join(", ", parts);
+	}
+
+	public static uint CommandOf(IntPtr menuBar, string text) {
+		for (int m = 0; m < GetMenuItemCount(menuBar); m++) {
+			var popup = GetSubMenu(menuBar, m);
+			for (int i = 0; i < GetMenuItemCount(popup); i++) {
+				if (ItemText(popup, i).Split('[')[0].Trim() == text) return GetMenuItemID(popup, i);
+			}
+		}
+		throw new ArgumentException("No menu item " + text);
 	}
 }
 '@
@@ -111,10 +169,34 @@ function Start-App {
 	return @{ Process = $process; Hwnd = $hwnd }
 }
 
-function Stop-App($app) {
-	[void][W]::PostMessageW($app.Hwnd, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
-	if (-not $app.Process.WaitForExit(5000)) { throw 'Process did not exit after WM_CLOSE' }
+# Closes with WM_CLOSE, or with File > Exit
+function Stop-App($app, [switch]$ExitCommand) {
+	if ($ExitCommand) { Send-Command $app.Hwnd 'E&xit' } else { [void][W]::PostMessageW($app.Hwnd, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) }
+	if (-not $app.Process.WaitForExit(5000)) { throw 'Process did not exit' }
 	Check '  exit code' $app.Process.ExitCode 0
+}
+
+# Posts WM_COMMAND for the menu item with this text (without its shortcut)
+function Send-Command($hwnd, [string]$item) {
+	$id = [W]::CommandOf([W]::GetMenu($hwnd), $item)
+	[void][W]::PostMessageW($hwnd, 0x111, [IntPtr][int]$id, [IntPtr]::Zero)
+}
+
+# The app sets menu item states in WM_INITMENUPOPUP, so send it for every popup before reading them
+function Update-MenuStates($hwnd) {
+	$menu = [W]::GetMenu($hwnd)
+	for ($i = 0; $i -lt [W]::GetMenuItemCount($menu); $i++) {
+		[void][W]::SendMessageW($hwnd, 0x117, [W]::GetSubMenu($menu, $i), [IntPtr]$i)
+	}
+}
+
+function Wait-OwnedWindow($owner) {
+	for ($i = 0; $i -lt 50; $i++) {
+		$window = [W]::OwnedWindow($owner)
+		if ($window -ne [IntPtr]::Zero) { return $window }
+		Start-Sleep -Milliseconds 100
+	}
+	[IntPtr]::Zero
 }
 
 function Get-ClientWidth($hwnd) {
@@ -204,7 +286,29 @@ try {
 	"DPI $script:dpi"
 	Check 'DPI awareness (2 = per monitor)' ([W]::GetAwarenessFromDpiAwarenessContext([W]::GetWindowDpiAwarenessContext($h))) 2
 	Check 'Big and small icons set' "$([W]::SendMessageW($h, 0x7F, [IntPtr]1, [IntPtr]::Zero) -ne 0) $([W]::SendMessageW($h, 0x7F, [IntPtr]0, [IntPtr]::Zero) -ne 0)" 'True True'
-	Check 'Menu bar' ([W]::MenuText([W]::GetMenu($h))) '&File &Sync &Track &View &Tools &Help'
+	$menu = [W]::GetMenu($h)
+	Check 'Menu bar' ([W]::MenuText($menu)) '&File &Sync &Track &View T&ools &Help'
+	$popups = @(
+		'&Add playlist... [Ctrl+N], &Remove playlist..., -, &Open library folder, -, E&xit [Ctrl+Q]',
+		'Sync &all [F5], Sync &selected playlist, -, &Cancel [Esc]',
+		'&Confirm match, C&hoose video..., &Edit track... [Enter], -, &Retry, &Keep, &Move to Recycle Bin..., -, &Show in folder, Open on &YouTube, Open source &page',
+		'&Log [Ctrl+L], -, &Columns...',
+		'&Settings... [Ctrl+Alt+S], Check for &updates, -, &Rebuild library from files..., Library folder &moved..., -, Open &log folder',
+		'&About WestieLib'
+	)
+	for ($i = 0; $i -lt $popups.Count; $i++) {
+		Check "  $(([W]::MenuText($menu) -split ' ')[$i]) items" ([W]::PopupText([W]::GetSubMenu($menu, $i))) $popups[$i]
+	}
+	Update-MenuStates $h
+	Check 'Grayed while idle with nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &selected playlist, &Cancel, &Confirm match, C&hoose video..., ' +
+		'&Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
+	Check 'Checked items' ([W]::ItemsWithState($menu, 0x8)) ''
+	Send-Command $h '&About WestieLib'
+	$about = Wait-OwnedWindow $h
+	Check 'Help > About opens a dialog' "$([W]::ClassOf($about)) $([W]::TextOf($about))" '#32770 About WestieLib'
+	[void][W]::PostMessageW($about, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 300
+	Check '  and closes' ([W]::IsWindow($about)) 'False'
 	Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
 	$cw = Get-ClientWidth $h
 	$g = S 5
@@ -229,7 +333,8 @@ try {
 	Set-Bounds $h 100 100 (S 1200) (S 750)
 	$cw = Get-ClientWidth $h
 	Check-Widths 'Window grows: inspector back to 500' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
-	Stop-App $app
+	"File > Exit"
+	Stop-App $app -ExitCommand
 	$saved = Get-ItemProperty $KeyPath
 	Check '  saved bounds' "$($saved.Left),$($saved.Top),$($saved.Right),$($saved.Bottom)" "100,100,$(100 + (S 1200)),$(100 + (S 750))"
 	Check '  saved maximized, widths (DIPs)' "$($saved.Maximized) $($saved.PlaylistsWidthDips) $($saved.InspectorWidthDips)" '0 250 500'

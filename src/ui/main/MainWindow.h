@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include "ui/commands/CommandId.h"
+#include "ui/commands/CommandState.h"
 #include "ui/framework/Splitter.h"
 #include "ui/framework/Window.h"
 #include "ui/framework/WindowIcon.h"
@@ -31,6 +33,10 @@ private:
     void save_state() const;
     MainLayout current_layout() const;
     void layout_panels();
+    CommandState command_state() const;
+    void run_command(CommandId command);
+    void on_command(WPARAM wparam, LPARAM lparam);
+    void on_init_menu_popup(HMENU menu, bool window_menu) const;
     void on_playlists_splitter_drag(int left);
     void on_inspector_splitter_drag(int left);
     void on_get_min_max_info(MINMAXINFO& info) const;

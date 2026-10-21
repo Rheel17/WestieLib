@@ -6,6 +6,8 @@
 #include "ResourceIds.h"
 #include "platform/win32/UniqueHandle.h"
 #include "platform/win32/Win32Error.h"
+#include "ui/commands/CommandMenu.h"
+#include "ui/dialogs/AboutDialog.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Instance.h"
 #include "ui/framework/Rect.h"
@@ -49,6 +51,8 @@ void MainWindow::show(int show_command) {
 
 LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+    case WM_COMMAND:       on_command(wparam, lparam); return 0;
+    case WM_INITMENUPOPUP: on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
     case WM_GETMINMAXINFO: on_get_min_max_info(*reinterpret_cast<MINMAXINFO*>(lparam)); return 0;
     case WM_SIZE:          layout_panels(); return 0;
     case WM_DPICHANGED:    on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
@@ -131,6 +135,35 @@ void MainWindow::layout_panels() {
     positions.move(inspector_splitter_.hwnd(), layout.inspector_splitter);
     positions.move(inspector_.hwnd(), layout.inspector);
     positions.apply();
+}
+
+CommandState MainWindow::command_state() const {
+    return {};
+}
+
+void MainWindow::run_command(CommandId command) {
+    if (!command_state().enabled(command)) {
+        return;
+    }
+
+    switch (command) {
+    case CommandId::Exit:  SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::About: show_about_dialog(hwnd()); return;
+    default:               return;
+    }
+}
+
+void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
+    // Only menus and accelerators send WM_COMMAND without a control
+    if (lparam == 0) {
+        run_command(static_cast<CommandId>(LOWORD(wparam)));
+    }
+}
+
+void MainWindow::on_init_menu_popup(HMENU menu, bool window_menu) const {
+    if (!window_menu) {
+        update_menu_items(menu, command_state());
+    }
 }
 
 void MainWindow::on_playlists_splitter_drag(int left) {

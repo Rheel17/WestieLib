@@ -11,11 +11,12 @@ Thin RAII classes over raw Win32; no MFC, ATL or WTL.
 ## Errors
 
 - `platform::win32::check(result, "ApiName")` returns `result`, or throws `std::system_error` with `GetLastError()`
-  when it is zero or null. APIs that return an error code (the registry) use `check_status(status, "ApiName")`.
+  when it is zero or null. APIs that return an error code (the registry) use `check_status(status, "ApiName")`, and
+  APIs that return an `HRESULT` use `check_hresult`.
 - Exceptions never unwind through Win32 frames. `Window::window_proc` catches everything, parks it in
   `PendingException` and returns a failure value (`WM_NCCREATE` → `FALSE`, `WM_CREATE` → -1, otherwise 0).
-  `MessageLoop::run` rethrows after each `DispatchMessageW`, and the `Window` constructor after `CreateWindowExW`.
-  Handlers simply throw; don't add local catches.
+  `MessageLoop::run` rethrows after each message, whether it was dispatched or translated as an accelerator, and the
+  `Window` constructor rethrows after `CreateWindowExW`. Handlers simply throw; don't add local catches.
 - `main.cpp` catches whatever reaches it and shows `show_fatal_error` (a message box), then exits with 1.
 
 ## Window lifecycle
@@ -50,6 +51,8 @@ rules that the code doesn't spell out:
 | `DeferredPositions` | Collect `move(hwnd, rect)` calls, then `apply()`. It moves with `SWP_NOCOPYBITS`, then paints at once with `RedrawWindow(parent, RDW_UPDATENOW \| RDW_ALLCHILDREN)`. Those two fixed splitter drags that showed half-painted frames, so keep them. Every window in one batch must share a parent |
 | `Dpi` | Sizes are DIPs in the code; `scale` / `unscale` convert at the point of use |
 | `WindowIcon` | `WM_SETICON` doesn't hand the icons to the window, so this object keeps them alive. Call `apply_to` again after a DPI change |
+| `build_popup_menu` | Builds a popup from a `MenuItem` table; `MenuSeparator` (an empty item) is a separator. Item states aren't part of the table: the owner sets them when the popup opens |
+| `AcceleratorTable` | Owns an `HACCEL`. `MessageLoop::run` translates through it for one window before `TranslateMessage`. `TranslateAccelerator` sends `WM_INITMENUPOPUP` first and skips grayed items, so shortcuts follow the menu's enabled state |
 | `platform::win32::UniqueHandle<H, Close>` | `unique_ptr` with a function deleter. Add an alias next to the others for each new handle type |
 | `platform::win32::to_utf16` | Core strings are UTF-8 `std::string` (see `plan/arch.md`); convert at the Win32 boundary |
 

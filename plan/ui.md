@@ -45,7 +45,7 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 - The window placement (normal bounds and maximized state) and the panel widths are saved under
   `HKCU\Software\WestieLib\Window` when the window closes, and restored on the next start. A minimized window comes
   back restored, or maximized if it was maximized before.
-- View menu toggles the inspector and the log.
+- The inspector is always shown. View › Log toggles the log pane.
 - Minimum window size is about 1100×680. The mockup draws the window at 1280×800, with a 250 px left panel and
   a 290 px inspector.
 
@@ -74,20 +74,32 @@ its video.
 
 ## Menu bar and toolbar
 
+Each menu lists its items top to bottom; ─ is a separator. Shortcuts are right-aligned in the menu.
+
 | Menu  | Items |
 |-------|-------|
-| File  | Add playlist… (Ctrl+N), Remove playlist…, Open library folder, Exit |
-| Sync  | Sync all (F5), Sync selected playlist, Cancel (Esc while syncing) |
-| Track | Confirm match, Choose video…, Edit track… (Enter, double-click), Retry, Keep, Move to Recycle Bin…, Show in folder, Open on YouTube, Open source page |
-| View  | Inspector, Log (Ctrl+L), Columns… |
-| Tools | Settings…, Check for updates, Rebuild library from files…, Library folder moved…, Open log folder |
+| File  | Add playlist… (Ctrl+N), Remove playlist…, ─, Open library folder, ─, Exit (Ctrl+Q) |
+| Sync  | Sync all (F5), Sync selected playlist, ─, Cancel (Esc while syncing) |
+| Track | Confirm match, Choose video…, Edit track… (Enter, double-click), ─, Retry, Keep, Move to Recycle Bin…, ─, Show in folder, Open on YouTube, Open source page |
+| View  | Log (Ctrl+L), ─, Columns… |
+| Tools | Settings… (Ctrl+Alt+S), Check for updates, ─, Rebuild library from files…, Library folder moved…, ─, Open log folder |
 | Help  | About WestieLib |
+
+Access keys: the menu bar has **F**ile, **S**ync, **T**rack, **V**iew, T**o**ols and **H**elp (Track and Tools can't
+share T). The items, in order: File **A**dd, **R**emove, **O**pen, E**x**it; Sync **A**ll, **S**elected, **C**ancel;
+Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **M**ove, **S**how, **Y**ouTube, source **P**age;
+View **L**og, **C**olumns; Tools **S**ettings, **U**pdates, **R**ebuild, **M**oved, **L**og folder; Help **A**bout.
 
 The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Settings`.
 
 - `Sync all ▾` is a split button. Its dropdown lists "Sync selected playlist" and then every playlist by name.
-- `Cancel` is enabled only while a sync runs. `Sync all` is disabled during that time.
-- Sync is disabled until every tool is installed.
+- The menu bar, the toolbar and the shortcuts share one set of rules, so a command is enabled everywhere or nowhere:
+  - `Cancel` is enabled only while a sync runs. `Sync all` and `Sync selected playlist` are disabled during that
+    time, and until every tool is installed.
+  - `Remove playlist…` and `Sync selected playlist` need a selected playlist.
+  - Track items need a selected track.
+  - Everything else is always enabled.
+- View › Log shows a check mark while the log pane is shown.
 
 ## Infobar
 
@@ -305,6 +317,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     default), `Check for updates`, and "Last checked …".
   - **Maintenance**: `Rebuild library from files…`.
   - The footer shows the version on the left, and `OK` / `Cancel`.
+- **About** is a TaskDialog with the app icon, `WestieLib` as the main instruction, `Version 1.2.0` (the build's
+  version) and OK.
 - **Confirmations** use a TaskDialog:
   - Remove playlist says how many tracks become Removed.
   - Move to Recycle Bin says how many files.

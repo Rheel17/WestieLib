@@ -3,11 +3,12 @@
 #include <windows.h>
 
 #include "platform/win32/Win32Error.h"
+#include "ui/framework/AcceleratorTable.h"
 #include "ui/framework/PendingException.h"
 
 namespace westie::ui::framework {
 
-int MessageLoop::run() {
+int MessageLoop::run(HWND window, const AcceleratorTable& accelerators) {
     MSG message;
     while (true) {
         BOOL result = GetMessageW(&message, nullptr, 0, 0);
@@ -18,8 +19,10 @@ int MessageLoop::run() {
             return static_cast<int>(message.wParam);
         }
 
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
+        if (!accelerators.translate(window, message)) {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
         PendingException::rethrow_if_any();
     }
 }

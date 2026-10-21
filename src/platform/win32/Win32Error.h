@@ -10,6 +10,7 @@ namespace westie::platform::win32 {
 [[noreturn]] void throw_last_error(std::string_view operation);
 
 void check_status(LSTATUS status, std::string_view operation);
+void check_hresult(HRESULT result, std::string_view operation);
 
 template<typename T>
 T check(T result, std::string_view operation) {

@@ -18,5 +18,6 @@ using UniqueHandle = std::unique_ptr<std::remove_pointer_t<Handle>, HandleCloser
 using UniqueIcon = UniqueHandle<HICON, DestroyIcon>;
 using UniqueMenu = UniqueHandle<HMENU, DestroyMenu>;
 using UniqueKey = UniqueHandle<HKEY, RegCloseKey>;
+using UniqueAcceleratorTable = UniqueHandle<HACCEL, DestroyAcceleratorTable>;
 
 }

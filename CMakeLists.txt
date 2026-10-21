@@ -15,15 +15,21 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/ui/FatalError.cpp
+	src/ui/commands/CommandMenu.cpp
+	src/ui/commands/CommandState.cpp
+	src/ui/dialogs/AboutDialog.cpp
+	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/DeferredPositions.cpp
 	src/ui/framework/MessageLoop.cpp
 	src/ui/framework/Panel.cpp
 	src/ui/framework/PendingException.cpp
+	src/ui/framework/PopupMenu.cpp
 	src/ui/framework/Splitter.cpp
 	src/ui/framework/Window.cpp
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp
 	src/ui/inspector/InspectorPanel.cpp
+	src/ui/main/MainAccelerators.cpp
 	src/ui/main/MainLayout.cpp
 	src/ui/main/MainMenu.cpp
 	src/ui/main/MainWindow.cpp
@@ -44,3 +50,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
+target_link_libraries(WestieLib PRIVATE comctl32)

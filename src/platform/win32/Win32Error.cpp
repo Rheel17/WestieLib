@@ -24,4 +24,10 @@ void check_status(LSTATUS status, std::string_view operation) {
     }
 }
 
+void check_hresult(HRESULT result, std::string_view operation) {
+    if (FAILED(result)) {
+        throw_error(static_cast<DWORD>(result), operation);
+    }
+}
+
 }

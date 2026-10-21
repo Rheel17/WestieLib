@@ -1,8 +1,24 @@
 # Main window
 
 `MainWindow` (`src/ui/main/`) is the frame window. It owns the menu bar (`MainMenu.cpp`), the window icon, every
-child window as a member (declaration order is creation order), and the user's panel sizes in DIPs. What the window
-should contain and how it should behave is specified in `plan/ui.md`; this file covers how the code is put together.
+child window as a member (declaration order is creation order), and the user's panel sizes in DIPs. It also routes
+commands. What the window should contain and how it should behave is specified in `plan/ui.md`; this file covers how
+the code is put together.
+
+## Commands
+
+- Every menu item, toolbar button and shortcut is a `CommandId` (`src/ui/commands/`). The values double as Win32
+  command IDs.
+- `CommandState` holds what the commands depend on (a sync running, the selection, whether the log shows).
+  `enabled(id)` and `checked(id)` are the only enable rules, so the menu, the toolbar and the shortcuts can't
+  disagree. `MainWindow::command_state()` builds it from the window's current state.
+- `MainMenu.cpp` lists the menus as tables of `command_item(id, text)`, with the shortcut after a tab. On
+  `WM_INITMENUPOPUP` (not for the window menu) `update_menu_items` grays and checks the popup's items from
+  `command_state()`.
+- `MainAccelerators.cpp` holds the shortcut table. `main.cpp` builds it and hands it to `MessageLoop::run`. Esc and
+  Enter appear in the menu text but aren't in the table: they belong to the sync and the track list.
+- Menus and accelerators arrive as `WM_COMMAND` with no control. `run_command` drops a command that
+  `command_state()` says is disabled, then acts on it. Commands without a feature yet do nothing.
 
 ## Startup and shutdown
 
