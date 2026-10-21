@@ -13,6 +13,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `-Screenshot` saves the window to a PNG via `PrintWindow(PW_RENDERFULLCONTENT)`, cropped to
   `DWMWA_EXTENDED_FRAME_BOUNDS`. Read the PNG to look at it.
 - Expected sizes are written in DIPs and scaled with the window's DPI (the `S` helper).
+- When a monitor with another DPI is attached, runs 5 and 6 cover it. Run 5 moves the window there, which sends
+  `WM_DPICHANGED`, and run 6 restores it there from the saved state. Both check everything that scales
+  (`Check-Scaled`).
+- Usually every monitor runs at the same scale, and those runs print `Skipped`. After a change to DPI handling (fonts,
+  image lists, bar heights, anything in `apply_dpi`), ask the user to set one monitor to another scale (Settings ›
+  System › Display) for a run. A script must never change the scaling itself, because that's a system setting.
+- The toolbar check compares each button's width with its text measured in the message font at the window's DPI. A
+  text measured in an older font shows up as a button that's too narrow.
 - The window shows on the user's screen while it runs.
 - Extend it when the UI changes, with checks on rects, registry values and messages.
 - Messages sent straight to a window don't exercise real mouse input (cursor shape, mouse capture), so those need a

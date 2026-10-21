@@ -44,6 +44,9 @@ private:
     std::vector<int> separator_indexes() const;
     void set_separator_widths(int width);
     void set_padding(int side, int vertical, int button_spacing);
+    void measure_texts();
+
+    std::vector<ToolbarButton> buttons_;
 };
 
 }

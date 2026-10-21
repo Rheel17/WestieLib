@@ -36,6 +36,7 @@ void Toolbar::add_buttons(std::span<const ToolbarButton> buttons) {
         entries.push_back(entry);
     }
     platform::win32::check(SendMessageW(hwnd(), TB_ADDBUTTONSW, entries.size(), reinterpret_cast<LPARAM>(entries.data())), "TB_ADDBUTTONSW");
+    buttons_.insert(buttons_.end(), buttons.begin(), buttons.end());
 }
 
 void Toolbar::set_image_lists(HIMAGELIST normal, HIMAGELIST disabled) {
@@ -52,8 +53,24 @@ void Toolbar::apply_metrics(const ToolbarMetrics& metrics, HFONT font) {
     // default width behind, which clips the text of disabled buttons.
     set_padding(metrics.side_padding, 0, metrics.button_spacing);
     set_font(font);
+    measure_texts();
     set_padding(metrics.side_padding, std::max(0, metrics.button_height - button_size().height), metrics.button_spacing);
     set_font(font);
+}
+
+void Toolbar::measure_texts() {
+    // A button's text width is measured when the button gets its text, not when the font changes
+    for (const ToolbarButton& button : buttons_) {
+        if (!button.text) {
+            continue;
+        }
+        TBBUTTONINFOW info{};
+        info.cbSize = sizeof(info);
+        info.dwMask = TBIF_TEXT;
+        // The toolbar copies the text and never writes to it
+        info.pszText = const_cast<wchar_t*>(button.text);
+        platform::win32::check(SendMessageW(hwnd(), TB_SETBUTTONINFOW, button.command, reinterpret_cast<LPARAM>(&info)), "TB_SETBUTTONINFOW");
+    }
 }
 
 void Toolbar::set_enabled(WORD command, bool enabled) {

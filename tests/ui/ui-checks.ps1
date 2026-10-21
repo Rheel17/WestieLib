@@ -126,6 +126,85 @@ public static class W {
 		return String.Join(", ", parts);
 	}
 
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+	public struct LOGFONTW {
+		public int Height, Width, Escapement, Orientation, Weight;
+		public byte Italic, Underline, StrikeOut, CharacterSet, OutPrecision, ClipPrecision, Quality, PitchAndFamily;
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string FaceName;
+	}
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+	public struct NONCLIENTMETRICSW {
+		public int Size, BorderWidth, ScrollWidth, ScrollHeight, CaptionWidth, CaptionHeight;
+		public LOGFONTW CaptionFont;
+		public int SmCaptionWidth, SmCaptionHeight;
+		public LOGFONTW SmCaptionFont;
+		public int MenuWidth, MenuHeight;
+		public LOGFONTW MenuFont, StatusFont, MessageFont;
+		public int PaddedBorderWidth;
+	}
+	[StructLayout(LayoutKind.Sequential)] public struct SIZE { public int Cx, Cy; }
+	[DllImport("user32.dll")] public static extern bool SystemParametersInfoForDpi(uint action, uint param, ref NONCLIENTMETRICSW value, uint winIni, uint dpi);
+	[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr CreateFontIndirectW(ref LOGFONTW font);
+	[DllImport("gdi32.dll")] public static extern IntPtr CreateCompatibleDC(IntPtr dc);
+	[DllImport("gdi32.dll")] public static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
+	[DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
+	[DllImport("gdi32.dll")] public static extern bool DeleteDC(IntPtr dc);
+	[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern bool GetTextExtentPoint32W(IntPtr dc, string text, int length, out SIZE size);
+
+	// The width of text in the message font at a DPI, the font the app gives its controls
+	public static int TextWidth(string text, uint dpi) {
+		var metrics = new NONCLIENTMETRICSW();
+		metrics.Size = Marshal.SizeOf(metrics);
+		SystemParametersInfoForDpi(0x29, (uint)metrics.Size, ref metrics, 0, dpi);
+		IntPtr font = CreateFontIndirectW(ref metrics.MessageFont), dc = CreateCompatibleDC(IntPtr.Zero);
+		try {
+			SelectObject(dc, font);
+			SIZE size;
+			GetTextExtentPoint32W(dc, text, text.Length, out size);
+			return size.Cx;
+		} finally {
+			DeleteDC(dc);
+			DeleteObject(font);
+		}
+	}
+
+	// "<text> +<width beyond the text>" for each plain button; separators and dropdowns are left out
+	public static string ToolbarExtraWidths(IntPtr toolbar, uint dpi) {
+		var parts = new List<string>();
+		long result;
+		int count = (int)SendMessageW(toolbar, 0x418, IntPtr.Zero, IntPtr.Zero);
+		for (int i = 0; i < count; i++) {
+			var button = SendForBuffer(toolbar, 0x417, (IntPtr)i, 32, out result);
+			if ((button[9] & 0x9) != 0) continue;
+			var text = Utf16(SendForBuffer(toolbar, 0x44B, (IntPtr)BitConverter.ToInt32(button, 4), 256, out result));
+			var rect = SendForBuffer(toolbar, 0x41D, (IntPtr)i, 16, out result);
+			parts.Add(text + " +" + (BitConverter.ToInt32(rect, 8) - BitConverter.ToInt32(rect, 0) - TextWidth(text, dpi)));
+		}
+		return String.Join(", ", parts);
+	}
+
+	[StructLayout(LayoutKind.Sequential)] public struct MONITORINFO { public int Size; public RECT Monitor, Work; public uint Flags; }
+	public delegate bool MonitorProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
+	[DllImport("user32.dll")] public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorProc proc, IntPtr data);
+	[DllImport("user32.dll")] public static extern bool GetMonitorInfoW(IntPtr monitor, ref MONITORINFO info);
+	[DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint x, out uint y);
+
+	// The work area of a monitor whose DPI isn't dpi, or an empty rect when there's none
+	public static RECT OtherDpiWorkArea(uint dpi) {
+		RECT found = new RECT();
+		EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data) => {
+			uint x, y;
+			GetDpiForMonitor(monitor, 0, out x, out y);
+			if (x == dpi) return true;
+			var info = new MONITORINFO();
+			info.Size = Marshal.SizeOf(info);
+			GetMonitorInfoW(monitor, ref info);
+			found = info.Work;
+			return false;
+		}, IntPtr.Zero);
+		return found;
+	}
+
 	// "gaps <between each pair of buttons> | separator <width>"
 	public static string ToolbarSpacing(IntPtr toolbar) {
 		var gaps = new List<string>();
@@ -442,6 +521,33 @@ function Check-Bars([string]$what, $hwnd) {
 	Check $what "$strip | $status" "0,0 $($cw)x$(S 34) | 0,$($ch - (S 23)) $($cw)x$(S 23)"
 }
 
+# Toolbar buttons: their height and position, the spacing, and room for their text in the font at the window's DPI
+function Check-Toolbar([string]$what, $hwnd) {
+	$strip = Get-ToolbarStrip $hwnd
+	$toolbar = ([W]::Children($strip, 'ToolbarWindow32'))[0]
+	$height = ([int64][W]::SendMessageW($toolbar, 0x43A, [IntPtr]::Zero, [IntPtr]::Zero)) -shr 16
+	$r = [W]::RectIn($toolbar, $strip)
+	Check "$what button height, left, top (centered)" "$height $($r.Left) $($r.Top)" "$(S 26) $(S 4) $([math]::Floor(((S 34) - 1 - (S 26)) / 2))"
+	Check "$what spacing" ([W]::ToolbarSpacing($toolbar)) "gaps $(S 1) $(S 1) $(S 1) $(S 1) | separator $(S 11)"
+	# Padding, icon and gap, plus a few pixels the toolbar keeps around the text itself. A button whose text was measured
+	# in an older, smaller font falls short of this.
+	$least = 2 * (S 8) + (S 16) + (S 5)
+	$actual = [W]::ToolbarExtraWidths($toolbar, $script:dpi)
+	$extras = @([regex]::Matches($actual, '\+(-?\d+)') | ForEach-Object { [int]$_.Groups[1].Value })
+	$ok = $extras.Count -eq 3 -and @($extras | Select-Object -Unique).Count -eq 1 -and $extras[0] -ge $least -and $extras[0] -le $least + (S 4)
+	Check-That "$what width beyond the text" $actual $ok "the same for each, $least to $($least + (S 4))"
+}
+
+# Everything that scales with the DPI: bars, toolbar, status bar, and the default panel widths
+function Check-Scaled($hwnd) {
+	$cw = Get-ClientWidth $hwnd
+	Check-Bars 'Toolbar strip | status bar' $hwnd
+	Check-Toolbar ' ' $hwnd
+	Check-StatusParts 'Status bar part edges' $hwnd
+	Check-StatusTexts ' ' $hwnd
+	Check-Widths 'Default widths' $hwnd @((S 250), ($cw - (S 250) - (S 290) - 2 * (S 5)), (S 290))
+}
+
 # Run, Library and Tools from the left, then Version running to the right edge. Version's rect stops where the size
 # grip starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but Version.
 function Check-StatusParts([string]$what, $hwnd) {
@@ -580,14 +686,9 @@ try {
 	Check '  and closes' ([W]::IsWindow($about)) 'False'
 	Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
 	Check-Bars 'Toolbar strip | status bar' $h
-	$strip = Get-ToolbarStrip $h
-	$toolbar = ([W]::Children($strip, 'ToolbarWindow32'))[0]
+	$toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
 	Check 'Toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
-	$buttonHeight = ([int64][W]::SendMessageW($toolbar, 0x43A, [IntPtr]::Zero, [IntPtr]::Zero)) -shr 16
-	$r = [W]::RectIn($toolbar, $strip)
-	Check '  button height, left, top (centered)' "$buttonHeight $($r.Left) $($r.Top)" "$(S 26) $(S 4) $([math]::Floor(((S 34) - 1 - (S 26)) / 2))"
-	Check '  spacing' ([W]::ToolbarSpacing($toolbar)) "gaps $(S 1) $(S 1) $(S 1) $(S 1) | separator $(S 11)"
-	$status = Get-StatusBar $h
+	Check-Toolbar ' ' $h
 	Check-StatusParts 'Status bar part edges' $h
 	Check-StatusTexts ' ' $h
 	$cw = Get-ClientWidth $h
@@ -687,6 +788,31 @@ try {
 	$h = $app.Hwnd
 	Check 'Comes back maximized, not minimized' "$([W]::IsZoomed($h)) $([W]::IsIconic($h))" 'True False'
 	Stop-App $app
+
+	"--- Run 5: moved to a monitor with another DPI"
+	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
+	$app = Start-App
+	$h = $app.Hwnd
+	$work = [W]::OtherDpiWorkArea($script:dpi)
+	if ($work.Right -eq $work.Left) {
+		"Skipped: no monitor with another DPI"
+		Stop-App $app
+	} else {
+		$from = $script:dpi
+		Set-Bounds $h ($work.Left + 100) ($work.Top + 100) (S 1280) (S 800)
+		Start-Sleep -Milliseconds 500
+		$script:dpi = [W]::GetDpiForWindow($h)
+		"DPI $from to $script:dpi"
+		Check-Scaled $h
+		Stop-App $app
+
+		"--- Run 6: restored onto that monitor"
+		$app = Start-App
+		$h = $app.Hwnd
+		"DPI $script:dpi"
+		Check-Scaled $h
+		Stop-App $app
+	}
 } finally {
 	if ($app -and -not $app.Process.HasExited) { $app.Process.Kill() }
 	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
