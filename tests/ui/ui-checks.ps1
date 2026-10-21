@@ -1,7 +1,7 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
 # states, commands and shortcuts, the toolbar and status bar, the side panels' first-run content, sizes, splitter drags
-# and limits, the log pane, painting during a drag, the library folder, and saving/restoring the window state and
-# settings.json across restarts.
+# and limits, the log pane, painting during a drag, the library folder, the Settings dialog, and saving/restoring the
+# window state and settings.json across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
@@ -68,9 +68,9 @@ public static class W {
 	[DllImport("user32.dll")] public static extern bool GetKeyboardState(byte[] state);
 	[DllImport("user32.dll")] public static extern bool SetKeyboardState(byte[] state);
 
-	// Presses Ctrl+key in the app without real input, so nothing can reach the user's other windows. While the threads
-	// are attached they share their key state, so the app's TranslateAccelerator sees Ctrl held.
-	public static void PostCtrlKey(IntPtr h, int key) {
+	// Presses Ctrl+key (or Ctrl+Alt+key) in the app without real input, so nothing can reach the user's other windows.
+	// While the threads are attached they share their key state, so the app's TranslateAccelerator sees Ctrl held.
+	public static void PostCtrlKey(IntPtr h, int key, bool alt = false) {
 		int pid;
 		uint thread = GetWindowThreadProcessId(h, out pid), self = GetCurrentThreadId();
 		AttachThreadInput(self, thread, true);
@@ -79,6 +79,7 @@ public static class W {
 		var saved = (byte[])state.Clone();
 		try {
 			state[0x11] |= 0x80;
+			if (alt) state[0x12] |= 0x80;
 			SetKeyboardState(state);
 			PostMessageW(h, 0x100, (IntPtr)key, (IntPtr)1);
 			System.Threading.Thread.Sleep(300);
@@ -444,6 +445,18 @@ public static class W {
 		AttachThreadInput(self, thread, true);
 		SetFocus(h);
 		AttachThreadInput(self, thread, false);
+	}
+
+	[StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO { public int Size; public uint Flags; public IntPtr Active, Focus, Capture, MenuOwner, MoveSize, Caret; public RECT CaretRect; }
+	[DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
+
+	// The window that has the keyboard focus on h's thread
+	public static IntPtr FocusOf(IntPtr h) {
+		int pid;
+		var info = new GUITHREADINFO();
+		info.Size = Marshal.SizeOf(info);
+		GetGUIThreadInfo(GetWindowThreadProcessId(h, out pid), ref info);
+		return info.Focus;
 	}
 
 	// Whether a child's text is drawn in red (the error color) in a PrintWindow capture
@@ -943,6 +956,47 @@ function Check-LibraryFolder($hwnd) {
 	Check-FolderInEffect '  leaving it: the folder takes effect, cleaned up' $hwnd $MissingFolder $MissingFolder
 }
 
+# Tools > Settings, the toolbar's Settings button and Ctrl+Alt+S each open the Settings dialog, centered on the window,
+# and Esc, Cancel and its close box each shut it. It shows the folder in effect, read-only, and the version.
+function Check-SettingsDialog($hwnd, [string]$folder) {
+	$strip = Get-ToolbarStrip $hwnd
+	$toolbar = ([W]::Children($strip, 'ToolbarWindow32'))[0]
+	$command = [IntPtr][int][W]::CommandOf([W]::GetMenu($hwnd), '&Settings...')
+	$opens = @(
+		@{ Name = 'Tools > Settings'; Open = { Send-Command $hwnd '&Settings...' } },
+		@{ Name = 'the toolbar button'; Open = { [void][W]::PostMessageW($strip, 0x111, $command, $toolbar) } },
+		@{ Name = 'Ctrl+Alt+S'; Open = { [W]::PostCtrlKey($hwnd, 0x53, $true) } }
+	)
+	$closes = @(
+		@{ Name = 'Esc'; Close = { param($dialog) [void][W]::PostMessageW($dialog, 0x100, [IntPtr]0x1B, [IntPtr]1) } },
+		@{ Name = 'Cancel'; Close = { param($dialog) [void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero) } },
+		@{ Name = 'its close box'; Close = { param($dialog) [void][W]::PostMessageW($dialog, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) } }
+	)
+	for ($i = 0; $i -lt $opens.Count; $i++) {
+		& $opens[$i].Open
+		$dialog = Wait-OwnedWindow $hwnd
+		Check "$($opens[$i].Name) opens Settings" "$([W]::ClassOf($dialog)) $([W]::TextOf($dialog))" '#32770 Settings'
+		if ($i -eq 0) {
+			$d = New-Object W+RECT
+			$o = New-Object W+RECT
+			[void][W]::GetWindowRect($dialog, [ref]$d)
+			[void][W]::GetWindowRect($hwnd, [ref]$o)
+			$offset = "$(($d.Left + $d.Right) - ($o.Left + $o.Right)) $(($d.Top + $d.Bottom) - ($o.Top + $o.Bottom))"
+			Check-That '  centered on the window (offset x2)' $offset ($offset -match '^-?[01] -?[01]$') '-1 to 1 each way'
+			$edit = ([W]::Children($dialog, 'Edit'))[0]
+			$readOnly = ([W]::GetWindowLongW($edit, -16) -band 0x800) -ne 0
+			Check '  the folder in effect, read-only' "$([W]::EditText($edit)) $readOnly" "$folder True"
+			$version = @([W]::Children($dialog, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like 'WestieLib *' })
+			Check '  the version' ($version -join ', ') "WestieLib $((Get-Item $Exe).VersionInfo.ProductVersion)"
+			Check '  starts on Change, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Change$([char]0x2026) 0"
+			if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-settings.png") }
+		}
+		& $closes[$i].Close $dialog
+		for ($j = 0; $j -lt 20 -and [W]::IsWindow($dialog); $j++) { Start-Sleep -Milliseconds 100 }
+		Check "  $($closes[$i].Name) closes it" ([W]::IsWindow($dialog)) 'False'
+	}
+}
+
 # settings.json's version and library folder, read as UTF-8
 function Get-SavedSettings {
 	if (-not (Test-Path $SettingsFile)) { return 'no file' }
@@ -1129,6 +1183,8 @@ try {
 	[void][W]::PostMessageW($about, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 300
 	Check '  and closes' ([W]::IsWindow($about)) 'False'
+	Check-SettingsDialog $h $DefaultLibrary
+	Check '  and writes no settings.json' (Get-SavedSettings) 'no file'
 	Check-MenuBarEdge 'Menu bar runs into the toolbar' $h -Menus
 	Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
 	Check-Bars 'Toolbar strip | status bar' $h

@@ -50,6 +50,7 @@ private:
     void update_commands();
     void run_command(CommandId command);
     void toggle_log();
+    void show_settings();
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
     LRESULT on_draw_item(const DRAWITEMSTRUCT& item) const;

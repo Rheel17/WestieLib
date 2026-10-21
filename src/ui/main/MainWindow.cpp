@@ -8,6 +8,7 @@
 #include "platform/win32/Win32Error.h"
 #include "ui/commands/CommandMenu.h"
 #include "ui/dialogs/AboutDialog.h"
+#include "ui/dialogs/SettingsDialog.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Instance.h"
 #include "ui/framework/Rect.h"
@@ -172,6 +173,7 @@ void MainWindow::run_command(CommandId command) {
     switch (command) {
     case CommandId::Exit:      SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
     case CommandId::ToggleLog: toggle_log(); return;
+    case CommandId::Settings:  show_settings(); return;
     case CommandId::About:     show_about_dialog(hwnd()); return;
     default:                   return;
     }
@@ -181,6 +183,10 @@ void MainWindow::toggle_log() {
     panels_.log_visible = !panels_.log_visible;
     layout_panels();
     update_commands();
+}
+
+void MainWindow::show_settings() {
+    SettingsDialog(settings_).edit(hwnd());
 }
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {

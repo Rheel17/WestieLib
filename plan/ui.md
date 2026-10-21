@@ -387,6 +387,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     default), `Check for updates`, and "Last checked …".
   - **Maintenance**: `Rebuild library from files…`.
   - The footer shows the version on the left, and `OK` / `Cancel`.
+  - So far the dialog has only the Library group; the other groups come with their features. A folder chosen with
+    `Change…` takes effect on `OK`.
 - **About** is a TaskDialog with the app icon, `WestieLib` as the main instruction, `Version 1.2.0` (the build's
   version) and OK.
 - **Confirmations** use a TaskDialog:

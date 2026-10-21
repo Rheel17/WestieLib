@@ -34,6 +34,7 @@ add_executable(WestieLib WIN32
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/dialogs/FolderPicker.cpp
+	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/BufferedPaint.cpp
 	src/ui/framework/Button.cpp
@@ -48,6 +49,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/MenuBarPainter.cpp
 	src/ui/framework/MessageFont.cpp
 	src/ui/framework/MessageLoop.cpp
+	src/ui/framework/ModalDialog.cpp
 	src/ui/framework/Panel.cpp
 	src/ui/framework/PendingException.cpp
 	src/ui/framework/PopupMenu.cpp
