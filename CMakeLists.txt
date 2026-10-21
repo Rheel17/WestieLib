@@ -35,10 +35,12 @@ add_executable(WestieLib WIN32
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp
 	src/ui/inspector/InspectorPanel.cpp
+	src/ui/log/LogPanel.cpp
 	src/ui/main/MainAccelerators.cpp
 	src/ui/main/MainLayout.cpp
 	src/ui/main/MainMenu.cpp
 	src/ui/main/MainWindow.cpp
+	src/ui/main/WindowPlacement.cpp
 	src/ui/main/WindowState.cpp
 	src/ui/playlists/PlaylistPanel.cpp
 	src/ui/statusbar/MainStatusBar.cpp

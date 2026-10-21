@@ -1,6 +1,5 @@
 #include "ui/main/MainWindow.h"
 
-#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -15,6 +14,7 @@
 #include "ui/framework/Size.h"
 #include "ui/framework/WindowClass.h"
 #include "ui/main/MainMenu.h"
+#include "ui/main/WindowState.h"
 
 namespace westie::ui {
 
@@ -27,31 +27,32 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 
 MainWindow::MainWindow() :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
+        placement_(hwnd()),
         icon_(IDI_APP_ICON),
         font_(framework::Dpi::of(hwnd())),
         toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
         playlists_(hwnd()),
-        playlists_splitter_(hwnd(), [this](int left) { on_playlists_splitter_drag(left); }),
+        playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
-        inspector_splitter_(hwnd(), [this](int left) { on_inspector_splitter_drag(left); }),
+        inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),
         inspector_(hwnd()),
+        log_splitter_(hwnd(), framework::SplitterAxis::Y, [this](int top) { on_log_splitter_drag(top); }),
+        log_(hwnd()),
         status_bar_(hwnd()) {
     apply_dpi(framework::Dpi::of(hwnd()));
-    toolbar_.update(command_state());
     attach_menu();
 
     if (std::optional<WindowState> state = load_window_state()) {
-        widths_ = state->panel_widths;
-        start_maximized_ = state->maximized;
-        restore_placement(*state);
+        panels_ = state->panels;
+        placement_.restore(state->placement);
     } else {
-        apply_initial_size();
+        placement_.apply_initial_size(InitialWindowDips);
     }
+    update_commands();
 }
 
 void MainWindow::show(int show_command) {
-    bool default_show = show_command == SW_SHOWNORMAL || show_command == SW_SHOWDEFAULT;
-    Window::show(start_maximized_ && default_show ? SW_SHOWMAXIMIZED : show_command);
+    Window::show(placement_.show_command(show_command));
 }
 
 LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -94,71 +95,39 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     font_ = std::move(font);
 }
 
-void MainWindow::apply_initial_size() {
-    framework::Size size = framework::Dpi::of(hwnd()).scale(InitialWindowDips);
-
-    MONITORINFO monitor{};
-    monitor.cbSize = sizeof(monitor);
-    platform::win32::check(GetMonitorInfoW(MonitorFromWindow(hwnd(), MONITOR_DEFAULTTONEAREST), &monitor), "GetMonitorInfoW");
-    const RECT& work = monitor.rcWork;
-    size.width = std::min(size.width, static_cast<int>(work.right - work.left));
-    size.height = std::min(size.height, static_cast<int>(work.bottom - work.top));
-
-    RECT window;
-    platform::win32::check(GetWindowRect(hwnd(), &window), "GetWindowRect");
-    int x = std::clamp(static_cast<int>(window.left), static_cast<int>(work.left), static_cast<int>(work.right) - size.width);
-    int y = std::clamp(static_cast<int>(window.top), static_cast<int>(work.top), static_cast<int>(work.bottom) - size.height);
-    platform::win32::check(SetWindowPos(hwnd(), nullptr, x, y, size.width, size.height, SWP_NOZORDER | SWP_NOACTIVATE), "SetWindowPos");
-}
-
-void MainWindow::restore_placement(const WindowState& state) {
-    WINDOWPLACEMENT placement{};
-    placement.length = sizeof(placement);
-    placement.showCmd = SW_HIDE;
-    placement.rcNormalPosition = state.normal_bounds.to_rect();
-
-    restoring_placement_ = true;
-    BOOL restored = SetWindowPlacement(hwnd(), &placement);
-    restoring_placement_ = false;
-    platform::win32::check(restored, "SetWindowPlacement");
-}
-
 void MainWindow::save_state() const {
-    WINDOWPLACEMENT placement{};
-    placement.length = sizeof(placement);
-    platform::win32::check(GetWindowPlacement(hwnd(), &placement), "GetWindowPlacement");
-
-    bool minimized_from_maximized = placement.showCmd == SW_SHOWMINIMIZED && (placement.flags & WPF_RESTORETOMAXIMIZED);
-    save_window_state({
-        .normal_bounds = framework::Rect::from_rect(placement.rcNormalPosition),
-        .maximized = placement.showCmd == SW_SHOWMAXIMIZED || minimized_from_maximized,
-        .panel_widths = widths_,
-    });
+    save_window_state({.placement = placement_.current(), .panels = panels_});
 }
 
 MainLayout MainWindow::current_layout() const {
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
     BarHeights bars{.toolbar = toolbar_.height(), .status_bar = status_bar_.height()};
-    return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), bars, widths_);
+    return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), bars, panels_);
 }
 
 void MainWindow::layout_panels() {
     MainLayout layout = current_layout();
 
     framework::DeferredPositions positions;
-    positions.move(toolbar_.hwnd(), layout.toolbar);
-    positions.move(playlists_.hwnd(), layout.playlists);
-    positions.move(playlists_splitter_.hwnd(), layout.playlists_splitter);
-    positions.move(tracks_.hwnd(), layout.tracks);
-    positions.move(inspector_splitter_.hwnd(), layout.inspector_splitter);
-    positions.move(inspector_.hwnd(), layout.inspector);
-    positions.move(status_bar_.hwnd(), layout.status_bar);
+    positions.place(toolbar_.hwnd(), layout.toolbar);
+    positions.place(playlists_.hwnd(), layout.playlists);
+    positions.place(playlists_splitter_.hwnd(), layout.playlists_splitter);
+    positions.place(tracks_.hwnd(), layout.tracks);
+    positions.place(inspector_splitter_.hwnd(), layout.inspector_splitter);
+    positions.place(inspector_.hwnd(), layout.inspector);
+    positions.place(log_splitter_.hwnd(), layout.log_splitter);
+    positions.place(log_.hwnd(), layout.log);
+    positions.place(status_bar_.hwnd(), layout.status_bar);
     positions.apply();
 }
 
 CommandState MainWindow::command_state() const {
-    return {};
+    return {.log_visible = panels_.log_visible};
+}
+
+void MainWindow::update_commands() {
+    toolbar_.update(command_state());
 }
 
 void MainWindow::run_command(CommandId command) {
@@ -167,10 +136,17 @@ void MainWindow::run_command(CommandId command) {
     }
 
     switch (command) {
-    case CommandId::Exit:  SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
-    case CommandId::About: show_about_dialog(hwnd()); return;
-    default:               return;
+    case CommandId::Exit:      SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::ToggleLog: toggle_log(); return;
+    case CommandId::About:     show_about_dialog(hwnd()); return;
+    default:                   return;
     }
+}
+
+void MainWindow::toggle_log() {
+    panels_.log_visible = !panels_.log_visible;
+    layout_panels();
+    update_commands();
 }
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
@@ -195,12 +171,17 @@ LRESULT MainWindow::on_draw_item(const DRAWITEMSTRUCT& item) const {
 }
 
 void MainWindow::on_playlists_splitter_drag(int left) {
-    widths_ = move_playlists_splitter(current_layout(), framework::Dpi::of(hwnd()), widths_, left);
+    panels_ = move_playlists_splitter(current_layout(), framework::Dpi::of(hwnd()), panels_, left);
     layout_panels();
 }
 
 void MainWindow::on_inspector_splitter_drag(int left) {
-    widths_ = move_inspector_splitter(current_layout(), framework::Dpi::of(hwnd()), widths_, left);
+    panels_ = move_inspector_splitter(current_layout(), framework::Dpi::of(hwnd()), panels_, left);
+    layout_panels();
+}
+
+void MainWindow::on_log_splitter_drag(int top) {
+    panels_ = move_log_splitter(current_layout(), framework::Dpi::of(hwnd()), panels_, top);
     layout_panels();
 }
 
@@ -213,7 +194,7 @@ void MainWindow::on_dpi_changed(UINT dpi, const RECT& suggested) {
     apply_dpi(framework::Dpi(dpi));
 
     // Restored bounds are already in the pixels of the monitor they are on
-    if (restoring_placement_) {
+    if (placement_.restoring()) {
         layout_panels();
         return;
     }

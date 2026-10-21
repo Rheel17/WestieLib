@@ -2,15 +2,14 @@
 
 #include <optional>
 
-#include "ui/framework/Rect.h"
 #include "ui/main/MainLayout.h"
+#include "ui/main/WindowPlacement.h"
 
 namespace westie::ui {
 
 struct WindowState {
-    framework::Rect normal_bounds;
-    bool maximized = false;
-    PanelWidths panel_widths;
+    Placement placement{};
+    PanelState panels{};
 };
 
 std::optional<WindowState> load_window_state();

@@ -1,6 +1,6 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
-# states, commands, the toolbar and status bar, sizes, splitter drags and limits, painting during a drag, and
-# saving/restoring the window state across restarts.
+# states, commands and shortcuts, the toolbar and status bar, sizes, splitter drags and limits, the log pane, painting
+# during a drag, and saving/restoring the window state across restarts.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
@@ -61,6 +61,30 @@ public static class W {
 	[DllImport("kernel32.dll")] public static extern bool VirtualFreeEx(IntPtr process, IntPtr address, IntPtr size, uint type);
 	[DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] buffer, IntPtr size, out IntPtr read);
 	[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
+	[DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+	[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint attach, uint to, bool on);
+	[DllImport("user32.dll")] public static extern bool GetKeyboardState(byte[] state);
+	[DllImport("user32.dll")] public static extern bool SetKeyboardState(byte[] state);
+
+	// Presses Ctrl+key in the app without real input, so nothing can reach the user's other windows. While the threads
+	// are attached they share their key state, so the app's TranslateAccelerator sees Ctrl held.
+	public static void PostCtrlKey(IntPtr h, int key) {
+		int pid;
+		uint thread = GetWindowThreadProcessId(h, out pid), self = GetCurrentThreadId();
+		AttachThreadInput(self, thread, true);
+		var state = new byte[256];
+		GetKeyboardState(state);
+		var saved = (byte[])state.Clone();
+		try {
+			state[0x11] |= 0x80;
+			SetKeyboardState(state);
+			PostMessageW(h, 0x100, (IntPtr)key, (IntPtr)1);
+			System.Threading.Thread.Sleep(300);
+		} finally {
+			SetKeyboardState(saved);
+			AttachThreadInput(self, thread, false);
+		}
+	}
 
 	// Sends a message whose lparam is a buffer the window fills. Common controls don't marshal pointers across
 	// processes, so the buffer lives in the window's process.
@@ -276,7 +300,7 @@ if (Get-Process WestieLib -ErrorAction SilentlyContinue) { throw 'WestieLib is r
 [void][W]::SetThreadDpiAwarenessContext([IntPtr](-4))
 
 $KeyPath = 'HKCU:\Software\WestieLib\Window'
-$StateNames = 'Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips'
+$StateNames = 'Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible'
 $script:failures = 0
 $script:dpi = 96
 $app = $null
@@ -357,13 +381,46 @@ function Get-ToolbarStrip($hwnd) { ([W]::Children($hwnd, 'WestieLib.MainToolbar'
 
 function Get-StatusBar($hwnd) { ([W]::Children($hwnd, 'msctls_statusbar32'))[0] }
 
+function Get-RowTop($hwnd) { [W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd).Bottom }
+
+# Playlists, tracks and inspector: the visible panels whose top is the row's, by their left edge
+function Get-RowPanels($hwnd) {
+	$top = Get-RowTop $hwnd
+	@([W]::Children($hwnd, 'WestieLib.Panel') | Where-Object { [W]::IsWindowVisible($_) -and [W]::RectIn($_, $hwnd).Top -eq $top })
+}
+
+# The other panel, shown or not
+function Get-LogPanel($hwnd) {
+	$top = Get-RowTop $hwnd
+	@([W]::Children($hwnd, 'WestieLib.Panel') | Where-Object { -not [W]::IsWindowVisible($_) -or [W]::RectIn($_, $hwnd).Top -ne $top })[0]
+}
+
+function Test-Upright($hwnd, $child) { $r = [W]::RectIn($child, $hwnd); ($r.Right - $r.Left) -lt ($r.Bottom - $r.Top) }
+
+# The visible splitters between the panels, by their left edge
+function Get-ColumnSplitters($hwnd) {
+	@([W]::Children($hwnd, 'WestieLib.Splitter') | Where-Object { [W]::IsWindowVisible($_) -and (Test-Upright $hwnd $_) })
+}
+
+function Get-LogSplitter($hwnd) {
+	@([W]::Children($hwnd, 'WestieLib.Splitter') | Where-Object { -not [W]::IsWindowVisible($_) -or -not (Test-Upright $hwnd $_) })[0]
+}
+
+function Get-LogVisibility($hwnd) { "$([W]::IsWindowVisible((Get-LogPanel $hwnd))) $([W]::IsWindowVisible((Get-LogSplitter $hwnd)))" }
+
+# Bottom of the panel row: the log splitter while the log shows, else the status bar
+function Get-RowBottom($hwnd) {
+	$splitter = Get-LogSplitter $hwnd
+	if ([W]::IsWindowVisible($splitter)) { [W]::RectIn($splitter, $hwnd).Top } else { [W]::RectIn((Get-StatusBar $hwnd), $hwnd).Top }
+}
+
 # Checks playlists | tracks | inspector widths (within $tolerance px), that the splitters fill the gaps exactly, and that
-# all of them fill the height between the toolbar and the status bar
+# all of them fill the height between the toolbar and the log or status bar
 function Check-Widths([string]$what, $hwnd, [int[]]$expected, [int]$tolerance = 0) {
-	$panels = @([W]::Children($hwnd, 'WestieLib.Panel') | ForEach-Object { [W]::RectIn($_, $hwnd) })
-	$splitters = @([W]::Children($hwnd, 'WestieLib.Splitter') | ForEach-Object { [W]::RectIn($_, $hwnd) })
-	$top = [W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd).Bottom
-	$bottom = [W]::RectIn((Get-StatusBar $hwnd), $hwnd).Top
+	$panels = @(Get-RowPanels $hwnd | ForEach-Object { [W]::RectIn($_, $hwnd) })
+	$splitters = @(Get-ColumnSplitters $hwnd | ForEach-Object { [W]::RectIn($_, $hwnd) })
+	$top = Get-RowTop $hwnd
+	$bottom = Get-RowBottom $hwnd
 	$offRow = @($panels + $splitters | Where-Object { $_.Top -ne $top -or $_.Bottom -ne $bottom })
 	$contiguous = $panels[0].Left -eq 0 -and $panels[0].Right -eq $splitters[0].Left -and $splitters[0].Right -eq $panels[1].Left -and
 		$panels[1].Right -eq $splitters[1].Left -and $splitters[1].Right -eq $panels[2].Left -and $panels[2].Right -eq (Get-ClientWidth $hwnd) -and
@@ -410,9 +467,9 @@ function Check-StatusTexts([string]$what, $hwnd) {
 	Check-That "$what Version's left | right gap" "$($version[0]) | $($version[1])" ([math]::Abs($version[0] - $version[1]) -le 1 -and $version[0] -ge (S 8)) 'equal within 1, at least the padding'
 }
 
-function LParam([int]$x, [int]$y) { [IntPtr](($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)) }
+function LParam([int]$x, [int]$y) { [IntPtr]([int64]($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)) }
 
-function Get-Splitter($hwnd, [int]$index) { ([W]::Children($hwnd, 'WestieLib.Splitter'))[$index] }
+function Get-Splitter($hwnd, [int]$index) { (Get-ColumnSplitters $hwnd)[$index] }
 
 # Drags splitter 0 (playlists) or 1 (inspector) so its left edge lands on $left
 function Move-Splitter($hwnd, [int]$index, [int]$left) {
@@ -422,6 +479,27 @@ function Move-Splitter($hwnd, [int]$index, [int]$left) {
 	[void][W]::SendMessageW($splitter, 0x200, [IntPtr]1, (LParam ($left - $r.Left + 2) 10))
 	[void][W]::SendMessageW($splitter, 0x202, [IntPtr]0, (LParam ($left - $r.Left + 2) 10))
 }
+
+# Drags the log splitter so its top edge lands on $top
+function Move-LogSplitter($hwnd, [int]$top) {
+	$splitter = Get-LogSplitter $hwnd
+	$r = [W]::RectIn($splitter, $hwnd)
+	[void][W]::SendMessageW($splitter, 0x201, [IntPtr]1, (LParam 10 2))
+	[void][W]::SendMessageW($splitter, 0x200, [IntPtr]1, (LParam 10 ($top - $r.Top + 2)))
+	[void][W]::SendMessageW($splitter, 0x202, [IntPtr]0, (LParam 10 ($top - $r.Top + 2)))
+}
+
+# The log and its splitter span the window right above the status bar, the log $height tall
+function Check-Log([string]$what, $hwnd, [int]$height) {
+	$cw = Get-ClientWidth $hwnd
+	$bottom = [W]::RectIn((Get-StatusBar $hwnd), $hwnd).Top
+	$g = S 5
+	$actual = "$(Format-Rect ([W]::RectIn((Get-LogSplitter $hwnd), $hwnd))) | $(Format-Rect ([W]::RectIn((Get-LogPanel $hwnd), $hwnd))) $(Get-LogVisibility $hwnd)"
+	Check $what $actual "0,$($bottom - $height - $g) $($cw)x$g | 0,$($bottom - $height) $($cw)x$height True True"
+}
+
+# The log's height while the panels keep their 240 minimum
+function Get-TallestLog($hwnd) { (Get-ClientHeight $hwnd) - (S 34) - (S 23) - (S 5) - (S 240) }
 
 function Set-Bounds($hwnd, $x, $y, $w, $h) {
 	[void][W]::SetWindowPos($hwnd, [IntPtr]::Zero, $x, $y, $w, $h, 0x4 -bor 0x10)
@@ -454,7 +532,7 @@ function Save-Screenshot($hwnd, $path) {
 
 # Counts drag steps after which some window still has an unpainted area
 function Measure-UnpaintedDragSteps($hwnd) {
-	$windows = @($hwnd) + @([W]::Children($hwnd, $null))
+	$windows = @($hwnd) + @([W]::Children($hwnd, $null) | Where-Object { [W]::IsWindowVisible($_) })
 	$splitter = Get-Splitter $hwnd 0
 	$unpainted = 0
 	[void][W]::SendMessageW($splitter, 0x201, [IntPtr]1, (LParam 2 10))
@@ -538,11 +616,36 @@ try {
 	Set-Bounds $h 100 100 (S 1200) (S 750)
 	$cw = Get-ClientWidth $h
 	Check-Widths 'Window grows: inspector back to 500' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
+	Check 'Log hidden at first start' (Get-LogVisibility $h) 'False False'
+	Send-Command $h '&Log'
+	Start-Sleep -Milliseconds 200
+	Check-Log 'View > Log shows it above the status bar' $h (S 168)
+	Check-Widths '  panels above it keep their widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
+	Update-MenuStates $h
+	Check '  and checks View > Log' ([W]::ItemsWithState($menu, 0x8)) '&Log'
+	Move-LogSplitter $h ((Get-ClientHeight $h) - 10)
+	Check-Log 'Log splitter far down: log stops at 100' $h (S 100)
+	Move-LogSplitter $h -100
+	$tallest = Get-TallestLog $h
+	Check-Log 'Log splitter far up: panels stop at 240' $h $tallest
+	Set-Bounds $h 100 100 600 400
+	Check-Log 'At minimum size: the log gives way' $h (Get-TallestLog $h)
+	Check-Widths '  panels keep 240' $h @((S 250), (S 400), ((Get-ClientWidth $h) - (S 250) - (S 400) - 2 * $g))
+	Set-Bounds $h 100 100 (S 1200) (S 750)
+	Check-Log 'Window grows: the log height comes back' $h $tallest
+	Move-LogSplitter $h ([W]::RectIn((Get-StatusBar $h), $h).Top - (S 200) - $g)
+	Check-Log 'Log splitter for a 200 log' $h (S 200)
+	[W]::PostCtrlKey($h, 0x4C)
+	Check 'Ctrl+L hides the log' (Get-LogVisibility $h) 'False False'
+	Check-Widths '  panels reach the status bar' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
+	[W]::PostCtrlKey($h, 0x4C)
+	Check-Log '  and shows it again' $h (S 200)
 	"File > Exit"
 	Stop-App $app -ExitCommand
 	$saved = Get-ItemProperty $KeyPath
 	Check '  saved bounds' "$($saved.Left),$($saved.Top),$($saved.Right),$($saved.Bottom)" "100,100,$(100 + (S 1200)),$(100 + (S 750))"
 	Check '  saved maximized, widths (DIPs)' "$($saved.Maximized) $($saved.PlaylistsWidthDips) $($saved.InspectorWidthDips)" '0 250 500'
+	Check '  saved log visible, height (DIPs)' "$($saved.LogVisible) $($saved.LogHeightDips)" '1 200'
 
 	"--- Run 2: restore a normal window"
 	$app = Start-App
@@ -551,16 +654,22 @@ try {
 	Check 'Restored bounds' (Get-Bounds $h) "100,100 $(S 1200)x$(S 750)"
 	Check-Widths 'Restored widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 	Check-Bars '  toolbar strip | status bar' $h
+	Check-Log 'Restored log' $h (S 200)
 	if ($Screenshot) { Save-Screenshot $h $Screenshot }
+	Send-Command $h '&Log'
+	Start-Sleep -Milliseconds 200
+	Check 'View > Log hides it' (Get-LogVisibility $h) 'False False'
 	[void][W]::ShowWindow($h, 3)
 	Start-Sleep -Milliseconds 300
 	Stop-App $app
-	Check '  saved maximized' (Get-ItemProperty $KeyPath).Maximized 1
+	$saved = Get-ItemProperty $KeyPath
+	Check '  saved maximized, log visible' "$($saved.Maximized) $($saved.LogVisible)" '1 0'
 
 	"--- Run 3: restore a maximized window"
 	$app = Start-App
 	$h = $app.Hwnd
 	Check 'Starts maximized' ([W]::IsZoomed($h)) 'True'
+	Check '  log stays hidden' (Get-LogVisibility $h) 'False False'
 	Check-StatusParts '  status bar part edges (no grip)' $h
 	Check-StatusTexts ' ' $h
 	[void][W]::ShowWindow($h, 9)

@@ -42,9 +42,13 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 - The left panel and the inspector are at least as wide as their defaults (250 and 290 px), and the main panel is at
   least 400 px wide. A splitter only trades width with the main panel. When the window gets too narrow for the saved
   widths, the inspector gives way first, then the left panel; the saved widths come back when the window grows.
-- The window placement (normal bounds and maximized state) and the panel widths are saved under
-  `HKCU\Software\WestieLib\Window` when the window closes, and restored on the next start. A minimized window comes
-  back restored, or maximized if it was maximized before.
+- The log pane is 168 px tall by default and at least 100 px, and the panels above it keep at least 240 px. Its
+  splitter only trades height with the panels. When the window gets too short for the saved height, the log gives
+  way; its height comes back when the window grows.
+- The infobar row is 32 px tall, right under the toolbar, and takes its height from the panels.
+- The window placement (normal bounds and maximized state), the panel widths, the log height and whether the log
+  shows are saved under `HKCU\Software\WestieLib\Window` when the window closes, and restored on the next start. A
+  minimized window comes back restored, or maximized if it was maximized before.
 - The inspector is always shown. View › Log toggles the log pane.
 - Minimum window size is about 1100×680. The mockup draws the window at 1280×800, with a 250 px left panel and
   a 290 px inspector.
@@ -263,7 +267,8 @@ The inspector scrolls vertically when its content is taller than the panel.
 
 ## Log pane
 
-- Hidden by default. View › Log or Ctrl+L toggles it. It spans the full window width and has its own splitter.
+- Hidden on the first start; after that, it comes back as it was when the window closed. View › Log or Ctrl+L
+  toggles it. It spans the full window width, between the panels and the status bar, and has its own splitter.
 - Its mini toolbar has `Log`, flat buttons `All │ Warnings & errors`, a `Selected track only` check box,
   `Open log folder` and ✕.
 - A list view with the columns Time | Level | Playlist / Track | Message. Warnings show in amber, errors in red.

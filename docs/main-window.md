@@ -1,9 +1,9 @@
 # Main window
 
 `MainWindow` (`src/ui/main/`) is the frame window. It owns the menu bar (`MainMenu.cpp`), the window icon, every
-child window as a member (declaration order is creation order), and the user's panel sizes in DIPs. It also routes
-commands. What the window should contain and how it should behave is specified in `plan/ui.md`; this file covers how
-the code is put together.
+child window as a member (declaration order is creation order), its `WindowPlacement`, and the user's `PanelState`
+(panel sizes in DIPs, and whether the log shows). It lays the children out and routes commands. What the window
+should contain and how it should behave is specified in `plan/ui.md`; this file covers how the code is put together.
 
 ## Commands
 
@@ -22,15 +22,18 @@ the code is put together.
 
 ## Startup and shutdown
 
+`WindowPlacement` (`WindowPlacement.cpp`) handles the window's bounds and maximized state; `MainWindow` hands it the
+saved `Placement` and asks it for the current one.
+
 1. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
-2. If `load_window_state()` finds saved state, the constructor takes the panel sizes from it and calls
-   `restore_placement`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without saved
-   state, `apply_initial_size()` uses `InitialWindowDips`, clamped to the monitor's work area.
-3. `main.cpp` calls `show(nCmdShow)`. `MainWindow::show` turns `SW_SHOWNORMAL` / `SW_SHOWDEFAULT` into
-   `SW_SHOWMAXIMIZED` when the saved state was maximized; any other show command, say from a shortcut, wins.
-4. `WM_DESTROY` → `save_state()` → `PostQuitMessage(0)`. `save_state` reads `GetWindowPlacement` and also counts a
-   window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window torn down by an exception saves nothing,
-   because `~Window` detaches before destroying.
+2. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
+   `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
+   saved state, `apply_initial_size` uses `InitialWindowDips`, clamped to the monitor's work area.
+3. `main.cpp` calls `show(nCmdShow)`. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` / `SW_SHOWDEFAULT` into
+   `SW_SHOWMAXIMIZED` when the saved window was maximized; any other show command, say from a shortcut, wins.
+4. `WM_DESTROY` → `save_state()` → `PostQuitMessage(0)`. `WindowPlacement::current` reads `GetWindowPlacement` and
+   also counts a window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window torn down by an exception
+   saves nothing, because `~Window` detaches before destroying.
 
 ## Toolbar and status bar
 
@@ -47,14 +50,16 @@ the code is put together.
 
 ## Layout
 
-- `MainLayout.cpp` is pure: it takes the client rect, the DPI, the bar heights in pixels and the panel sizes, and
-  returns a rect per child, with no window calls. The toolbar takes the top, the status bar the bottom, and the
-  panels share the rest. Size limits are constants in `MainLayout.h`; the rules they follow are in `plan/ui.md`
-  (Window layout).
+- `MainLayout.cpp` is pure: it takes the client rect, the DPI, the bar heights in pixels and the `PanelState`, and
+  returns a rect per child, with no window calls. From the top: the toolbar, the infobar row (only when its height
+  isn't 0), the panel row, the log splitter and log (only while the log shows); the status bar takes the bottom.
+  Size limits are constants in `MainLayout.h`; the rules they follow are in `plan/ui.md` (Window layout).
+- A part that isn't there is an empty `std::optional`, and `DeferredPositions::place` hides its window in the same
+  batch. Nothing passes an infobar height yet, so that row stays empty until the infobar exists.
 - The `move_*_splitter` functions turn the position a dragged splitter wants into new panel sizes, clamped to the
   limits.
-- `MainWindow::layout_panels()` moves every child through one `DeferredPositions` batch. It runs on `WM_SIZE` and
-  after each splitter drag step (`on_*_splitter_drag` updates the sizes first).
+- `MainWindow::layout_panels()` places every child through one `DeferredPositions` batch. It runs on `WM_SIZE`, after
+  each splitter drag step (`on_*_splitter_drag` updates the `PanelState` first), and when View › Log flips the log.
 - The window's minimum size is `MinimumWindowDips` (`WM_GETMINMAXINFO`).
 
 ## Saved state
@@ -63,7 +68,8 @@ the code is put together.
 `*Value` constants there.
 
 - Bounds are `rcNormalPosition`: workspace coordinates in physical pixels, negative numbers as two's complement.
-  Panel sizes are DIPs.
+  Panel widths and the log height are DIPs; `LogVisible` and `Maximized` are 0 or 1.
 - Without all four bounds the saved state is ignored. Other missing values fall back to their defaults.
-- When the restored bounds land on a monitor with a different DPI, `restoring_placement_` makes `on_dpi_changed`
-  skip the suggested rect, because the saved bounds are already in that monitor's pixels, and only lay out again.
+- When the restored bounds land on a monitor with a different DPI, `WindowPlacement::restoring()` makes
+  `on_dpi_changed` skip the suggested rect, because the saved bounds are already in that monitor's pixels, and only
+  lay out again.

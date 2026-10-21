@@ -9,7 +9,7 @@ constexpr UINT PlacementFlags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS;
 
 }
 
-void DeferredPositions::move(HWND hwnd, const Rect& rect) {
+void DeferredPositions::place(HWND hwnd, const std::optional<Rect>& rect) {
     placements_.push_back({hwnd, rect});
 }
 
@@ -21,8 +21,8 @@ void DeferredPositions::apply() {
     // A failed DeferWindowPos drops the whole batch
     if (!apply_deferred()) {
         for (const Placement& placement : placements_) {
-            const Rect& rect = placement.rect;
-            SetWindowPos(placement.hwnd, nullptr, rect.left, rect.top, rect.width(), rect.height(), PlacementFlags);
+            Rect rect = placement.rect.value_or(Rect{});
+            SetWindowPos(placement.hwnd, nullptr, rect.left, rect.top, rect.width(), rect.height(), flags_for(placement));
         }
     }
 
@@ -31,14 +31,18 @@ void DeferredPositions::apply() {
     placements_.clear();
 }
 
+UINT DeferredPositions::flags_for(const Placement& placement) noexcept {
+    return placement.rect ? PlacementFlags | SWP_SHOWWINDOW : PlacementFlags | SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE;
+}
+
 bool DeferredPositions::apply_deferred() const {
     HDWP positions = BeginDeferWindowPos(static_cast<int>(placements_.size()));
     for (const Placement& placement : placements_) {
         if (!positions) {
             return false;
         }
-        const Rect& rect = placement.rect;
-        positions = DeferWindowPos(positions, placement.hwnd, nullptr, rect.left, rect.top, rect.width(), rect.height(), PlacementFlags);
+        Rect rect = placement.rect.value_or(Rect{});
+        positions = DeferWindowPos(positions, placement.hwnd, nullptr, rect.left, rect.top, rect.width(), rect.height(), flags_for(placement));
     }
     return positions && EndDeferWindowPos(positions);
 }

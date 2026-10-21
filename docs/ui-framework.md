@@ -47,8 +47,8 @@ rules that the code doesn't spell out:
 | Class | Rule |
 |-------|------|
 | `Panel` | Base for content panels: a child window with a `COLOR_WINDOW` background and `WS_CLIPCHILDREN \| WS_CLIPSIBLINGS`. Panels derive as `final`, with `explicit X(HWND parent) : Panel(parent) {}` |
-| `Splitter` | While dragging (with mouse capture), every mouse move calls its callback with the position it wants, in parent client pixels. The owner clamps that and lays out again |
-| `DeferredPositions` | Collect `move(hwnd, rect)` calls, then `apply()`. It moves with `SWP_NOCOPYBITS`, then paints at once with `RedrawWindow(parent, RDW_UPDATENOW \| RDW_ALLCHILDREN)`. Those two fixed splitter drags that showed half-painted frames, so keep them. Every window in one batch must share a parent |
+| `Splitter` | Moves along `SplitterAxis::X` (a bar between columns) or `Y` (between rows). While dragging (with mouse capture), every mouse move calls its callback with the left or top edge it wants, in parent client pixels. The owner clamps that and lays out again. One window class serves both axes, so the cursor is set in `WM_SETCURSOR` |
+| `DeferredPositions` | Collect `place(hwnd, rect)` calls, then `apply()`. A window gets `SWP_SHOWWINDOW` with a rect, and `SWP_HIDEWINDOW` with `std::nullopt`. It moves with `SWP_NOCOPYBITS`, then paints at once with `RedrawWindow(parent, RDW_UPDATENOW \| RDW_ALLCHILDREN)`. Those two fixed splitter drags that showed half-painted frames, so keep them. Every window in one batch must share a parent |
 | `Dpi` | Sizes are DIPs in the code; `scale` / `unscale` convert at the point of use |
 | `WindowIcon` | `WM_SETICON` doesn't hand the icons to the window, so this object keeps them alive. Call `apply_to` again after a DPI change |
 | `Control` | Base for children of a system class (`Toolbar`, `StatusBar`). It subclasses the control, so it never destroys a handle its parent already took down (`WM_NCDESTROY`), and a derived class can override `handle_message` for the control's own messages. As in `Window`, exceptions there are parked. It can't be copied or moved. The control's notifications go to its parent, so the owning `Window` handles them |
@@ -68,7 +68,7 @@ rules that the code doesn't spell out:
 
 1. Put the class in its area's folder and derive from `Panel`, or from `Window` with its own `window_class()`.
 2. Make it a member of its owner, initialized with the owner's `hwnd()`. Declaration order is creation order.
-3. Position it in the owner's layout pass through `DeferredPositions`.
+3. Place it in the owner's layout pass through `DeferredPositions`.
 4. Add the `.cpp` to `CMakeLists.txt`.
 
 ## DPI

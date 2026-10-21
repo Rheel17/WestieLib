@@ -16,6 +16,8 @@ constexpr wchar_t BottomValue[] = L"Bottom";
 constexpr wchar_t MaximizedValue[] = L"Maximized";
 constexpr wchar_t PlaylistsWidthValue[] = L"PlaylistsWidthDips";
 constexpr wchar_t InspectorWidthValue[] = L"InspectorWidthDips";
+constexpr wchar_t LogHeightValue[] = L"LogHeightDips";
+constexpr wchar_t LogVisibleValue[] = L"LogVisible";
 
 std::optional<int> read_int(const platform::win32::RegistryKey& key, const wchar_t* name) {
     return key.read_dword(name).transform([](DWORD value) { return static_cast<int>(value); });
@@ -41,26 +43,33 @@ std::optional<WindowState> load_window_state() {
         return std::nullopt;
     }
 
-    PanelWidths defaults;
+    PanelState defaults;
     return WindowState{
-        .normal_bounds = {*left, *top, *right, *bottom},
-        .maximized = read_int(*key, MaximizedValue).value_or(0) != 0,
-        .panel_widths = {
+        .placement = {
+            .normal_bounds = {*left, *top, *right, *bottom},
+            .maximized = read_int(*key, MaximizedValue).value_or(0) != 0,
+        },
+        .panels = {
             .playlists_dips = read_int(*key, PlaylistsWidthValue).value_or(defaults.playlists_dips),
             .inspector_dips = read_int(*key, InspectorWidthValue).value_or(defaults.inspector_dips),
+            .log_dips = read_int(*key, LogHeightValue).value_or(defaults.log_dips),
+            .log_visible = read_int(*key, LogVisibleValue).value_or(defaults.log_visible) != 0,
         },
     };
 }
 
 void save_window_state(const WindowState& state) {
     platform::win32::RegistryKey key = platform::win32::RegistryKey::create(HKEY_CURRENT_USER, KeyPath);
-    write_int(key, LeftValue, state.normal_bounds.left);
-    write_int(key, TopValue, state.normal_bounds.top);
-    write_int(key, RightValue, state.normal_bounds.right);
-    write_int(key, BottomValue, state.normal_bounds.bottom);
-    write_int(key, MaximizedValue, state.maximized);
-    write_int(key, PlaylistsWidthValue, state.panel_widths.playlists_dips);
-    write_int(key, InspectorWidthValue, state.panel_widths.inspector_dips);
+    const framework::Rect& bounds = state.placement.normal_bounds;
+    write_int(key, LeftValue, bounds.left);
+    write_int(key, TopValue, bounds.top);
+    write_int(key, RightValue, bounds.right);
+    write_int(key, BottomValue, bounds.bottom);
+    write_int(key, MaximizedValue, state.placement.maximized);
+    write_int(key, PlaylistsWidthValue, state.panels.playlists_dips);
+    write_int(key, InspectorWidthValue, state.panels.inspector_dips);
+    write_int(key, LogHeightValue, state.panels.log_dips);
+    write_int(key, LogVisibleValue, state.panels.log_visible);
 }
 
 }

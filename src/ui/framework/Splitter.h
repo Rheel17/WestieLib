@@ -9,9 +9,11 @@
 
 namespace westie::ui::framework {
 
+enum class SplitterAxis { X, Y };
+
 class Splitter final : public Window {
 public:
-    Splitter(HWND parent, std::function<void(int left)> on_drag);
+    Splitter(HWND parent, SplitterAxis axis, std::function<void(int position)> on_drag);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -19,11 +21,14 @@ protected:
 private:
     static const WindowClass& window_class();
 
+    int along_axis(LPARAM lparam) const noexcept;
+    bool on_set_cursor(LPARAM lparam) const;
     void on_button_down(LPARAM lparam);
     void on_mouse_move(LPARAM lparam);
     void on_button_up();
 
-    std::function<void(int left)> on_drag_;
+    SplitterAxis axis_;
+    std::function<void(int position)> on_drag_;
     std::optional<int> grab_offset_;
 };
 

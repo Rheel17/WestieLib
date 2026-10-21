@@ -10,8 +10,9 @@
 #include "ui/framework/Window.h"
 #include "ui/framework/WindowIcon.h"
 #include "ui/inspector/InspectorPanel.h"
+#include "ui/log/LogPanel.h"
 #include "ui/main/MainLayout.h"
-#include "ui/main/WindowState.h"
+#include "ui/main/WindowPlacement.h"
 #include "ui/playlists/PlaylistPanel.h"
 #include "ui/statusbar/MainStatusBar.h"
 #include "ui/toolbar/MainToolbar.h"
@@ -33,23 +34,25 @@ private:
 
     void attach_menu();
     void apply_dpi(framework::Dpi dpi);
-    void apply_initial_size();
-    void restore_placement(const WindowState& state);
     void save_state() const;
     MainLayout current_layout() const;
     void layout_panels();
     CommandState command_state() const;
+    void update_commands();
     void run_command(CommandId command);
+    void toggle_log();
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
     LRESULT on_draw_item(const DRAWITEMSTRUCT& item) const;
     void on_playlists_splitter_drag(int left);
     void on_inspector_splitter_drag(int left);
+    void on_log_splitter_drag(int top);
     void on_get_min_max_info(MINMAXINFO& info) const;
     void on_dpi_changed(UINT dpi, const RECT& suggested);
     void on_setting_change(WPARAM setting);
     void on_destroy();
 
+    WindowPlacement placement_;
     framework::WindowIcon icon_;
     framework::MessageFont font_;
     MainToolbar toolbar_;
@@ -58,10 +61,10 @@ private:
     TrackPanel tracks_;
     framework::Splitter inspector_splitter_;
     InspectorPanel inspector_;
+    framework::Splitter log_splitter_;
+    LogPanel log_;
     MainStatusBar status_bar_;
-    PanelWidths widths_;
-    bool start_maximized_ = false;
-    bool restoring_placement_ = false;
+    PanelState panels_;
 };
 
 }
