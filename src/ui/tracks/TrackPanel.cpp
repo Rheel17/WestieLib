@@ -2,6 +2,6 @@
 
 namespace westie::ui {
 
-TrackPanel::TrackPanel(HWND parent) : Panel(parent) {}
+TrackPanel::TrackPanel(HWND parent) : Panel(parent, L"Tracks") {}
 
 }

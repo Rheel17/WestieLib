@@ -21,7 +21,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   System › Display) for a run. A script must never change the scaling itself, because that's a system setting.
 - The toolbar check compares each button's width with its text measured in the message font at the window's DPI. A
   text measured in an older font shows up as a button that's too narrow.
-- The window shows on the user's screen while it runs.
+- The window shows on the user's screen while it runs. A click in another window during a run takes the mouse capture
+  from a splitter halfway through a drag. Every later drag then fails with the playlists at their widest, and the blink
+  checks say the splitter didn't follow. Run it again without touching the mouse.
 - Extend it when the UI changes, with checks on rects, registry values and messages.
 - Messages sent straight to a window don't exercise real mouse input (cursor shape, mouse capture), so those need a
   try by hand.
@@ -46,9 +48,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - Call `SetThreadDpiAwarenessContext(-4)` first, or rects come back scaled for a DPI-unaware process.
 - To drag a splitter, send `WM_LBUTTONDOWN`, `WM_MOUSEMOVE` and `WM_LBUTTONUP` to the splitter window, with `lparam`
   in splitter client coordinates (`Move-Splitter`, `Move-LogSplitter`).
-- The log pane is a `WestieLib.Panel` too, and its splitter a `WestieLib.Splitter`. `EnumChildWindows` also returns
-  hidden windows. So the helpers find the panel row by its top edge (`Get-RowPanels`), tell splitters apart by shape
-  (`Get-ColumnSplitters`, `Get-LogSplitter`), and skip what isn't visible.
+- Every panel is a `WestieLib.Panel`, and the log's splitter a `WestieLib.Splitter` like the others. `EnumChildWindows`
+  also returns hidden windows and the panels inside panels. So the helpers take the main window's own panels
+  (`Get-MainPanels`), find one by its name, which is its window text (`Get-Panel $h 'Log'`), find the visible panel row
+  by its top edge (`Get-RowPanels`), and tell splitters apart by shape (`Get-ColumnSplitters`, `Get-LogSplitter`).
+- An edit control keeps its text itself, so read and write it with `WM_GETTEXT` / `WM_SETTEXT` (`EditText`,
+  `SetEditText`), which Windows marshals across processes. `WM_SETTEXT` makes it notify `EN_CHANGE`, as typing does,
+  and sending `WM_KILLFOCUS` makes it notify `EN_KILLFOCUS`, as when the user leaves the field.
+- `Focus` gives a window the real keyboard focus, through `AttachThreadInput` like `PostCtrlKey`. A click that follows
+  then moves the focus for real, as a mouse click would.
+- `RedInk` tells whether a window's text is drawn in the error color, in a `PrintWindow` capture.
+- A dialog that opens from a button click is modal, so post `BM_CLICK` rather than send it, then wait for the window
+  it owns (`Wait-OwnedWindow`).
 - To drive the menu bar, post `WM_SYSCOMMAND` `SC_KEYMENU` (with a mnemonic in `lparam` to open that menu) and then
   `WM_KEYDOWN` keys; the app's menu loop picks them up. End with enough Esc presses to leave the menu loop, or the
   next checks run against a window stuck in menu mode (`Check-MenuBarEdge -Menus`).
@@ -67,7 +78,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
   the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area
-  blinks when any pixel differs from the capture before the drag, and moving text blinks when it loses half its dark
-  pixels. It says `covered` when another window lies over the area, because the screen then shows that window instead.
+  blinks when any pixel differs from the capture before the drag, and moving text blinks when it loses a tenth of its
+  dark pixels. It says `covered` when another window lies over the area, because the screen then shows that window instead.
 - Keep the scripts ASCII. Windows PowerShell reads a `.ps1` without a BOM as ANSI, so a `…` in it turns into
   mojibake. In embedded C#, write such characters as `(char)0x2026`.

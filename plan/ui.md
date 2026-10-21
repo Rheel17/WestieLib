@@ -181,6 +181,45 @@ Remove playlist….
 
 ## Main panel
 
+### First run
+
+While there are no playlists, the main panel shows a welcome screen instead of the filter bar, the status filter and
+the track table. Its content is a column 430 px wide, or the panel's width less 16 px on each side when that is
+narrower. The column is centered in the panel both ways, and starts at the top when the panel is too short for it.
+From the top:
+
+- the app icon, 40 px;
+- `Welcome to WestieLib`, semibold at 1.5 times the message font, 12 px below the icon;
+- 6 px below, in gray: "WestieLib keeps your YouTube Music and Spotify playlists in sync with a folder of tagged audio
+  files. Choose where the files go, then add your first playlist.";
+- 18 px below, `Library folder`, and 4 px under that an editable field with the folder, then `Browse…` 8 px to its
+  right;
+- 4 px under the field, its hint line (below);
+- 16 px below, `+ Add your first playlist`, the default button. It opens the Add playlist dialog.
+
+The library folder:
+
+- starts as `Music\WestieLib` in the user's profile, the *default folder*. It doesn't have to exist; the first sync
+  creates it.
+- The hint line under the field says what the text in the field names, and changes as the user types:
+
+  | The text | Hint |
+  |----------|------|
+  | isn't a full path (`C:\…` or `\\server\share\…`), or has a character a folder name can't have | "Enter a full folder path, such as `<default folder>`." in red |
+  | is on a drive letter this PC doesn't have | "That drive isn't on this PC." in red |
+  | is a file | "That's a file, not a folder." in red |
+  | is a folder that doesn't exist yet | "This folder doesn't exist yet. WestieLib creates it when it first syncs." in gray |
+  | is a folder that exists, or one on a network drive or share | nothing. Network paths aren't looked up while typing, because an unreachable server would hang the window |
+
+  The line keeps room for its longest hint, wrapped to the column, so nothing moves while the hint changes.
+- Spaces around the text are dropped, and so are the quotes Explorer's "Copy as path" puts around a path. A trailing
+  backslash goes too.
+- Typed text takes effect when the field loses focus, and when the window closes, if its hint is gray or empty. With
+  a red hint the previous folder stays in effect, and the text and the hint stay for the user to fix.
+- `Browse…` opens a folder picker titled "Library folder", at the typed folder if the text is a full path and else at
+  the folder in effect, or at the nearest folder above it that exists. A chosen folder takes effect at once.
+- The status bar's Library part shows the folder in effect.
+
 ### Filter bar
 
 - **Search**: an edit with the cue banner "Search title, artist, album". It matches title, artists, album and
@@ -297,7 +336,7 @@ The inspector scrolls vertically when its content is taller than the panel.
 | Version | `v1.2.0` |
 
 - The status bar is the native one, 23 px tall, or taller when the system font needs it. It ends in a size grip.
-- Run, Tracks, Library and Tools are 270, 100, 300 and 220 px wide, from the left. Version is 80 px wide against the
+- Run, Tracks, Library and Tools are 270, 150, 450 and 120 px wide, from the left. Version is 80 px wide against the
   right edge, with its text centered between its separator and the grip, or the window edge when maximized. No
   separator follows it. The space between Tools and Version stays empty.
 - Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit. The library folder
@@ -354,12 +393,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - Remove playlist says how many tracks become Removed.
   - Move to Recycle Bin says how many files.
   - Rebuild says it replaces track entries.
-- **First run** has no playlists. The main panel shows an empty state:
-  - a welcome line;
-  - the library folder with `Browse…`;
-  - `+ Add your first playlist`.
-
-  Tools install in the meantime, and the status bar shows their progress.
+- **First run** has no playlists, so the main panel shows its welcome screen (see Main panel › First run). Tools install
+  in the meantime, and the status bar shows their progress.
 
 ## Command and event mapping
 
@@ -393,6 +428,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with parts and an embedded `PROGRESS_CLASS` |
 | Left panel | All tracks is a custom-painted row window above the list. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon. The playlist list is a `LISTBOX` with `LBS_OWNERDRAWVARIABLE` (its items are at most 255 px tall, which a playlist row passes above ~260% scaling; settle this with the playlist rows); rows, bars and icons drawn in `WM_DRAWITEM`. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |

@@ -11,7 +11,9 @@ configure_file(src/Version.h.in "${GENERATED_DIR}/Version.h" @ONLY)
 
 add_executable(WestieLib WIN32
 	src/main.cpp
+	src/platform/win32/ComApartment.cpp
 	src/platform/win32/KnownFolder.cpp
+	src/platform/win32/PathProbe.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
@@ -20,12 +22,14 @@ add_executable(WestieLib WIN32
 	src/ui/commands/CommandMenu.cpp
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
+	src/ui/dialogs/FolderPicker.cpp
 	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/BufferedPaint.cpp
 	src/ui/framework/Button.cpp
 	src/ui/framework/CommonControls.cpp
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
+	src/ui/framework/Edit.cpp
 	src/ui/framework/FontSet.cpp
 	src/ui/framework/IconImageList.cpp
 	src/ui/framework/IconResource.cpp
@@ -55,6 +59,10 @@ add_executable(WestieLib WIN32
 	src/ui/statusbar/MainStatusBar.cpp
 	src/ui/toolbar/MainToolbar.cpp
 	src/ui/tracks/TrackPanel.cpp
+	src/ui/welcome/LibraryFolderCheck.cpp
+	src/ui/welcome/LibraryFolderField.cpp
+	src/ui/welcome/LibraryFolderText.cpp
+	src/ui/welcome/WelcomePanel.cpp
 	res/WestieLib.rc
 )
 

@@ -18,6 +18,8 @@ struct Rect {
 
     RECT to_rect() const { return {left, top, right, bottom}; }
 
+    bool operator==(const Rect&) const = default;
+
     int width() const { return right - left; }
     int height() const { return bottom - top; }
 

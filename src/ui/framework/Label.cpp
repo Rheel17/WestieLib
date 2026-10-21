@@ -9,6 +9,20 @@
 
 namespace westie::ui::framework {
 
+namespace {
+
+constexpr COLORREF ErrorColor = RGB(0xC4, 0x2B, 0x1C);
+
+COLORREF color_of(TextColor color) {
+    switch (color) {
+    case TextColor::Gray:  return GetSysColor(COLOR_GRAYTEXT);
+    case TextColor::Error: return ErrorColor;
+    default:               return GetSysColor(COLOR_WINDOWTEXT);
+    }
+}
+
+}
+
 Label::Label(HWND parent, std::wstring text, const LabelStyle& style) :
         Window(window_class(), {.title = text, .style = WS_CHILD | WS_VISIBLE, .parent = parent}), text_(std::move(text)), style_(style) {}
 
@@ -17,11 +31,32 @@ void Label::set_font(HFONT font) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, TRUE), "InvalidateRect");
 }
 
+void Label::set_text(std::wstring text) {
+    if (text == text_) {
+        return;
+    }
+    platform::win32::check(SetWindowTextW(hwnd(), text.c_str()), "SetWindowTextW");
+    text_ = std::move(text);
+    platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
+void Label::set_color(TextColor color) {
+    if (color == style_.color) {
+        return;
+    }
+    style_.color = color;
+    platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
 int Label::height_for(int width) const {
+    return height_for(text_, width);
+}
+
+int Label::height_for(std::wstring_view text, int width) const {
     platform::win32::UniqueMemoryDc dc(platform::win32::check(CreateCompatibleDC(nullptr), "CreateCompatibleDC"));
     SelectObject(dc.get(), font_);
     RECT bounds{0, 0, width, 0};
-    DrawTextW(dc.get(), text_.c_str(), static_cast<int>(text_.size()), &bounds, format() | DT_CALCRECT);
+    DrawTextW(dc.get(), text.data(), static_cast<int>(text.size()), &bounds, format() | DT_CALCRECT);
     return bounds.bottom;
 }
 
@@ -51,7 +86,7 @@ void Label::paint() const {
     FillRect(paint.dc(), &client, GetSysColorBrush(COLOR_WINDOW));
     SelectObject(paint.dc(), font_);
     SetBkMode(paint.dc(), TRANSPARENT);
-    SetTextColor(paint.dc(), GetSysColor(style_.color == TextColor::Gray ? COLOR_GRAYTEXT : COLOR_WINDOWTEXT));
+    SetTextColor(paint.dc(), color_of(style_.color));
     DrawTextW(paint.dc(), text_.c_str(), static_cast<int>(text_.size()), &client, format());
 }
 

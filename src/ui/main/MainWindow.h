@@ -21,12 +21,13 @@
 #include "ui/statusbar/MainStatusBar.h"
 #include "ui/toolbar/MainToolbar.h"
 #include "ui/tracks/TrackPanel.h"
+#include "ui/welcome/WelcomePanel.h"
 
 namespace westie::ui {
 
 class MainWindow final : public framework::Window {
 public:
-    explicit MainWindow(const std::filesystem::path& library_folder);
+    explicit MainWindow(const std::filesystem::path& default_library_folder);
 
     void show(int show_command) override;
 
@@ -66,6 +67,7 @@ private:
     PlaylistPanel playlists_;
     framework::Splitter playlists_splitter_;
     TrackPanel tracks_;
+    WelcomePanel welcome_;
     framework::Splitter inspector_splitter_;
     InspectorPanel inspector_;
     framework::Splitter log_splitter_;

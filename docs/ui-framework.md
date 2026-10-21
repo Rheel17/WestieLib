@@ -46,7 +46,7 @@ rules that the code doesn't spell out:
 
 | Class | Rule |
 |-------|------|
-| `Panel` | Base for content panels: a child window with a `COLOR_WINDOW` background and `WS_CLIPCHILDREN \| WS_CLIPSIBLINGS`. Panels derive as `final` and hand their parent to `Panel(parent)` |
+| `Panel` | Base for content panels: a child window with a `COLOR_WINDOW` background and `WS_CLIPCHILDREN \| WS_CLIPSIBLINGS`. Panels derive as `final` and hand their parent and a name to `Panel(parent, name)`. The name is the window text: screen readers announce it, and tests find panels by it |
 | `Splitter` | Moves along `SplitterAxis::X` (a bar between columns) or `Y` (between rows). While dragging (with mouse capture), every mouse move calls its callback with the left or top edge it wants, in parent client pixels. The owner clamps that and lays out again. One window class serves both axes, so the cursor is set in `WM_SETCURSOR` |
 | `DeferredPositions` | Collect `place(hwnd, rect)` calls, then `apply()`. A window gets `SWP_SHOWWINDOW` with a rect, and `SWP_HIDEWINDOW` with `std::nullopt`. It moves with `SWP_NOCOPYBITS`, then paints at once with `RedrawWindow(parent, RDW_UPDATENOW \| RDW_ALLCHILDREN)`. Those two fixed splitter drags that showed half-painted frames, so keep them. Every window in one batch must share a parent |
 | `Dpi` | Sizes are DIPs in the code; `scale` / `unscale` convert at the point of use |
@@ -58,17 +58,19 @@ rules that the code doesn't spell out:
 | `MenuBarPainter` | Draws a window's menu bar, so the gray row the theme puts at its bottom goes away. Windows sends the undocumented `WM_UAHDRAWMENU` (background) and `WM_UAHDRAWMENUITEM` (each item, also on every hover and keyboard move) while it paints the bar; `draw` fills the background and draws the items with the `Menu` theme's `MENU_BARITEM` part and states. `cover_edge` paints over the line Windows draws below the bar, outside its rect; the owner calls it after the default `WM_NCPAINT` and `WM_NCACTIVATE`. Reload the theme on DPI and theme changes. Without visual styles (high contrast) it draws nothing and Windows draws the bar. `MIM_BACKGROUND` would be the documented route, but themed menu bars ignore it |
 | `WindowDc` | `GetWindowDC` / `ReleaseDC`, for painting into the non-client area |
 | `SavedDc` | `SaveDC` / `RestoreDC`, for drawing into a DC someone else owns, such as an owner-draw item's |
-| `MessageFont` | The message font for a DPI, regular or semibold (`FontStyle`), with its line height. Controls keep the `HFONT` they were given, so on a change make the new font, hand it out, and only then replace the old one |
+| `MessageFont` | The message font for a DPI, regular, semibold or as a heading (semibold at 150%) (`FontStyle`), with its line height. Controls keep the `HFONT` they were given, so on a change make the new font, hand it out, and only then replace the old one |
 | `FontSet` | Every `MessageFont` the UI uses, at one DPI. The owner of the windows that use it keeps it, and replaces it the same way |
 | `Label` | Text that paints itself in a window of its own (`WestieLib.Label`): normal or gray, left or centered, one line with an ellipsis or wrapped. The text is also the window text, so tests and screen readers can read it. `height_for(width)` measures it. It paints through `BufferedPaint`. It isn't a `STATIC`, because a `STATIC` takes its colors from its parent's `WM_CTLCOLORSTATIC`, which would put color code in every panel |
 | `Button` | A push button with a `CommandId`, optionally the default button, optionally with an icon. `apply_dpi` sets the font and works out `size()`: at least 75×23 DIPs, else 10 DIPs of padding around the icon, a 5 DIP gap and the text. With an icon the button left-aligns its text (`BS_LEFT`) and draws the icon at the left of its theme's content margin, so the image list's left margin (the spare width's half, less that content margin) centers the row. Without that, the text centers in what the icon leaves, away from it |
+| `Edit` | A single-line `EDIT` with a client edge, 23 DIPs tall or taller for the font. `apply_dpi` sets the margins after the font, because a new font resets them. Its notifications (`EN_CHANGE`, `EN_KILLFOCUS`, …) go to its parent |
 | `IconImageList` | An image list of icon resources at one pixel size. Controls don't own image lists: keep it alive while the control uses it, and rebuild it on a DPI change |
 | `IconResource` | One icon resource loaded at one pixel size, for windows that draw it themselves. Load it again after a DPI change |
 | `PaintScope` | `BeginPaint` / `EndPaint` for a `WM_PAINT` handler |
 | `BufferedPaint` | A `PaintScope` that hands out a buffer for the area to paint, at the same client coordinates, and copies it to the window in one `BitBlt` at the end. Windows that paint their own content use it, and fill their own background instead of erasing it: no class background brush, or `TRUE` from `WM_ERASEBKGND`. Each splitter drag step repaints every panel it touches, so an erase followed by a paint shows as blinking text |
 | `build_popup_menu` | Builds a popup from a `MenuItem` table; `MenuSeparator` (an empty item) is a separator. Item states aren't part of the table: the owner sets them when the popup opens |
 | `AcceleratorTable` | Owns an `HACCEL`. `MessageLoop::run` translates through it for one window before `TranslateMessage`. `TranslateAccelerator` sends `WM_INITMENUPOPUP` first and skips grayed items, so shortcuts follow the menu's enabled state |
-| `platform::win32::UniqueHandle<H, Close>` | `unique_ptr` with a function deleter. Add an alias next to the others for each new handle type |
+| `platform::win32::UniqueHandle<H, Close>` | `unique_ptr` with a function deleter. Add an alias next to the others for each new handle type. `UniqueComPtr<I>` releases a COM interface |
+| `platform::win32::ComApartment` | Joins the UI thread to a single-threaded COM apartment for as long as it lives. `main.cpp` makes one before any window, because the shell's dialogs (`pick_folder`) need it |
 | `platform::win32::to_utf16` | Core strings are UTF-8 `std::string` (see `plan/arch.md`); convert at the Win32 boundary |
 
 ## Adding a child window
@@ -84,4 +86,4 @@ The app is Per-Monitor V2. Sizes live in the code as DIPs and are scaled with `D
 windows handle `WM_DPICHANGED`: apply the suggested rect, reload DPI-dependent resources (icons, fonts, image lists),
 and let `WM_SIZE` lay the children out again. Hairlines stay one physical pixel.
 
-`main.cpp` calls `init_common_controls()` before creating any window.
+`main.cpp` makes the `ComApartment` and calls `init_common_controls()` before creating any window.

@@ -16,7 +16,7 @@ constexpr int BottomPaddingDips = 10;
 }
 
 InspectorPanel::InspectorPanel(HWND parent) :
-        Panel(parent),
+        Panel(parent, L"Inspector"),
         placeholder_(
                 hwnd(), L"Add a playlist to see\nits tracks here.",
                 {.color = framework::TextColor::Gray, .alignment = framework::LabelAlignment::Center, .wrap = true}

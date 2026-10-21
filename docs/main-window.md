@@ -63,6 +63,28 @@ saved `Placement` and asks it for the current one.
 - `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
   the constructor shows zeros.
 
+## Welcome screen
+
+- `WelcomePanel` (`src/ui/welcome/`) is the main column while there are no playlists; `layout_panels` hides the
+  `TrackPanel` meanwhile. It paints the app icon and lays out its labels, the `LibraryFolderField` and the default
+  `Add your first playlist` button in one centered column. The button's click goes to `run_command`, as in the side
+  panels.
+- `LibraryFolderField` is a panel with the `Edit`, `Browse…` and the hint `Label` under them. It keeps the folder in
+  effect.
+  - Text goes through `check_library_folder` (`LibraryFolderCheck.cpp`). That function cleans the text up with
+    `parse_library_folder` (`LibraryFolderText.cpp`, which has the syntax rules), then looks the path up with
+    `platform::win32::probe_path`. The result is the folder, if the library can use it, and a `FolderHint`;
+    `hint_text` has the wording.
+  - `probe_path` never asks a network share or a mapped network drive, because an unreachable server would hang the
+    window on every keystroke.
+  - On `EN_CHANGE` the field shows the hint, red for a problem.
+  - On `EN_KILLFOCUS`, and after `pick_folder` (`src/ui/dialogs/`) returns a folder, a usable folder replaces the text
+    in its cleaned-up form and, when it changed, goes to the callback. Anything else leaves the folder in effect alone.
+  - The hint label keeps the height of the longest hint (`ShownFolderHints`) at the field's width, so the column
+    doesn't move while the user types.
+- `MainWindow` gets the default folder from `main.cpp`. It hands it to the welcome panel, which starts the field at it
+  and uses it in the hint's example, and to the status bar. The field's callback updates the status bar.
+
 ## Layout
 
 - `MainLayout.cpp` is pure: it takes the client rect, the DPI, the bar heights in pixels and the `PanelState`, and

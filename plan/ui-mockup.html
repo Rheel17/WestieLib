@@ -178,6 +178,9 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .empty .eh { font-size: 18px; line-height: 24px; font-weight: 600; margin: 12px 0 6px; }
 .empty p { margin: 0 0 18px; color: var(--gray); }
 .empty .lbl { margin-bottom: 4px; }
+.empty .fld { margin-bottom: 4px; }
+.empty .hint { min-height: 16px; color: var(--gray); }
+.empty .hint.bad { color: var(--red); }
 
 /* ---------- log pane ---------- */
 .loghd { height: 28px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 8px; border-bottom: 1px solid var(--line); }
@@ -678,9 +681,10 @@ function firstRunMain() {
 	return `<div class="empty"><div class="box">
 		${ic('app', 's40')}
 		<div class="eh">Welcome to WestieLib</div>
-		<p>WestieLib keeps your YouTube Music and Spotify playlists in sync with a folder of tagged audio files for Mixxx. Choose where the files go, then add your first playlist.</p>
+		<p>WestieLib keeps your YouTube Music and Spotify playlists in sync with a folder of tagged audio files. Choose where the files go, then add your first playlist.</p>
 		<div class="lbl">Library folder</div>
 		<div class="fld"><div class="edit" style="flex:1">${LIBRARY}</div>${btn('Browse…')}</div>
+		<div class="hint">This folder doesn't exist yet. WestieLib creates it when it first syncs.</div>
 		<div style="margin-top:16px">${btn('Add your first playlist', 'def', 'plus')}</div>
 	</div></div>`;
 }
@@ -859,9 +863,9 @@ function statusBar(s, cfg) {
 		? `Installing tools… ffmpeg 45%<span class="pbar ctl" style="width:60px"><i style="width:45%"></i></span>`
 		: `Tools ${ic('synced', 's12')}`;
 	return `<div class="statusbar"><div class="p" style="width:270px">${run}</div>
-		<div class="p" style="width:100px">${s.tracks.size} tracks</div>
-		<div class="p" style="width:300px">${LIBRARY}</div>
-		<div class="p">${tools}</div>
+		<div class="p" style="width:150px">${s.tracks.size} tracks</div>
+		<div class="p" style="width:450px">${LIBRARY}</div>
+		<div class="p" style="width:120px">${tools}</div>
 		<div class="p" style="margin-left:auto;width:80px;justify-content:center;border-left:1px solid #cfcfcf;border-right:0">v1.2.0</div><div class="grip" style="margin-left:0">${ic('grip')}</div></div>`;
 }
 
@@ -1132,6 +1136,7 @@ const SCREENS = [
 		cap: 'No playlists yet. The main panel becomes a welcome screen, and the tools install in the background.',
 		notes: [
 			'The library folder is chosen here, and it defaults to Music\\WestieLib.',
+			'The line under the field follows the typing: red when the text can\'t be the library folder, gray when the folder doesn\'t exist yet.',
 			'The status bar shows tool installation progress. Sync all stays disabled until every tool is installed.',
 			'The filter bar, status tabs and table appear once the first playlist is added.',
 		],

@@ -25,7 +25,7 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 
 }
 
-MainWindow::MainWindow(const std::filesystem::path& library_folder) :
+MainWindow::MainWindow(const std::filesystem::path& default_library_folder) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
@@ -35,6 +35,10 @@ MainWindow::MainWindow(const std::filesystem::path& library_folder) :
         playlists_(hwnd(), [this](CommandId command) { run_command(command); }),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
+        welcome_(
+                hwnd(), default_library_folder, [this](CommandId command) { run_command(command); },
+                [this](const std::filesystem::path& folder) { status_bar_.set_library_folder(folder); }
+        ),
         inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),
         inspector_(hwnd()),
         log_splitter_(hwnd(), framework::SplitterAxis::Y, [this](int top) { on_log_splitter_drag(top); }),
@@ -43,7 +47,8 @@ MainWindow::MainWindow(const std::filesystem::path& library_folder) :
     apply_dpi(framework::Dpi::of(hwnd()));
     attach_menu();
     show_track_counts({});
-    status_bar_.set_library_folder(library_folder);
+    welcome_.set_library_folder(default_library_folder);
+    status_bar_.set_library_folder(default_library_folder);
 
     if (std::optional<WindowState> state = load_window_state()) {
         panels_ = state->panels;
@@ -103,6 +108,7 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     framework::FontSet fonts(dpi);
     toolbar_.apply_dpi(dpi, fonts.regular());
     playlists_.apply_dpi(dpi, fonts);
+    welcome_.apply_dpi(dpi, fonts);
     inspector_.apply_fonts(fonts);
     status_bar_.apply_dpi(dpi, fonts.regular());
     fonts_ = std::move(fonts);
@@ -131,7 +137,9 @@ void MainWindow::layout_panels() {
     positions.place(toolbar_.hwnd(), layout.toolbar);
     positions.place(playlists_.hwnd(), layout.playlists);
     positions.place(playlists_splitter_.hwnd(), layout.playlists_splitter);
-    positions.place(tracks_.hwnd(), layout.tracks);
+    // Until there are playlists, the welcome screen takes the main column
+    positions.place(tracks_.hwnd(), std::nullopt);
+    positions.place(welcome_.hwnd(), layout.tracks);
     positions.place(inspector_splitter_.hwnd(), layout.inspector_splitter);
     positions.place(inspector_.hwnd(), layout.inspector);
     positions.place(log_splitter_.hwnd(), layout.log_splitter);

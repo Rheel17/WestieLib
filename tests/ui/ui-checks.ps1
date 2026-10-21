@@ -417,21 +417,65 @@ public static class W {
 		throw new ArgumentException("No menu item " + text);
 	}
 
+	[DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")] static extern IntPtr SendText(IntPtr h, uint msg, IntPtr w, StringBuilder l);
+	[DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")] static extern IntPtr SendString(IntPtr h, uint msg, IntPtr w, string l);
+	[DllImport("user32.dll")] public static extern int GetWindowLongW(IntPtr h, int index);
+
+	// An edit keeps its text itself, so GetWindowTextW from another process doesn't see it; WM_GETTEXT and WM_SETTEXT
+	// are marshalled
+	public static string EditText(IntPtr edit) {
+		var s = new StringBuilder(1024);
+		SendText(edit, 0x0D, (IntPtr)1024, s);
+		return s.ToString();
+	}
+
+	public static void SetEditText(IntPtr edit, string text) { SendString(edit, 0x0C, IntPtr.Zero, text); }
+
+	[DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr dialog, int id);
+
+	[DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr h);
+
+	// Gives a window the keyboard focus, as a click into it would: attached, this thread shares the app's input state
+	public static void Focus(IntPtr h) {
+		int pid;
+		uint thread = GetWindowThreadProcessId(h, out pid), self = GetCurrentThreadId();
+		AttachThreadInput(self, thread, true);
+		SetFocus(h);
+		AttachThreadInput(self, thread, false);
+	}
+
+	// Whether a child's text is drawn in red (the error color) in a PrintWindow capture
+	public static bool RedInk(IntPtr window, IntPtr child) {
+		RECT client;
+		GetClientRect(child, out client);
+		int dx, dy, red = 0;
+		using (var bitmap = Capture(window, child, out dx, out dy)) {
+			for (int x = 0; x < client.Right; x++) {
+				for (int y = 0; y < client.Bottom; y++) {
+					var p = bitmap.GetPixel(x + dx, y + dy);
+					if (p.R > p.G + 60 && p.R > p.B + 60) red++;
+				}
+			}
+		}
+		return red > 10;
+	}
+
 	[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
 	[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
 	[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
 
 	static IntPtr Pack(int x, int y) { return (IntPtr)(((y & 0xFFFF) << 16) | (x & 0xFFFF)); }
 
-	// Drags a splitter `by` pixels and back, one pixel per step, as a mouse would
-	public static void DragSplitter(IntPtr window, IntPtr splitter, int by) {
+	// Drags a splitter `by` pixels and back, one pixel per step, as a mouse would. False when the splitter didn't get
+	// there: it stops following once it loses the mouse capture, say to a click in another window.
+	public static bool DragSplitter(IntPtr window, IntPtr splitter, int by) {
 		int from = RectIn(splitter, window).Left, step = by > 0 ? 1 : -1;
-		var lefts = new List<int>();
-		for (int d = step; d != by + step; d += step) lefts.Add(from + d);
-		for (int d = by - step; d != -step; d -= step) lefts.Add(from + d);
 		SendMessageW(splitter, 0x201, (IntPtr)1, Pack(2, 10));
-		foreach (int left in lefts) SendMessageW(splitter, 0x200, (IntPtr)1, Pack(left - RectIn(splitter, window).Left + 2, 10));
+		for (int d = step; d != by + step; d += step) SendMessageW(splitter, 0x200, (IntPtr)1, Pack(from + d - RectIn(splitter, window).Left + 2, 10));
+		bool followed = RectIn(splitter, window).Left == from + by;
+		for (int d = by - step; d != -step; d -= step) SendMessageW(splitter, 0x200, (IntPtr)1, Pack(from + d - RectIn(splitter, window).Left + 2, 10));
 		SendMessageW(splitter, 0x202, IntPtr.Zero, Pack(2, 10));
+		return followed;
 	}
 
 	// The screen's pixels in a rect, as DWM composed them. Unlike PrintWindow, which paints the window afresh, this sees
@@ -463,8 +507,8 @@ public static class W {
 	static volatile bool watching;
 
 	// Captures `area` (client coordinates of `window`) over and over while a splitter drag runs, and counts the captures
-	// that blinked: for a steady area, any that differ from the capture before the drag; for moving text, any with less
-	// than half the dark pixels. "covered" when another window is over the area, since then the screen shows that one.
+	// that blinked: for a steady area, any that differ from the capture before the drag; for moving text, any that lost
+	// a tenth of its dark pixels. "covered" when another window is over the area, since then the screen shows that one.
 	public static string WatchDrag(IntPtr window, RECT area, IntPtr splitter, int by, bool moving) {
 		MapWindowPoints(window, IntPtr.Zero, ref area, 2);
 		foreach (var p in new[] { new POINT { X = area.Left, Y = area.Top }, new POINT { X = area.Right - 1, Y = area.Bottom - 1 } }) {
@@ -478,13 +522,14 @@ public static class W {
 			while (watching) {
 				var now = ScreenPixels(area);
 				frames++;
-				if (moving ? DarkPixels(now) * 2 < ink : Differ(now, before)) blinked++;
+				if (moving ? DarkPixels(now) * 10 < ink * 9 : Differ(now, before)) blinked++;
 			}
 		});
 		thread.Start();
-		DragSplitter(window, splitter, by);
+		bool followed = DragSplitter(window, splitter, by);
 		watching = false;
 		thread.Join();
+		if (!followed) return "the splitter didn't follow the drag";
 		return frames < 20 ? "only " + frames + " captures" : "blinked " + blinked;
 	}
 }
@@ -579,17 +624,20 @@ function Get-StatusBar($hwnd) { ([W]::Children($hwnd, 'msctls_statusbar32'))[0] 
 
 function Get-RowTop($hwnd) { [W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd).Bottom }
 
-# Playlists, tracks and inspector: the visible panels whose top is the row's, by their left edge
+# The main window's own panels; EnumChildWindows also returns the panels inside them
+function Get-MainPanels($hwnd) { @([W]::Children($hwnd, 'WestieLib.Panel') | Where-Object { [W]::GetAncestor($_, 1) -eq $hwnd }) }
+
+# The playlists, the main column (tracks or welcome) and the inspector: the visible panels whose top is the row's, by
+# their left edge
 function Get-RowPanels($hwnd) {
 	$top = Get-RowTop $hwnd
-	@([W]::Children($hwnd, 'WestieLib.Panel') | Where-Object { [W]::IsWindowVisible($_) -and [W]::RectIn($_, $hwnd).Top -eq $top })
+	@(Get-MainPanels $hwnd | Where-Object { [W]::IsWindowVisible($_) -and [W]::RectIn($_, $hwnd).Top -eq $top })
 }
 
-# The other panel, shown or not
-function Get-LogPanel($hwnd) {
-	$top = Get-RowTop $hwnd
-	@([W]::Children($hwnd, 'WestieLib.Panel') | Where-Object { -not [W]::IsWindowVisible($_) -or [W]::RectIn($_, $hwnd).Top -ne $top })[0]
-}
+# A panel of the main window by its name (its window text), shown or not
+function Get-Panel($hwnd, [string]$name) { @(Get-MainPanels $hwnd | Where-Object { [W]::TextOf($_) -eq $name })[0] }
+
+function Get-LogPanel($hwnd) { Get-Panel $hwnd 'Log' }
 
 function Test-Upright($hwnd, $child) { $r = [W]::RectIn($child, $hwnd); ($r.Right - $r.Left) -lt ($r.Bottom - $r.Top) }
 
@@ -693,6 +741,7 @@ function Check-Scaled($hwnd) {
 	Check-Widths 'Default widths' $hwnd @((S 250), ($cw - (S 250) - (S 290) - 2 * (S 5)), (S 290))
 	Check-PlaylistPanel 'Left panel:' $hwnd
 	Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $hwnd
+	Check-Welcome 'Welcome screen' $hwnd
 }
 
 # Run, Tracks, Library and Tools from the left, then Version running to the right edge. Version's rect stops where the
@@ -703,7 +752,7 @@ function Check-StatusParts([string]$what, $hwnd) {
 	$cw = Get-ClientWidth $hwnd
 	$edges = @()
 	$right = 0
-	foreach ($width in 270, 100, 300, 220) { $right += S $width; $edges += $right }
+	foreach ($width in 270, 150, 450, 120) { $right += S $width; $edges += $right }
 	$edges += $cw - (S 80)
 	$grip = $cw - [W]::StatusPartRect($status, 5).Right
 	$fits = if ([W]::IsZoomed($hwnd)) { $grip -eq 0 } else { $grip -gt 0 -and $grip -le (S 20) }
@@ -745,9 +794,150 @@ function Check-PlaylistPanel([string]$what, $hwnd) {
 	Check "$what  button" "$([W]::TextOf($button)) $(Format-Rect ([W]::RectIn($button, $panel)))" "Add playlist $text,$buttonTop $($width)x$(S 23)"
 }
 
+$WelcomeTexts = 'Welcome to WestieLib / WestieLib keeps your YouTube Music and Spotify playlists in sync with a folder of tagged audio files. ' +
+	'Choose where the files go, then add your first playlist. / Library folder'
+$DefaultLibrary = Join-Path ([Environment]::GetFolderPath('MyMusic')) 'WestieLib'
+
+function Get-DirectChildren($parent, [string]$class) { @([W]::Children($parent, $class) | Where-Object { [W]::GetAncestor($_, 1) -eq $parent }) }
+
+function Get-FolderEdit($hwnd) { ([W]::Children((Get-DirectChildren (Get-Panel $hwnd 'Welcome') 'WestieLib.Panel')[0], 'Edit'))[0] }
+
+# The welcome screen takes the main column while the track panel hides. Its column is 430 wide (less when the panel is
+# narrow) and centered both ways; from the top: icon, heading, text, label, the field (edit and Browse across the
+# column, the hint line under them) and the default button.
+function Check-Welcome([string]$what, $hwnd) {
+	$panel = Get-Panel $hwnd 'Welcome'
+	Check "$what in the main column, tracks hidden" "$((Get-RowPanels $hwnd)[1] -eq $panel) $([W]::IsWindowVisible((Get-Panel $hwnd 'Tracks')))" 'True False'
+	$labels = @(Get-DirectChildren $panel 'WestieLib.Label' | Sort-Object { [W]::RectIn($_, $panel).Top })
+	Check "$what  texts" (($labels | ForEach-Object { [W]::TextOf($_) }) -join ' / ') $WelcomeTexts
+
+	$pw = Get-ClientWidth $panel
+	$width = [math]::Min((S 430), $pw - 2 * (S 16))
+	$heading = [W]::RectIn($labels[0], $panel)
+	$label = [W]::RectIn($labels[2], $panel)
+	$field = (Get-DirectChildren $panel 'WestieLib.Panel')[0]
+	$fieldRect = [W]::RectIn($field, $panel)
+	$button = (Get-DirectChildren $panel 'Button')[0]
+	$buttonRect = [W]::RectIn($button, $panel)
+	$top = $heading.Top - (S 12) - (S 40)
+	# Twice the offset from the panel's center, so it stays whole
+	$offset = ($top + $buttonRect.Bottom) - (Get-ClientHeight $panel)
+	$actual = "$($heading.Left) $($heading.Right - $heading.Left) | $offset"
+	Check-That "$what  column left, width | center offset x2" $actual ($actual -match "^$([math]::Floor(($pw - $width) / 2)) $width \| -?[012]$") "$([math]::Floor(($pw - $width) / 2)) $width | -2 to 2"
+
+	$edit = ([W]::Children($field, 'Edit'))[0]
+	$browse = ([W]::Children($field, 'Button'))[0]
+	$editRect = [W]::RectIn($edit, $field)
+	$browseRect = [W]::RectIn($browse, $field)
+	$actual = "$(Format-Rect $editRect) | $([W]::TextOf($browse)) $($browseRect.Left - $editRect.Right) $($fieldRect.Right - $fieldRect.Left - $browseRect.Right)"
+	$expected = "0,0 $($browseRect.Left - (S 8))x$(S 23) | Browse$([char]0x2026) $(S 8) 0"
+	Check "$what  edit | Browse, gap, right" $actual $expected
+	# The hint line keeps room for its longest hint, a line or more
+	$hint = [W]::RectIn(([W]::Children($field, 'WestieLib.Label'))[0], $field)
+	$hintHeight = $hint.Bottom - $hint.Top
+	$actual = "$(Format-Rect $fieldRect) | $(Format-Rect $hint)"
+	$expected = "$($heading.Left),$($label.Bottom + (S 4)) $($width)x$((S 23) + (S 4) + $hintHeight) | 0,$((S 23) + (S 4)) $($width)x$hintHeight"
+	Check-That "$what  field | its hint line" $actual ($actual -eq $expected -and $hintHeight -ge (S 16)) "$expected, the hint at least $(S 16) tall"
+	$style = [W]::GetWindowLongW($button, -16) -band 0xF
+	Check "$what  button, default" "$([W]::TextOf($button)) $($buttonRect.Left) $($buttonRect.Top) $($style -eq 1)" "Add your first playlist $($heading.Left) $($fieldRect.Bottom + (S 16)) True"
+}
+
+$HintNotFullPath = "Enter a full folder path, such as $DefaultLibrary."
+$HintNoSuchDrive = "That drive isn't on this PC."
+$HintNotAFolder = "That's a file, not a folder."
+$HintWillBeCreated = "This folder doesn't exist yet. WestieLib creates it when it first syncs."
+
+function Get-FolderHint($hwnd) { ([W]::Children([W]::GetAncestor((Get-FolderEdit $hwnd), 1), 'WestieLib.Label'))[0] }
+
+# What the hint line says right after typing $text, before the field loses focus; whether it's red; and whether the
+# line moved
+function Get-HintFor($hwnd, [string]$text) {
+	$hint = Get-FolderHint $hwnd
+	$before = Format-Rect ([W]::RectIn($hint, $hwnd))
+	[W]::SetEditText((Get-FolderEdit $hwnd), $text)
+	Start-Sleep -Milliseconds 100
+	"$([W]::TextOf($hint)) | red $([W]::RedInk($hwnd, $hint)) | moved $((Format-Rect ([W]::RectIn($hint, $hwnd))) -ne $before)"
+}
+
+# The field reads $field, and the status bar's library text is as wide as $folder in the message font (within the
+# glyphs' overhang)
+function Check-FolderInEffect([string]$what, $hwnd, [string]$field, [string]$folder) {
+	$status = Get-StatusBar $hwnd
+	$part = [W]::StatusPartRect($status, 2)
+	$gaps = [W]::StatusTextGaps($hwnd, $status, 2)
+	$width = $part.Right - $part.Left - $gaps[0] - $gaps[1]
+	$expected = [W]::TextWidth($folder, $script:dpi)
+	$text = [W]::EditText((Get-FolderEdit $hwnd))
+	Check-That $what "$text | $width" ($text -eq $field -and [math]::Abs($width - $expected) -le 3) "$field | $expected within 3"
+}
+
+# The field starts at the default folder. The hint line follows the typing. Leaving the field takes a folder into
+# effect, unless its hint is red. Browse works whatever the field says, and picking a folder takes effect at once.
+function Check-LibraryFolder($hwnd) {
+	$edit = Get-FolderEdit $hwnd
+	$browse = ([W]::Children([W]::GetAncestor($edit, 1), 'Button'))[0]
+	$music = [Environment]::GetFolderPath('MyMusic')
+	Check-FolderInEffect 'Library folder: field | status bar text width' $hwnd $DefaultLibrary $DefaultLibrary
+	$expected = if (Test-Path $DefaultLibrary -PathType Container) { '' } else { $HintWillBeCreated }
+	Check '  hint for the default folder' ([W]::TextOf((Get-FolderHint $hwnd))) $expected
+
+	$drive = @([char[]]'QRSTUVWXYZ' | Where-Object { -not (Test-Path "$($_):\") })[0]
+	$missing = "C:\WestieLib-check-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+	Check '  typing a relative path' (Get-HintFor $hwnd 'Music\WestieLib') "$HintNotFullPath | red True | moved False"
+	Check '  typing a path on a missing drive' (Get-HintFor $hwnd "$($drive):\Music") "$HintNoSuchDrive | red True | moved False"
+	Check '  typing the path of a file' (Get-HintFor $hwnd (Resolve-Path $Exe).Path) "$HintNotAFolder | red True | moved False"
+	Check '  typing a folder that does not exist' (Get-HintFor $hwnd $missing) "$HintWillBeCreated | red False | moved False"
+	Check '  typing a folder that exists' (Get-HintFor $hwnd $music) ' | red False | moved False'
+
+	[void](Get-HintFor $hwnd 'Music\WestieLib')
+	[void][W]::SendMessageW($edit, 0x8, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 200
+	Check-FolderInEffect '  leaving it with a red hint keeps the folder' $hwnd 'Music\WestieLib' $DefaultLibrary
+
+	# The click moves the focus out of the field, which commits it, so start with the focus in it
+	[W]::Focus($edit)
+	[void][W]::PostMessageW($browse, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	$picker = Wait-OwnedWindow $hwnd
+	Check '  Browse with that text opens the picker' "$([W]::ClassOf($picker)) $([W]::TextOf($picker))" '#32770 Library folder'
+	[void][W]::PostMessageW($picker, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 500
+	Check-FolderInEffect '  and Cancel keeps the text and the folder' $hwnd 'Music\WestieLib' $DefaultLibrary
+
+	# The picker's only visible edit is its Folder box, and its button for picking is IDOK
+	[void][W]::PostMessageW($browse, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	$picker = Wait-OwnedWindow $hwnd
+	Start-Sleep -Milliseconds 500
+	$boxes = @([W]::Children($picker, 'Edit') | Where-Object { [W]::IsWindowVisible($_) })
+	if ($boxes.Count -eq 1) {
+		[W]::SetEditText($boxes[0], $music)
+		[void][W]::PostMessageW([W]::GetDlgItem($picker, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	} else {
+		[void][W]::PostMessageW($picker, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	}
+	for ($i = 0; $i -lt 30 -and [W]::IsWindow($picker); $i++) { Start-Sleep -Milliseconds 100 }
+	Start-Sleep -Milliseconds 300
+	Check-FolderInEffect "  picking a folder in the picker (Folder boxes: $($boxes.Count))" $hwnd $music $music
+	Check '  and its hint' ([W]::TextOf((Get-FolderHint $hwnd))) ''
+
+	Check '  typing a quoted folder that does not exist' (Get-HintFor $hwnd "  `"$missing\`"  ") "$HintWillBeCreated | red False | moved False"
+	[void][W]::SendMessageW($edit, 0x8, [IntPtr]::Zero, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 200
+	Check-FolderInEffect '  leaving it: the folder takes effect, cleaned up' $hwnd $missing $missing
+}
+
 # Splitter drags don't make text blink on screen: the left panel's content stays exactly as it was while the playlists
-# splitter moves, and the inspector's placeholder, which moves with the inspector, never loses its text
+# splitter moves, and the inspector's placeholder and the welcome screen, which move with their panels, never lose
+# their text. The welcome drag stays short enough for its column to keep its width, so its text wraps the same.
 function Check-NoBlinking($hwnd) {
+	$welcome = [W]::RectIn((Get-Panel $hwnd 'Welcome'), $hwnd)
+	$texts = @(Get-DirectChildren (Get-Panel $hwnd 'Welcome') 'WestieLib.Label' | ForEach-Object { [W]::RectIn($_, $hwnd) })
+	$column = New-Object W+RECT
+	$column.Left = $welcome.Left
+	$column.Right = $welcome.Right
+	$column.Top = ($texts | Measure-Object -Property Top -Minimum).Minimum - (S 52)
+	$column.Bottom = [W]::RectIn((Get-DirectChildren (Get-Panel $hwnd 'Welcome') 'Button')[0], $hwnd).Bottom
+	Check 'Playlists drag: welcome screen never blinks' ([W]::WatchDrag($hwnd, $column, (Get-Splitter $hwnd 0), (S 200), $true)) 'blinked 0'
+
 	$panel = (Get-RowPanels $hwnd)[0]
 	$button = [W]::RectIn(([W]::Children($panel, 'Button'))[0], $hwnd)
 	$left = New-Object W+RECT
@@ -904,6 +1094,8 @@ try {
 	Check-Widths 'Initial widths' $h @((S 250), ($cw - (S 250) - (S 290) - 2 * $g), (S 290))
 	Check-PlaylistPanel 'Left panel:' $h
 	Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $h
+	Check-Welcome 'Welcome screen' $h
+	Check-LibraryFolder $h
 	Check 'Drag steps left unpainted' (Measure-UnpaintedDragSteps $h) 0
 	Check-NoBlinking $h
 	Move-Splitter $h 0 0

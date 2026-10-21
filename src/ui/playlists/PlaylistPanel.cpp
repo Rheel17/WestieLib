@@ -29,7 +29,7 @@ constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
 }
 
 PlaylistPanel::PlaylistPanel(HWND parent, std::function<void(CommandId)> on_command) :
-        Panel(parent),
+        Panel(parent, L"Playlists"),
         on_command_(std::move(on_command)),
         all_tracks_(hwnd()),
         empty_text_(hwnd(), L"No playlists yet.", {.color = framework::TextColor::Gray}),

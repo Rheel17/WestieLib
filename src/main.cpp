@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <knownfolders.h>
 
+#include "platform/win32/ComApartment.h"
 #include "platform/win32/KnownFolder.h"
 #include "ui/FatalError.h"
 #include "ui/framework/AcceleratorTable.h"
@@ -13,6 +14,7 @@
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
     try {
+        westie::platform::win32::ComApartment com;
         westie::ui::framework::init_common_controls();
         westie::ui::MainWindow window(westie::platform::win32::known_folder(FOLDERID_Music) / L"WestieLib");
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
