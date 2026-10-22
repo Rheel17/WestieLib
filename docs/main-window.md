@@ -9,8 +9,8 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 
 - Every menu item, toolbar button and shortcut is a `CommandId` (`src/ui/commands/`). The values double as Win32
   command IDs.
-- `CommandState` holds what the commands depend on (a sync running, whether the tools are installed or at work, the
-  selection, whether the log shows).
+- `CommandState` holds what the commands depend on (a sync running, whether the tools are at work, whether there are
+  playlists, the selection, whether the log shows). `has_playlists` stays false until playlists exist.
   `enabled(id)` and `checked(id)` are the only enable rules, so the menu, the toolbar and the shortcuts can't
   disagree. `MainWindow::command_state()` builds it from the window's current state.
 - `MainMenu.cpp` lists the menus as tables of `command_item(id, text)`, with the shortcut after a tab. On
@@ -74,8 +74,9 @@ saved `Placement` and asks it for the current one.
   each one onto an `apply_event` overload. Then `show_tools` updates the status bar, the commands and an open
   Settings dialog.
 - `ToolBoard` (`src/ui/tools/`) is the UI's view of the tools: a `ToolStatus` per download, whether a run is going
-  (`ToolsRunChanged`) and when the releases were last checked (`ToolsChecked`). `ready()` means every tool has a
-  release, which gates Sync. `ToolMark` turns a status, or the board, into Ready, Working or Attention.
+  (`ToolsRunChanged`) and when the releases were last checked (`ToolsChecked`). Commands don't depend on it, except
+  `Check for updates`, which waits for a run to end: work that needs a missing tool waits for it in the sync instead
+  (`plan/arch.md`, ToolManager). `ToolMark` turns a status, or the board, into Ready, Working or Attention.
   `ToolStatusText.cpp` has all the wording, and `RelativeDayText.cpp` the `today 14:03` / `yesterday` / `12 Oct`
   style the playlist rows will share.
 - `Check for updates` calls `ToolManager::run(true)`. The run itself reports that it started, so the command grays

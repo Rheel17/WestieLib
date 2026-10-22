@@ -3,11 +3,10 @@
 namespace westie::ui {
 
 bool CommandState::enabled(CommandId command) const {
-    bool can_sync = tools_ready && !tools_busy && !syncing;
     switch (command) {
     case CommandId::RemovePlaylist:       return playlist_selected;
-    case CommandId::SyncAll:              return can_sync;
-    case CommandId::SyncSelectedPlaylist: return can_sync && playlist_selected;
+    case CommandId::SyncAll:              return has_playlists && !syncing;
+    case CommandId::SyncSelectedPlaylist: return playlist_selected && !syncing;
     case CommandId::CancelSync:           return syncing;
     case CommandId::CheckForUpdates:      return !tools_busy && !syncing;
     case CommandId::ConfirmMatch:

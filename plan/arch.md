@@ -379,8 +379,21 @@ ToolManager runs at startup and before the first sync of a session.
 - Missing tools are always installed.
 - Installed tools are updated only when `autoUpdateTools` is on, or when `checkForUpdates` asks for it.
 
-The SyncEngine starts only when all tools are installed. ToolManager exposes the absolute tool paths to the other
-components.
+ToolManager exposes the absolute tool paths to the other components, and which tools are available: installed, and
+not being replaced by an update right now. A sync doesn't wait for the tools as a whole. Each step waits only for the
+tools it needs (ui.md, Vocabulary › Waiting for tools):
+
+| Step                                   | Needs          |
+|----------------------------------------|----------------|
+| `SpotifySource` fetch                  | –              |
+| `YouTubeMusicSource` fetch             | yt-dlp         |
+| Matcher, `searchVideos`                | yt-dlp         |
+| Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg |
+
+A step whose tool isn't available stays queued, and the track stays `pending` with a `waitingFor` list of tool names
+in its `TrackStatusChanged` event; it isn't a failure, and nothing is written to the state for it. When ToolManager
+reports a tool installed, the waiting steps go ahead. So a sync can run while tools install, and a failed tool
+install leaves the work waiting, not failed.
 
 - `run(update_installed)` starts a run on a worker thread (`std::jthread`), which `stop()` asks to stop. The
   destructor joins it. The UI starts a run only while none is active.
@@ -616,7 +629,7 @@ and their work folders are cleaned.
 | `SyncStarted` / `SyncFinished` | run summary                                     |
 | `PlaylistFetched`              | playlist id, name, track count                  |
 | `PlaylistFetchFailed`          | playlist id, error                              |
-| `TrackStatusChanged`           | track key, status, failure, error               |
+| `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for |
 | `TrackProgress`                | track key, percent                              |
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |

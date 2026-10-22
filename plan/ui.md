@@ -62,6 +62,7 @@ The UI uses its own words for the core statuses.
 | `downloaded`       | Synced                               | green circle with check            |
 | `pending`          | Waiting                              | hollow gray circle                 |
 | (downloading)      | Waiting, shown as `Downloading 62%`  | blue progress ring that fills      |
+| (needs a tool)     | Waiting, shown as `Waiting for ffmpeg` | gray hourglass, still            |
 | `failed`           | Failed                               | red circle with cross              |
 | `match.review`     | Needs review                         | amber warning triangle             |
 | `orphaned`         | Removed                              | orange circle with slash           |
@@ -69,6 +70,22 @@ The UI uses its own words for the core statuses.
 
 In the Status column, Needs review wins over Synced and shows ⚠, because review is the state the user can act
 on.
+
+**Waiting for tools.** Work that needs a tool waits while that tool isn't installed, and only then; work that doesn't
+need it goes ahead. Waiting isn't failing: the hourglass is gray and still, unlike ✕ for a failed download and ⚠ for
+something the user should act on, and the work starts by itself once the tool is installed. A tool whose install
+failed shows in the status bar (see Status bar › Tools) and in Settings, not on the tracks waiting for it.
+
+| Work                                      | Needs           |
+|-------------------------------------------|-----------------|
+| Fetch a Spotify playlist                  | –               |
+| Fetch a YouTube Music playlist            | yt-dlp          |
+| Match a Spotify track (search YouTube Music) | yt-dlp       |
+| Download a track: audio, thumbnail cover  | yt-dlp, ffmpeg  |
+| Choose a video: search                    | yt-dlp          |
+
+A track that waits shows the hourglass in the Status column, with `Waiting for ffmpeg` (or `Waiting for yt-dlp and
+ffmpeg`) as its tooltip and in the inspector. A playlist whose fetch waits shows it on line 5 (see Left panel).
 
 **Tracks and sources.** A row in the UI is a *track*: one file in the library. A track has one or more *sources*,
 which are YouTube Music videos or Spotify tracks. The same song in a YouTube Music playlist and a Spotify playlist
@@ -109,9 +126,10 @@ The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Sett
 
 - `Sync all ▾` is a split button. Its dropdown lists "Sync selected playlist" and then every playlist by name.
 - The menu bar, the toolbar and the shortcuts share one set of rules, so a command is enabled everywhere or nowhere:
-  - `Cancel` is enabled only while a sync runs. `Sync all` and `Sync selected playlist` are disabled during that
-    time, until every tool is installed, and while tools are checked or updated.
-  - `Remove playlist…` and `Sync selected playlist` need a selected playlist.
+  - `Cancel` is enabled only while a sync runs. `Sync all` is enabled when there is at least one playlist and no sync
+    runs. The tools don't matter: work that needs a missing tool waits (see Vocabulary › Waiting for tools).
+  - `Remove playlist…` and `Sync selected playlist` need a selected playlist, and `Sync selected playlist` also needs
+    no sync running.
   - Track items need a selected track.
   - `Check for updates` is disabled while tools are checked, installed or updated, and while a sync runs.
   - Everything else is always enabled.
@@ -157,12 +175,15 @@ With no playlists, the list reads `No playlists yet.` in gray.
 - **Status icon.** It starts the line, flush with the progress bar above, and the text follows it. It is the
   first rule that applies, top to bottom:
 
-  | Icon | Status       | Shown when                |
-  |------|--------------|---------------------------|
-  | ⚠    | fetch failed | the last fetch failed     |
-  | ✕    | failures     | some tracks failed        |
-  | ○    | unsynced     | some tracks are waiting   |
-  | ✓    | synced       | none of the above         |
+  | Icon | Status            | Shown when                                          |
+  |------|-------------------|-----------------------------------------------------|
+  | ⚠    | fetch failed      | the last fetch failed                               |
+  | ✕    | failures          | some tracks failed                                  |
+  | ⧗    | waiting for tools | its fetch, or some of its tracks, wait for a tool   |
+  | ○    | unsynced          | some tracks are waiting                             |
+  | ✓    | synced            | none of the above                                   |
+
+  While it waits for tools, the last-sync text reads `Waiting for yt-dlp`.
 
 - **Last-sync text.** One of `Synced today 14:03`, `Synced yesterday`, `Synced 12 Oct`, `Never synced`, or
   `Couldn't fetch · synced 9 Oct` (with `Couldn't fetch` in amber). It ends in an ellipsis rather than pushing
@@ -330,7 +351,7 @@ The inspector scrolls vertically when its content is taller than the panel.
 
 | Part    | Content |
 |---------|---------|
-| Run     | `Ready · last sync today 14:05`, or `Syncing 6 of 25` with an embedded progress bar |
+| Run     | `Ready · last sync today 14:05`, or `Syncing 6 of 25` with an embedded progress bar, or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
 | Tools   | `Tools ✓` or `Tools ⚠`, or while the tools are at work, `Tools ◔ installing ffmpeg 35%` with the progress ring: the word, 7 px, a 12 px icon, and then 7 px and what is going on (see below) |
@@ -395,7 +416,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - At the top: the source track (glyph, title, artists, album, length) and either "Current match: <title>,
     58% confidence" or "The Matcher found no usable video."
   - `Search YouTube Music:` an edit pre-filled with the Matcher's query, a `Songs and videos` / `Songs` /
-    `Videos` drop-down, and `Search`.
+    `Videos` drop-down, and `Search`. Searching needs yt-dlp: without it, `Search` is disabled and the results list
+    reads "Search needs yt-dlp, which isn't installed yet." Pasting a link still works.
   - A results list with Title | Artist | Album | Type | Length:
     - the current match is marked `(current)`;
     - a video that already belongs to another track is marked `(in library)`, and choosing it merges the two

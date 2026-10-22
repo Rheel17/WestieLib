@@ -36,10 +36,6 @@ bool ToolBoard::running() const noexcept {
     return running_;
 }
 
-bool ToolBoard::ready() const noexcept {
-    return std::ranges::none_of(statuses_, [](const core::ToolStatus& status) { return status.release.empty(); });
-}
-
 ToolMark ToolBoard::mark() const noexcept {
     if (running_) {
         return ToolMark::Working;

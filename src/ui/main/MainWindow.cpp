@@ -163,7 +163,7 @@ void MainWindow::layout_panels() {
 }
 
 CommandState MainWindow::command_state() const {
-    return {.tools_ready = tool_board_.ready(), .tools_busy = tool_board_.running(), .log_visible = panels_.log_visible};
+    return {.tools_busy = tool_board_.running(), .log_visible = panels_.log_visible};
 }
 
 void MainWindow::update_commands() {
