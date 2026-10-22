@@ -15,7 +15,7 @@ LRESULT Splitter::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SETCURSOR:      return on_set_cursor(lparam) ? TRUE : Window::handle_message(message, wparam, lparam);
     case WM_LBUTTONDOWN:    on_button_down(lparam); return 0;
-    case WM_MOUSEMOVE:      on_mouse_move(lparam); return 0;
+    case WM_MOUSEMOVE:      on_mouse_move(wparam, lparam); return 0;
     case WM_LBUTTONUP:      on_button_up(); return 0;
     case WM_CAPTURECHANGED: grab_offset_.reset(); return 0;
     default:                return Window::handle_message(message, wparam, lparam);
@@ -45,8 +45,10 @@ void Splitter::on_button_down(LPARAM lparam) {
     SetCapture(hwnd());
 }
 
-void Splitter::on_mouse_move(LPARAM lparam) {
-    if (!grab_offset_) {
+void Splitter::on_mouse_move(WPARAM keys, LPARAM lparam) {
+    // Windows also sends a move when a window moves under a cursor that stands still, with the button up, and the
+    // capture brings that one here even from far away
+    if (!grab_offset_ || (keys & MK_LBUTTON) == 0) {
         return;
     }
     POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};

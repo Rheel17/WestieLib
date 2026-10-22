@@ -24,7 +24,7 @@ private:
     int along_axis(LPARAM lparam) const noexcept;
     bool on_set_cursor(LPARAM lparam) const;
     void on_button_down(LPARAM lparam);
-    void on_mouse_move(LPARAM lparam);
+    void on_mouse_move(WPARAM keys, LPARAM lparam);
     void on_button_up();
 
     SplitterAxis axis_;
