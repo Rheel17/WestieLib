@@ -114,7 +114,7 @@ int MainStatusBar::progress_width() const {
     if (!progress_) {
         return 0;
     }
-    int width = 2 * dpi_.scale(TextSidePaddingDips) + status_bar_.text_width(progress_->text);
+    int width = status_bar_.part_width_for(progress_->text);
     if (progress_->percent) {
         width += dpi_.scale(GapDips) + dpi_.scale(ProgressBarDips.width);
     }

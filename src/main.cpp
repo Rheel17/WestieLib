@@ -6,13 +6,17 @@
 #include <windows.h>
 #include <knownfolders.h>
 
+#include "Version.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
 #include "core/tools/ToolManager.h"
+#include "platform/win32/BCryptHasher.h"
 #include "platform/win32/ComApartment.h"
 #include "platform/win32/Environment.h"
 #include "platform/win32/KnownFolder.h"
+#include "platform/win32/Utf16.h"
 #include "platform/win32/Win32FileOps.h"
+#include "platform/win32/WinHttpClient.h"
 #include "ui/FatalError.h"
 #include "ui/events/CoreEventQueue.h"
 #include "ui/framework/AcceleratorTable.h"
@@ -23,12 +27,19 @@
 
 namespace {
 
-// The UI checks point the app at a folder of their own, so they never touch the user's files
+// The UI checks point the app at a folder and a GitHub of their own, so they never touch the user's files or the network
 std::filesystem::path data_folder() {
     if (std::optional<std::wstring> folder = westie::platform::win32::environment_variable(L"WESTIELIB_DATA_DIR"); folder && !folder->empty()) {
         return *folder;
     }
     return westie::platform::win32::known_folder(FOLDERID_LocalAppData) / L"WestieLib";
+}
+
+std::string github_api_url() {
+    if (std::optional<std::wstring> url = westie::platform::win32::environment_variable(L"WESTIELIB_GITHUB_API"); url && !url->empty()) {
+        return westie::platform::win32::to_utf8(*url);
+    }
+    return "https://api.github.com";
 }
 
 }
@@ -37,6 +48,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
     try {
         westie::platform::win32::ComApartment com;
         westie::platform::win32::Win32FileOps files;
+        westie::platform::win32::WinHttpClient http(L"WestieLib/" WESTIELIB_VERSION_STRING);
+        westie::platform::win32::BCryptHasher hasher;
         std::filesystem::path data = data_folder();
         westie::core::SettingsStore settings_store(
                 files, data / L"settings.json", {.library_path = westie::platform::win32::known_folder(FOLDERID_Music) / L"WestieLib"}
@@ -46,7 +59,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
 
         // The window goes before the tool manager, whose worker may still report into the queue while it stops
         westie::ui::CoreEventQueue events;
-        westie::core::ToolManager tools(files, data / L"tools", events);
+        westie::core::ToolManager tools({.files = files, .http = http, .hasher = hasher}, github_api_url(), data / L"tools", events);
 
         westie::ui::framework::init_common_controls();
         westie::ui::MainWindow window(settings_store, settings, events, tools);

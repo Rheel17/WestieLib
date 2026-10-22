@@ -297,10 +297,10 @@ The cover art comes from the first of:
 
 | Service          | Implementation                                                                       |
 |------------------|--------------------------------------------------------------------------------------|
-| `HttpClient`     | WinHTTP. GET for JSON/HTML, streaming file download with progress callback.          |
+| `HttpClient`     | WinHTTP (`WinHttpClient`). `get` returns a body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
 | `ProcessRunner`  | `CreateProcessW` with stdout/stderr pipes, line splitting, UTF-8 decoding, exit code. Every child joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; cancelling a run terminates the job. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. |
 | `FileOps`        | Atomic replace via `ReplaceFileW` (with backup), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
-| `Hasher`         | SHA-256 via BCrypt.                                                                  |
+| `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
 | `TextNormalizer` | `NormalizeString` (NFKD), combining marks dropped, case folded.                      |
 
 Strings inside the core are UTF-8 `std::string`; paths are `std::filesystem::path`. Conversion to UTF-16 happens
@@ -353,16 +353,24 @@ ToolManager installs and updates the external tools in `tools\` from their GitHu
 comes from BtbN, the upstream that repository forks. Its `latest` release is rebuilt daily too, which is why the
 branch, and not the digest, decides an update.
 
-So far the app knows yt-dlp and ffmpeg; deno follows.
+So far the app knows yt-dlp and ffmpeg, and downloads yt-dlp; ffmpeg and then deno follow.
 
 Flow per tool:
 
-1. `GET https://api.github.com/repos/<repo>/releases/latest`.
-2. Compare the release with `tools.json`.
-3. Download the asset into `tools\.staging\`.
-4. Verify its SHA-256 against the `digest` GitHub reports for the asset.
+1. `GET https://api.github.com/repos/<repo>/releases/latest` (`GitHubReleases`, `src/core/github/`), read with glaze.
+   `WESTIELIB_GITHUB_API` replaces `https://api.github.com`; the UI checks point it at an address that refuses, so
+   they never reach the network.
+2. `ToolSource` picks the asset and names the release, and the release is compared with `tools.json`. A missing tool
+   has no release, so it always installs.
+3. `ToolInstaller` downloads the asset into `tools\.staging\<tool>\download`. The asset's name comes from the network,
+   so it never names a file.
+4. Verify its SHA-256 against the `digest` GitHub reports for the asset. An asset without one is refused.
 5. Extract zip archives with miniz.
-6. Swap the new files into `tools\` while no tool process is running, then update `tools.json`.
+6. Move the new files into `tools\` (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`) while no tool process is running,
+   then update `tools.json`.
+
+`tools\.staging` is cleared when a run starts and when it ends; a run stopped by the app's close leaves its partial
+download there until the next one.
 
 ToolManager runs at startup and before the first sync of a session.
 - Missing tools are always installed.
@@ -378,10 +386,11 @@ components.
 - Each step emits a `ToolStatus` (download, state, release, percent, error), so the UI can show
   `Missing`, `Installed`, `Checking`, `Downloading`, `Installing`, `UpToDate` or `Failed`. A run reports the saved
   `checkedAt` as `ToolsChecked`, and a look-up of the releases ends with a new one.
-- An exception on the worker would end the process, so the run turns it into a `Failed` status for each tool.
-- A failed install or update leaves the previous files in place.
-
-So far a run only reads `tools.json` and checks that each tool's files exist; the downloads come next.
+- An exception on the worker would end the process, so the run turns it into a `Failed` status for each tool. A
+  failure for one tool fails only that tool, and the run goes on with the next.
+- A failed install or update leaves the previous files and `tools.json` entry in place.
+- A look-up that went well sets `checkedAt`, even when the install after it fails.
+- Closing the app stops the run: the download is cancelled, and the thread is joined before the process ends.
 
 ### SelfUpdater
 
@@ -647,9 +656,10 @@ queued event at once. The queue owns the events, so nothing leaks when the windo
 src/
     core/           the logic, in namespace westie::core, one folder per area:
         events/     CoreEvent, EventSink
+        github/     the latest release of a repository, from GitHub's API
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
         settings/   Settings, SettingsStore
-        tools/      ToolManager, ToolsStore and the tool types
+        tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore and the tool types
                     later areas get folders of their own: SyncEngine, sources, Matcher, Downloader, Tagger,
                     Library, StateStore, SelfUpdater, RemoteConfig
     platform/       service interfaces

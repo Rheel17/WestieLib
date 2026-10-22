@@ -44,7 +44,7 @@ public:
     void set_text(int part, std::wstring text, const PartFormat& format = {});
     void set_tip(int part, std::wstring text);
     void embed(int part, HWND window, std::optional<Size> size);
-    int text_width(std::wstring_view text) const;
+    int part_width_for(std::wstring_view text) const;
     void draw(const DRAWITEMSTRUCT& item) const;
 
 protected:

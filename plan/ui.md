@@ -364,9 +364,10 @@ Its tooltip has a line per tool: `yt-dlp 2026.10.21`, `ffmpeg n9.0`, `yt-dlp: no
 **Progress.** It names the work and the tool at hand:
 
 - `Installing tools… ffmpeg 45%` while a missing tool downloads, or `Updating tools… yt-dlp 12%` for one that is
-  installed. The bar shows the download's percentage.
-- `Installing tools… ffmpeg`, with a full bar, while the download is unpacked and put in place.
-- `Checking for tool updates…`, without the bar, while the releases are looked up.
+  installed. The bar shows the download's percentage, from 0% while it connects.
+- `Installing tools… ffmpeg`, with a full bar, while the download is checked, unpacked and put in place.
+- While the releases are looked up, without the bar: `Installing tools…` for a missing tool, else `Checking for tool
+  updates…`.
 - Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit. The library folder
   loses its middle instead (`C:\Users\...\WestieLib`), so its last folder stays readable.
 

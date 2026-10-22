@@ -20,12 +20,16 @@ FetchContent_MakeAvailable(glaze)
 
 add_executable(WestieLib WIN32
 	src/main.cpp
+	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
 	src/core/settings/SettingsStore.cpp
+	src/core/tools/ToolInstaller.cpp
 	src/core/tools/ToolManager.cpp
 	src/core/tools/ToolPackage.cpp
+	src/core/tools/ToolSource.cpp
 	src/core/tools/ToolsStore.cpp
+	src/platform/win32/BCryptHasher.cpp
 	src/platform/win32/ComApartment.cpp
 	src/platform/win32/Environment.cpp
 	src/platform/win32/KnownFolder.cpp
@@ -35,6 +39,7 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32FileOps.cpp
+	src/platform/win32/WinHttpClient.cpp
 	src/ui/FatalError.cpp
 	src/ui/RelativeDayText.cpp
 	src/ui/TrackCountText.cpp
@@ -106,4 +111,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE glaze::glaze comctl32 uxtheme shell32 ole32 uuid)
+target_link_libraries(WestieLib PRIVATE glaze::glaze comctl32 uxtheme shell32 ole32 uuid winhttp bcrypt)

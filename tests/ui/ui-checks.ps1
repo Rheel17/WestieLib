@@ -663,6 +663,9 @@ $StateNames = 'Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips
 # The app keeps its files here instead of %LOCALAPPDATA%\WestieLib, so the user's settings and tools stay untouched
 $DataDir = Join-Path ([IO.Path]::GetTempPath()) "WestieLib-checks-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 $env:WESTIELIB_DATA_DIR = $DataDir
+# Nothing listens there, so every release look-up fails at once, and never leaves the PC
+$env:WESTIELIB_GITHUB_API = 'http://127.0.0.1:9'
+$LookupFailure = 'Couldn''t reach 127\.0\.0\.1: .+'
 $SettingsFile = Join-Path $DataDir 'settings.json'
 $ToolsDir = Join-Path $DataDir 'tools'
 $script:failures = 0
@@ -694,7 +697,20 @@ function Start-App {
 	if ($hwnd -eq [IntPtr]::Zero) { throw 'Main window not found' }
 	Start-Sleep -Milliseconds 400
 	$script:dpi = [W]::GetDpiForWindow($hwnd)
+	Wait-ToolsIdle $hwnd
 	return @{ Process = $process; Hwnd = $hwnd }
+}
+
+# A tool run grays Check for updates until it ends. Against the checks' GitHub a look-up fails within a few seconds.
+function Wait-ToolsIdle($hwnd) {
+	$menu = [W]::GetMenu($hwnd)
+	$id = [W]::CommandOf($menu, 'Check for &updates')
+	for ($i = 0; $i -lt 150; $i++) {
+		Update-MenuStates $hwnd
+		if (([W]::GetMenuState($menu, $id, 0) -band 0x1) -eq 0) { return }
+		Start-Sleep -Milliseconds 100
+	}
+	throw 'The tool run did not end'
 }
 
 # Closes with WM_CLOSE, or with File > Exit
@@ -1099,7 +1115,9 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 			$version = @([W]::Children($dialog, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like 'WestieLib *' })
 			Check '  the version' ($version -join ', ') "WestieLib $((Get-Item $Exe).VersionInfo.ProductVersion)"
 			Check '  starts on Change, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Change$([char]0x2026) 0"
-			Check '  tools, none installed' (Get-SettingsTools $dialog) 'yt-dlp |  | Not installed / ffmpeg |  | Not installed | auto 1 | Never checked | check True'
+			$pattern = "yt-dlp \|  \| Failed: $LookupFailure / ffmpeg \|  \| Not installed \| auto 1 \| Never checked \| check True"
+			$actual = Get-SettingsTools $dialog
+			Check-That '  tools, none installed' $actual ($actual -match "^$pattern$") $pattern
 			if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-settings.png") }
 		}
 		& $closes[$i].Close $dialog
@@ -1178,11 +1196,18 @@ function Install-FakeTools {
 	[IO.File]::WriteAllText((Join-Path $ToolsDir 'tools.json'), $json)
 }
 
-# The Tools part's icon color and tooltip lines
-function Check-ToolsPart([string]$what, $hwnd, [string]$expected) {
+# The Tools part's icon color and tooltip lines, matched against a regex
+function Check-ToolsPart([string]$what, $hwnd, [string]$pattern) {
 	$status = Get-StatusBar $hwnd
 	$tip = [W]::TooltipText($status, $ToolsPart) -replace "`r`n", ' / '
-	Check $what "$([W]::StatusIconColor($hwnd, $status, $ToolsPart)) | $tip" $expected
+	$actual = "$([W]::StatusIconColor($hwnd, $status, $ToolsPart)) | $tip"
+	Check-That $what $actual ($actual -match "^$pattern$") $pattern
+}
+
+function Set-SavedAutoUpdate([bool]$on) {
+	$json = Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+	$json.autoUpdateTools = $on
+	[IO.File]::WriteAllText($SettingsFile, ($json | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
 }
 
 # The Settings dialog's Tools group: the list's rows, the check box, Last checked, and whether Check for updates is
@@ -1195,21 +1220,36 @@ function Get-SettingsTools($dialog) {
 	"$rows | auto $auto | $([W]::TextOf([W]::GetDlgItem($dialog, 1006))) | check $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1005)))"
 }
 
-# The Tools group with the tools installed. Check for updates runs at once and comes back to the same list; the check
-# box takes effect on OK, and is saved.
+# Clicks Check for updates in the dialog and waits for the button to come back: it grays while the run goes
+function Invoke-CheckForUpdates($dialog) {
+	$button = [W]::GetDlgItem($dialog, 1005)
+	[void][W]::PostMessageW($button, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	for ($i = 0; $i -lt 150; $i++) {
+		Start-Sleep -Milliseconds 100
+		if ($i -ge 2 -and [W]::IsWindowEnabled($button)) { return }
+	}
+	throw 'Check for updates did not end'
+}
+
+# The Tools group with the tools installed and Update tools automatically off, as the run starts them. Check for
+# updates runs at once, even with the check box off; its look-up fails, which leaves yt-dlp's files as they were. The
+# check box takes effect on OK, and is saved.
 function Check-SettingsTools($hwnd) {
-	$installed = "yt-dlp | 2026.10.21 | Installed / ffmpeg | n9.0 | Installed"
+	$checked = Get-LastCheckedText
 	Send-Command $hwnd '&Settings...'
 	$dialog = Wait-OwnedWindow $hwnd
-	Check 'Settings, tools installed' (Get-SettingsTools $dialog) "$installed | auto 1 | $(Get-LastCheckedText) | check True"
-	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1005), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	Start-Sleep -Milliseconds 500
-	Check '  after Check for updates' (Get-SettingsTools $dialog) "$installed | auto 1 | $(Get-LastCheckedText) | check True"
+	Check 'Settings, tools installed' (Get-SettingsTools $dialog) "yt-dlp | 2026.10.21 | Installed / ffmpeg | n9.0 | Installed | auto 0 | $checked | check True"
+	Invoke-CheckForUpdates $dialog
+	$pattern = "yt-dlp \| 2026\.10\.21 \| Failed: $LookupFailure / ffmpeg \| n9\.0 \| Installed \| auto 0 \| $checked \| check True"
+	$actual = Get-SettingsTools $dialog
+	Check-That '  Check for updates, GitHub unreachable' $actual ($actual -match "^$pattern$") $pattern
+	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg n9\.0"
+	Check '  yt-dlp kept' "$((Get-Item (Join-Path $ToolsDir 'yt-dlp.exe')).Length) $(Test-Path (Join-Path $ToolsDir '.staging'))" '0 False'
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
-	Check '  unchecking Update tools automatically, then Cancel' (Get-SavedAutoUpdate) 'True'
+	Check '  checking Update tools automatically, then Cancel' (Get-SavedAutoUpdate) 'False'
 
 	Send-Command $hwnd '&Settings...'
 	$dialog = Wait-OwnedWindow $hwnd
@@ -1217,10 +1257,10 @@ function Check-SettingsTools($hwnd) {
 	Start-Sleep -Milliseconds 200
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
-	Check '  then OK saves it' (Get-SavedAutoUpdate) 'False'
+	Check '  then OK saves it' (Get-SavedAutoUpdate) 'True'
 	Send-Command $hwnd '&Settings...'
 	$dialog = Wait-OwnedWindow $hwnd
-	Check '  and the dialog shows it' ((Get-SettingsTools $dialog) -replace '^.* \| (auto \d) \|.*$', '$1') 'auto 0'
+	Check '  and the dialog shows it' ((Get-SettingsTools $dialog) -replace '^.* \| (auto \d) \|.*$', '$1') 'auto 1'
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
 }
@@ -1394,7 +1434,7 @@ try {
 	Update-MenuStates $h
 	Check 'Grayed while idle, no tools, nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &all, Sync &selected playlist, &Cancel, ' +
 		'&Confirm match, C&hoose video..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
-	Check-ToolsPart 'No tools installed: Tools icon | tooltip' $h 'amber | yt-dlp: not installed / ffmpeg: not installed'
+	Check-ToolsPart 'No tools, GitHub unreachable: Tools icon | tooltip' $h "amber \| yt-dlp: $LookupFailure / ffmpeg: not installed"
 	Check 'Checked items' ([W]::ItemsWithState($menu, 0x8)) ''
 	Send-Command $h '&About WestieLib'
 	$about = Wait-OwnedWindow $h
@@ -1483,12 +1523,13 @@ try {
 	Check '  saved maximized, widths (DIPs)' "$($saved.Maximized) $($saved.PlaylistsWidthDips) $($saved.InspectorWidthDips)" '0 250 500'
 	Check '  saved log visible, height (DIPs)' "$($saved.LogVisible) $($saved.LogHeightDips)" '1 200'
 
-	"--- Run 2: restore a normal window, with tools installed"
+	"--- Run 2: restore a normal window, with tools installed, not updated automatically"
 	Install-FakeTools
+	Set-SavedAutoUpdate $false
 	$app = Start-App
 	$h = $app.Hwnd
 	$cw = Get-ClientWidth $h
-	Check-ToolsPart 'Tools installed: Tools icon | tooltip' $h 'green | yt-dlp 2026.10.21 / ffmpeg n9.0'
+	Check-ToolsPart 'Tools installed: Tools icon | tooltip' $h 'green \| yt-dlp 2026\.10\.21 / ffmpeg n9\.0'
 	$toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
 	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
 	Check-SettingsTools $h

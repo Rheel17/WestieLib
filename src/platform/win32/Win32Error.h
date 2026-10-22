@@ -11,6 +11,7 @@ namespace westie::platform::win32 {
 
 void check_status(LSTATUS status, std::string_view operation);
 void check_hresult(HRESULT result, std::string_view operation);
+void check_ntstatus(LONG status, std::string_view operation);
 
 template<typename T>
 T check(T result, std::string_view operation) {

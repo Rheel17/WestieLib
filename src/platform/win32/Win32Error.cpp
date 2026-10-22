@@ -1,5 +1,7 @@
 #include "platform/win32/Win32Error.h"
 
+#include <format>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 
@@ -27,6 +29,13 @@ void check_status(LSTATUS status, std::string_view operation) {
 void check_hresult(HRESULT result, std::string_view operation) {
     if (FAILED(result)) {
         throw_error(static_cast<DWORD>(result), operation);
+    }
+}
+
+void check_ntstatus(LONG status, std::string_view operation) {
+    // Negative is an error, as NT_SUCCESS tests
+    if (status < 0) {
+        throw std::runtime_error(std::format("{} failed with NTSTATUS {:#010x}", operation, static_cast<unsigned long>(status)));
     }
 }
 

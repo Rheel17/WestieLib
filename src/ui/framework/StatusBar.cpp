@@ -1,6 +1,7 @@
 #include "ui/framework/StatusBar.h"
 
 #include <algorithm>
+#include <array>
 #include <numeric>
 #include <utility>
 
@@ -68,12 +69,15 @@ void StatusBar::embed(int part, HWND window, std::optional<Size> size) {
     place_embedded();
 }
 
-int StatusBar::text_width(std::wstring_view text) const {
+int StatusBar::part_width_for(std::wstring_view text) const {
     platform::win32::UniqueMemoryDc dc(platform::win32::check(CreateCompatibleDC(nullptr), "CreateCompatibleDC"));
     if (auto font = reinterpret_cast<HFONT>(SendMessageW(hwnd(), WM_GETFONT, 0, 0))) {
         SelectObject(dc.get(), font);
     }
-    return measure(dc.get(), text);
+    // A part's rect starts this far after the edge before it: horizontal border, vertical border, gap between parts
+    std::array<int, 3> borders{};
+    platform::win32::check(SendMessageW(hwnd(), SB_GETBORDERS, 0, reinterpret_cast<LPARAM>(borders.data())), "SB_GETBORDERS");
+    return borders[2] + 2 * padding_ + measure(dc.get(), text);
 }
 
 void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
@@ -89,10 +93,10 @@ void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
     SetBkMode(item.hDC, TRANSPARENT);
     SetTextColor(item.hDC, GetSysColor(COLOR_BTNTEXT));
 
-    // The rect for a part that runs to the edge reaches under the size grip; the bar's own rect for it stops there
-    RECT bounds = item.rcItem;
-    bounds.left += padding_;
-    bounds.right = std::min(bounds.right, static_cast<LONG>(part_rect(static_cast<int>(item.itemID)).right)) - padding_;
+    // The item rect for a part that runs to the edge reaches under the size grip; the bar's own rect for it stops there.
+    // The bar's rect is also what part_width_for measures against.
+    Rect padded = padded_rect(static_cast<int>(item.itemID));
+    RECT bounds{padded.left, item.rcItem.top, padded.right, item.rcItem.bottom};
     const IconResource* icon = part.format.icon;
     if (icon) {
         // The icon follows the text, so the text gets what's left after it, and no more than it needs

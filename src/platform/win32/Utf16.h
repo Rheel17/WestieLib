@@ -6,5 +6,6 @@
 namespace westie::platform::win32 {
 
 std::wstring to_utf16(std::string_view utf8);
+std::string to_utf8(std::wstring_view utf16);
 
 }

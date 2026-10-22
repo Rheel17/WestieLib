@@ -37,8 +37,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   `ui-checks.ps1` sets it to a new folder under `%TEMP%` for the apps it starts, and deletes that folder in its
   `finally` block, so `%LOCALAPPDATA%\WestieLib` is never touched. Any other script that starts the app does the same.
   The checks only type library folders (`C:\WestieLib-check-<random>`, …), and never create them.
-- The checks never reach the network. Run 1 starts without tools. Run 2 starts with fake ones (`Install-FakeTools`):
-  a `tools.json` and empty executables.
+- The checks never reach the network: they set `WESTIELIB_GITHUB_API` to `http://127.0.0.1:9`, where nothing listens,
+  so every release look-up fails within a couple of seconds with `Couldn't reach 127.0.0.1: …` (in Windows' language).
+  `Start-App` waits for the app's first tool run to end (`Wait-ToolsIdle`: Check for updates is enabled again).
+- Run 1 starts without tools, so yt-dlp's install fails. Run 2 starts with fake ones (`Install-FakeTools`: a
+  `tools.json` and empty executables) and `autoUpdateTools` off, so nothing is looked up until Check for updates.
+- Downloads themselves aren't in the checks. To try them by hand, point `WESTIELIB_DATA_DIR` at a scratch folder and
+  start the app against the real GitHub, or against a local server that answers `/repos/yt-dlp/yt-dlp/releases/latest`
+  with a release whose asset URL is on the same server; sending the asset slowly shows the progress.
 - Never cut such a script's output short (`| Select-Object -First n`): PowerShell then stops the script before its
   `finally` block, so the app keeps running and the user's values stay set aside. Filter with `Where-Object` or
   `Select-String`, which read to the end.

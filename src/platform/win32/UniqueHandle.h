@@ -4,9 +4,11 @@
 #include <type_traits>
 
 #include <windows.h>
+#include <bcrypt.h>
 #include <commctrl.h>
 #include <objbase.h>
 #include <uxtheme.h>
+#include <winhttp.h>
 
 namespace westie::platform::win32 {
 
@@ -25,6 +27,10 @@ inline void release_com(IUnknown* object) noexcept {
 template<typename Interface>
 using UniqueComPtr = UniqueHandle<Interface*, release_com>;
 
+inline void close_algorithm_provider(BCRYPT_ALG_HANDLE algorithm) noexcept {
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+}
+
 using UniqueIcon = UniqueHandle<HICON, DestroyIcon>;
 using UniqueMenu = UniqueHandle<HMENU, DestroyMenu>;
 using UniqueKey = UniqueHandle<HKEY, RegCloseKey>;
@@ -36,6 +42,10 @@ using UniqueImageList = UniqueHandle<HIMAGELIST, ImageList_Destroy>;
 using UniqueCoTaskString = UniqueHandle<PWSTR, CoTaskMemFree>;
 using UniqueTheme = UniqueHandle<HTHEME, CloseThemeData>;
 using UniqueFile = UniqueHandle<HANDLE, CloseHandle>;
+using UniqueLocalString = UniqueHandle<PWSTR, LocalFree>;
+using UniqueInternet = UniqueHandle<HINTERNET, WinHttpCloseHandle>;
+using UniqueAlgorithmProvider = UniqueHandle<BCRYPT_ALG_HANDLE, close_algorithm_provider>;
+using UniqueHash = UniqueHandle<BCRYPT_HASH_HANDLE, BCryptDestroyHash>;
 
 // CreateFileW fails with INVALID_HANDLE_VALUE, not null
 inline UniqueFile adopt_file(HANDLE file) noexcept {

@@ -68,8 +68,9 @@ std::optional<ToolProgress> tools_progress(const ToolBoard& board) {
         }
         return ToolProgress{.text = std::format(L"{} {}", work, name), .percent = FullPercent};
     }
-    if (std::ranges::any_of(statuses, [](const core::ToolStatus& status) { return status.state == core::ToolState::Checking; })) {
-        return ToolProgress{.text = L"Checking for tool updates…"};
+    if (auto checking = std::ranges::find(statuses, core::ToolState::Checking, &core::ToolStatus::state); checking != statuses.end()) {
+        // A missing tool's release is looked up to install it, not to update it
+        return ToolProgress{.text = checking->release.empty() ? L"Installing tools…" : L"Checking for tool updates…"};
     }
     return std::nullopt;
 }

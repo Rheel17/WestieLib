@@ -25,7 +25,7 @@ file names such as `Win32Error.cpp`.
 - Links `comctl32` (TaskDialog and the common controls) and `uxtheme` (the menu bar's drawing). The manifest selects
   ComCtl32 v6, which `TaskDialogIndirect` needs. MinGW's `uxtheme` import library has no `OpenThemeDataForDpi`, so
   the code uses `OpenThemeData` and reopens the theme after a DPI change. `shell32`, `ole32` and `uuid` bring the
-  known folders, COM and the folder picker.
+  known folders, COM and the folder picker. `winhttp` downloads the tools, and `bcrypt` checks their SHA-256.
 - [glaze](https://github.com/stephenberry/glaze) reads and writes JSON. `FetchContent` clones it at a pinned tag
   (`GIT_TAG` in `CMakeLists.txt`) into `<build>/_deps`, so the first configure of a build folder needs the network.
   It's header-only, and `SYSTEM` keeps its headers out of the warnings. To update it, change the tag; its release

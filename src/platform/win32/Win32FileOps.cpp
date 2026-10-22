@@ -71,4 +71,16 @@ void Win32FileOps::replace_file(const std::filesystem::path& file, std::string_v
     check(MoveFileExW(temporary.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
 }
 
+void Win32FileOps::create_folders(const std::filesystem::path& folder) {
+    std::filesystem::create_directories(folder);
+}
+
+void Win32FileOps::remove_tree(const std::filesystem::path& path) {
+    std::filesystem::remove_all(path);
+}
+
+void Win32FileOps::move_replacing(const std::filesystem::path& from, const std::filesystem::path& to) {
+    check(MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
+}
+
 }
