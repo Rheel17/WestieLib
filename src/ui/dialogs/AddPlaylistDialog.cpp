@@ -60,8 +60,10 @@ INT_PTR AddPlaylistDialog::handle_message(UINT message, WPARAM wparam, LPARAM lp
     case WM_INITDIALOG: on_init_dialog(); return TRUE;
     case WM_COMMAND:    on_command(wparam); return TRUE;
     case WM_TIMER:      on_timer(wparam); return TRUE;
-    case WM_DRAWITEM:   paint_link_line(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam), link_line(check_, lookup_.status()), spinner_.progress(SpinnerTurn)); return TRUE;
-    default:            return ModalDialog::handle_message(message, wparam, lparam);
+    case WM_DRAWITEM:
+        paint_link_line(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam), link_line(check_, lookup_.status()), spinner_.progress(SpinnerTurn));
+        return TRUE;
+    default: return ModalDialog::handle_message(message, wparam, lparam);
     }
 }
 
@@ -72,10 +74,14 @@ void AddPlaylistDialog::on_init_dialog() {
 
 void AddPlaylistDialog::on_command(WPARAM wparam) {
     switch (LOWORD(wparam)) {
-    case IDOK:              accept(); return;
-    case IDCANCEL:          end(IDCANCEL); return;
-    case IDC_PLAYLIST_LINK: if (HIWORD(wparam) == EN_CHANGE) { check_link(); } return;
-    default:                return;
+    case IDOK:     accept(); return;
+    case IDCANCEL: end(IDCANCEL); return;
+    case IDC_PLAYLIST_LINK:
+        if (HIWORD(wparam) == EN_CHANGE) {
+            check_link();
+        }
+        return;
+    default: return;
     }
 }
 

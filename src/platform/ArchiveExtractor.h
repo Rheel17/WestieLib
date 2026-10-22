@@ -12,7 +12,9 @@ public:
     virtual ~ArchiveExtractor() = default;
 
     virtual void extract(
-            const std::filesystem::path& archive, std::span<const std::wstring_view> file_names, const std::filesystem::path& folder,
+            const std::filesystem::path& archive,
+            std::span<const std::wstring_view> file_names,
+            const std::filesystem::path& folder,
             const std::stop_token& stop
     ) const = 0;
 };

@@ -19,7 +19,7 @@
 #define IDI_TOOL_WAIT        17
 #define IDI_SEARCH           18
 // The progress ring's 25 steps, empty to full, are IDI_RING_0 to IDI_RING_0 + 24
-#define IDI_RING_0           20
+#define IDI_RING_0                20
 #define IDD_SETTINGS              100
 #define IDC_LIBRARY_FOLDER        1000
 #define IDC_CHANGE_LIBRARY_FOLDER 1001

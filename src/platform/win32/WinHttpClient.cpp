@@ -54,7 +54,9 @@ std::string error_text(DWORD error) {
 }
 
 WinHttpClient::WinHttpClient(const std::wstring& user_agent) :
-        session_(check(WinHttpOpen(user_agent.c_str(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen")) {
+        session_(
+                check(WinHttpOpen(user_agent.c_str(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen")
+        ) {
     check(WinHttpSetTimeouts(session_.get(), ResolveTimeoutMs, ConnectTimeoutMs, SendTimeoutMs, ReceiveTimeoutMs), "WinHttpSetTimeouts");
 }
 
@@ -117,7 +119,9 @@ void WinHttpClient::request(const std::string& url, const std::function<void(std
 
     DWORD status = 0;
     DWORD size = sizeof(status);
-    if (!WinHttpQueryHeaders(handle, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX)) {
+    if (!WinHttpQueryHeaders(
+                handle, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX
+        )) {
         fail(stop, host);
     }
     if (status < FirstSuccessStatus || status >= FirstFailureStatus) {

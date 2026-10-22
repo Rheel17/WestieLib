@@ -46,7 +46,11 @@ namespace westie::ui {
 class MainWindow final : public framework::Window {
 public:
     MainWindow(
-            core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools,
+            core::SettingsStore& settings_store,
+            core::Settings settings,
+            core::StateStore& state,
+            CoreEventQueue& events,
+            core::ToolManager& tools,
             core::PlaylistLookup& lookup
     );
 

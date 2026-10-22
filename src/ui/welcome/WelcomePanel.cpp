@@ -27,7 +27,9 @@ constexpr int ButtonGapDips = 16;
 }
 
 WelcomePanel::WelcomePanel(
-        HWND parent, const std::filesystem::path& default_library_folder, std::function<void(CommandId)> on_command,
+        HWND parent,
+        const std::filesystem::path& default_library_folder,
+        std::function<void(CommandId)> on_command,
         std::function<void(const std::filesystem::path&)> on_library_folder
 ) :
         Panel(parent, L"Welcome"),
@@ -69,7 +71,7 @@ void WelcomePanel::commit_library_folder() {
 
 LRESULT WelcomePanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE:       layout(); return 0;
+    case WM_SIZE: layout(); return 0;
     // The paint fills the background, so the icon isn't erased first and doesn't blink
     case WM_ERASEBKGND: return TRUE;
     case WM_PAINT:      paint(); return 0;
@@ -88,8 +90,17 @@ void WelcomePanel::layout() {
     int introduction_height = introduction_.height_for(width);
     int field_height = folder_.height_for(width);
     framework::Size button = add_button_.size();
-    int height = icon_.size() + dpi.scale(HeadingGapDips) + heading_height_ + dpi.scale(IntroductionGapDips) + introduction_height +
-                 dpi.scale(LabelGapDips) + label_height_ + dpi.scale(FieldGapDips) + field_height + dpi.scale(ButtonGapDips) + button.height;
+    int height = icon_.size() +
+                 dpi.scale(HeadingGapDips) +
+                 heading_height_ +
+                 dpi.scale(IntroductionGapDips) +
+                 introduction_height +
+                 dpi.scale(LabelGapDips) +
+                 label_height_ +
+                 dpi.scale(FieldGapDips) +
+                 field_height +
+                 dpi.scale(ButtonGapDips) +
+                 button.height;
     int left = (area.width() - width) / 2;
     int top = std::max(dpi.scale(MarginDips), (area.height() - height) / 2);
 

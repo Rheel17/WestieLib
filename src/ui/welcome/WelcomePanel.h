@@ -20,7 +20,9 @@ namespace westie::ui {
 class WelcomePanel final : public framework::Panel {
 public:
     WelcomePanel(
-            HWND parent, const std::filesystem::path& default_library_folder, std::function<void(CommandId)> on_command,
+            HWND parent,
+            const std::filesystem::path& default_library_folder,
+            std::function<void(CommandId)> on_command,
             std::function<void(const std::filesystem::path&)> on_library_folder
     );
 

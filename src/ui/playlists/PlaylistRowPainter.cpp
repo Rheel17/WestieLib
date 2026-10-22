@@ -66,8 +66,8 @@ void PlaylistRowPainter::paint(HDC dc, const framework::Rect& bounds, const Play
     paint_row_look(dc, bounds, look);
     SetBkMode(dc, TRANSPARENT);
     framework::Rect content{
-            bounds.left + HairlinePixels + dpi_.scale(SidePaddingDips), bounds.top + HairlinePixels + dpi_.scale(TopPaddingDips),
-            bounds.right - HairlinePixels - dpi_.scale(SidePaddingDips), bounds.bottom
+        bounds.left + HairlinePixels + dpi_.scale(SidePaddingDips), bounds.top + HairlinePixels + dpi_.scale(TopPaddingDips),
+        bounds.right - HairlinePixels - dpi_.scale(SidePaddingDips), bounds.bottom
     };
     paint_name(dc, content.take_top(name_line_height_), row);
 

@@ -31,7 +31,7 @@ struct SettingsJson {
 template<>
 struct glz::meta<westie::core::SettingsJson> {
     using T = westie::core::SettingsJson;
-    static constexpr auto value = glz::object("version", &T::version, "libraryPath", &T::library_path, "autoUpdateTools", &T::auto_update_tools);
+    constexpr static auto value = glz::object("version", &T::version, "libraryPath", &T::library_path, "autoUpdateTools", &T::auto_update_tools);
 };
 
 namespace westie::core {

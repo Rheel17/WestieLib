@@ -65,10 +65,8 @@ ProcessResult Win32ProcessRunner::run(const std::filesystem::path& program, std:
     std::wstring line = command_line(program, arguments);
     std::wstring environment = environment_block_with(ChildEnvironment);
     PROCESS_INFORMATION started{};
-    check(
-            CreateProcessW(program.c_str(), line.data(), nullptr, nullptr, TRUE, CreationFlags, environment.data(), nullptr, &startup.StartupInfo, &started),
-            "CreateProcessW"
-    );
+    check(CreateProcessW(program.c_str(), line.data(), nullptr, nullptr, TRUE, CreationFlags, environment.data(), nullptr, &startup.StartupInfo, &started),
+          "CreateProcessW");
     UniqueKernelObject process(started.hProcess);
     UniqueKernelObject thread(started.hThread);
 

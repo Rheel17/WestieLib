@@ -89,16 +89,12 @@ std::optional<int> ListView::column_index(int subitem) const {
 
 std::vector<int> ListView::column_order() const {
     std::vector<int> order(column_count());
-    platform::win32::check(
-            SendMessageW(hwnd(), LVM_GETCOLUMNORDERARRAY, order.size(), reinterpret_cast<LPARAM>(order.data())), "LVM_GETCOLUMNORDERARRAY"
-    );
+    platform::win32::check(SendMessageW(hwnd(), LVM_GETCOLUMNORDERARRAY, order.size(), reinterpret_cast<LPARAM>(order.data())), "LVM_GETCOLUMNORDERARRAY");
     return order;
 }
 
 void ListView::set_column_order(std::span<const int> order) {
-    platform::win32::check(
-            SendMessageW(hwnd(), LVM_SETCOLUMNORDERARRAY, order.size(), reinterpret_cast<LPARAM>(order.data())), "LVM_SETCOLUMNORDERARRAY"
-    );
+    platform::win32::check(SendMessageW(hwnd(), LVM_SETCOLUMNORDERARRAY, order.size(), reinterpret_cast<LPARAM>(order.data())), "LVM_SETCOLUMNORDERARRAY");
 }
 
 void ListView::set_sort_arrow(std::optional<ListSortArrow> arrow) {

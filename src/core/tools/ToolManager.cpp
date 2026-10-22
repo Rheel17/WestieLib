@@ -110,8 +110,8 @@ void ToolManager::report_failure(const char* error) {
 
 ToolStatus ToolManager::installed_status(ToolPackage package, const InstalledTools& installed) const {
     auto tool = installed.tools.find(package);
-    bool present = tool != installed.tools.end()
-                   && std::ranges::all_of(tool_package_files(package), [this](std::wstring_view file) { return files_.is_file(folder_.path() / file); });
+    bool present = tool != installed.tools.end() &&
+                   std::ranges::all_of(tool_package_files(package), [this](std::wstring_view file) { return files_.is_file(folder_.path() / file); });
     if (!present) {
         return {.package = package, .state = ToolState::Missing};
     }

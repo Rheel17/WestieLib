@@ -15,8 +15,7 @@ constexpr std::string_view IgnoreConfig = "--ignore-config";
 
 }
 
-YtDlp::YtDlp(ToolFolder& folder, const platform::FileOps& files, const platform::ProcessRunner& runner) :
-        folder_(folder), files_(files), runner_(runner) {}
+YtDlp::YtDlp(ToolFolder& folder, const platform::FileOps& files, const platform::ProcessRunner& runner) : folder_(folder), files_(files), runner_(runner) {}
 
 platform::ProcessResult YtDlp::run(std::vector<std::string> arguments, const std::stop_token& stop) const {
     // Held while it runs, so an update waits to replace it

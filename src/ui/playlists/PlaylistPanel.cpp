@@ -47,7 +47,7 @@ void PlaylistPanel::show_selection(const std::optional<std::string>& key) {
 
 LRESULT PlaylistPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE:       layout(); return 0;
+    case WM_SIZE: layout(); return 0;
     // The paint fills the background, so the rule isn't erased first and doesn't blink
     case WM_ERASEBKGND: return TRUE;
     case WM_PAINT:      paint(); return 0;

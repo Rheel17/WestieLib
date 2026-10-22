@@ -46,8 +46,7 @@ std::string zip_error(mz_zip_archive& zip) {
 }
 
 void MinizArchiveExtractor::extract(
-        const std::filesystem::path& archive, std::span<const std::wstring_view> file_names, const std::filesystem::path& folder,
-        const std::stop_token& stop
+        const std::filesystem::path& archive, std::span<const std::wstring_view> file_names, const std::filesystem::path& folder, const std::stop_token& stop
 ) const {
     std::string archive_name = to_utf8(archive.filename().wstring());
     // miniz opens files by narrow name, which can't hold every path, so it gets a FILE opened by the wide one
@@ -67,8 +66,9 @@ void MinizArchiveExtractor::extract(
         mz_uint count = mz_zip_reader_get_num_files(&zip);
         mz_zip_archive_file_stat entry{};
         for (; index < count; ++index) {
-            if (mz_zip_reader_file_stat(&zip, index, &entry) && !mz_zip_reader_is_file_a_directory(&zip, index)
-                && entry_file_name(entry.m_filename) == wanted) {
+            if (mz_zip_reader_file_stat(&zip, index, &entry) &&
+                !mz_zip_reader_is_file_a_directory(&zip, index) &&
+                entry_file_name(entry.m_filename) == wanted) {
                 break;
             }
         }

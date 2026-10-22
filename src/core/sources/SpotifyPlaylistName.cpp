@@ -38,7 +38,7 @@ struct PropsJson {
 
     // glaze looks for a member of this name
     struct glaze {
-        static constexpr auto value = glz::object("pageProps", &PropsJson::page_props);
+        constexpr static auto value = glz::object("pageProps", &PropsJson::page_props);
     };
 };
 

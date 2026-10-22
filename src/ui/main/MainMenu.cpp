@@ -69,12 +69,8 @@ constexpr std::array HelpItems = {
 };
 
 constexpr std::array Popups = {
-    Popup{L"&File", FileItems},
-    Popup{L"&Sync", SyncItems},
-    Popup{L"&Track", TrackItems},
-    Popup{L"&View", ViewItems},
-    Popup{L"T&ools", ToolsItems},
-    Popup{L"&Help", HelpItems},
+    Popup{L"&File", FileItems}, Popup{L"&Sync", SyncItems},   Popup{L"&Track", TrackItems},
+    Popup{L"&View", ViewItems}, Popup{L"T&ools", ToolsItems}, Popup{L"&Help", HelpItems},
 };
 
 }

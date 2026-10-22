@@ -39,7 +39,11 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 }
 
 MainWindow::MainWindow(
-        core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools,
+        core::SettingsStore& settings_store,
+        core::Settings settings,
+        core::StateStore& state,
+        CoreEventQueue& events,
+        core::ToolManager& tools,
         core::PlaylistLookup& lookup
 ) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
@@ -65,7 +69,9 @@ MainWindow::MainWindow(
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
         welcome_(
-                hwnd(), settings_store.defaults().library_path, [this](CommandId command) { run_command(command); },
+                hwnd(),
+                settings_store.defaults().library_path,
+                [this](CommandId command) { run_command(command); },
                 [this](const std::filesystem::path& folder) { change_library_folder(folder); }
         ),
         inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),

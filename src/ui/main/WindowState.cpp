@@ -45,10 +45,11 @@ std::optional<WindowState> load_window_state() {
 
     PanelState defaults;
     return WindowState{
-        .placement = {
-            .normal_bounds = {*left, *top, *right, *bottom},
-            .maximized = read_int(*key, MaximizedValue).value_or(0) != 0,
-        },
+        .placement =
+                {
+                    .normal_bounds = {*left, *top, *right, *bottom},
+                    .maximized = read_int(*key, MaximizedValue).value_or(0) != 0,
+                },
         .panels = {
             .playlists_dips = read_int(*key, PlaylistsWidthValue).value_or(defaults.playlists_dips),
             .inspector_dips = read_int(*key, InspectorWidthValue).value_or(defaults.inspector_dips),

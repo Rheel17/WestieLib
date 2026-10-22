@@ -11,10 +11,8 @@ namespace westie::ui {
 namespace {
 
 constexpr std::array PlaylistItems{
-    command_item(CommandId::SyncSelectedPlaylist, L"&Sync"),
-    command_item(CommandId::OpenPlaylistPage, L"&Open in browser"),
-    command_item(CommandId::CopyPlaylistLink, L"&Copy URL"),
-    framework::MenuSeparator,
+    command_item(CommandId::SyncSelectedPlaylist, L"&Sync"),         command_item(CommandId::OpenPlaylistPage, L"&Open in browser"),
+    command_item(CommandId::CopyPlaylistLink, L"&Copy URL"),         framework::MenuSeparator,
     command_item(CommandId::RemovePlaylist, L"&Remove playlist..."),
 };
 

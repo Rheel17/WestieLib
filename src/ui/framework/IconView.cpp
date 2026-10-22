@@ -23,7 +23,7 @@ void IconView::apply_dpi(Dpi dpi) {
 
 LRESULT IconView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_PAINT:     paint(); return 0;
+    case WM_PAINT: paint(); return 0;
     // A click goes to the window the icon sits in, as if the icon were painted there
     case WM_NCHITTEST: return HTTRANSPARENT;
     default:           return Window::handle_message(message, wparam, lparam);

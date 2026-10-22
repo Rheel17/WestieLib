@@ -4,8 +4,8 @@
 #include <utility>
 
 #include <windows.h>
-#include <windowsx.h>
 #include <commctrl.h>
+#include <windowsx.h>
 
 #include "platform/win32/Win32Error.h"
 #include "ui/framework/BufferedPaint.h"

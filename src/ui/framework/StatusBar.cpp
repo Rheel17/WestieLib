@@ -191,7 +191,9 @@ void StatusBar::place_embedded() const {
     for (const auto& [part, embedded] : embedded_) {
         Rect bounds = padded_rect(part);
         if (!embedded.size || bounds.width() < embedded.size->width) {
-            platform::win32::check(SetWindowPos(embedded.window, nullptr, 0, 0, 0, 0, SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE), "SetWindowPos");
+            platform::win32::check(
+                    SetWindowPos(embedded.window, nullptr, 0, 0, 0, 0, SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE), "SetWindowPos"
+            );
             continue;
         }
         Size size = *embedded.size;

@@ -18,9 +18,7 @@ constexpr int BottomPaddingDips = 10;
 }
 
 InspectorPanel::InspectorPanel(HWND parent, const std::function<void(CommandId)>& on_command) :
-        Panel(parent, L"Inspector", WS_VSCROLL),
-        library_(hwnd(), on_command),
-        playlist_(hwnd(), on_command) {}
+        Panel(parent, L"Inspector", WS_VSCROLL), library_(hwnd(), on_command), playlist_(hwnd(), on_command) {}
 
 void InspectorPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
     library_.apply_dpi(dpi, fonts);

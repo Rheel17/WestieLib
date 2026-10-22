@@ -60,7 +60,7 @@ void PlaylistList::set_selection(const std::optional<std::string>& key) {
 
 LRESULT PlaylistList::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE:           layout(); return 0;
+    case WM_SIZE: layout(); return 0;
     // The paint fills the background, so the rows aren't erased first and don't blink
     case WM_ERASEBKGND:     return TRUE;
     case WM_PAINT:          paint(); return 0;

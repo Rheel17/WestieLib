@@ -30,7 +30,10 @@ Button::Button(HWND parent, const Options& options) :
         Control({
             .class_name = WC_BUTTONW,
             .text = options.text,
-            .style = WS_CHILD | WS_VISIBLE | WS_TABSTOP | static_cast<DWORD>(options.default_button ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON) |
+            .style = WS_CHILD |
+                     WS_VISIBLE |
+                     WS_TABSTOP |
+                     static_cast<DWORD>(options.default_button ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON) |
                      static_cast<DWORD>(options.icon != 0 ? BS_LEFT : 0),
             .parent = parent,
             .id = options.command,

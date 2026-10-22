@@ -67,6 +67,15 @@ EmptyLineBeforeAccessModifier: LogicalBlock
 ExperimentalAutoDetectBinPacking: true
 FixNamespaceComments: false
 IncludeBlocks: Preserve
+IncludeCategories:
+  - Regex: '^<windows\.h>'
+    Priority: 10
+  - Regex: '^<objidl\.h>'
+    Priority: 20
+  - Regex: '^<gdiplus\.h>'
+    Priority: 30
+  - Regex: '<[[:alnum:]_]+\.h>'
+    Priority: 100
 IndentAccessModifiers: false
 IndentCaseBlocks: true
 IndentCaseLabels: false

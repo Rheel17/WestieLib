@@ -44,13 +44,13 @@ std::filesystem::path backup_for(const std::filesystem::path& file) {
 template<>
 struct glz::meta<westie::core::PlaylistJson> {
     using T = westie::core::PlaylistJson;
-    static constexpr auto value = glz::object("url", &T::url, "name", &T::name, "addedAt", &T::added_at);
+    constexpr static auto value = glz::object("url", &T::url, "name", &T::name, "addedAt", &T::added_at);
 };
 
 template<>
 struct glz::meta<westie::core::StateJson> {
     using T = westie::core::StateJson;
-    static constexpr auto value = glz::object("version", &T::version, "playlists", &T::playlists);
+    constexpr static auto value = glz::object("version", &T::version, "playlists", &T::playlists);
 };
 
 namespace westie::core {
