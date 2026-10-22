@@ -887,18 +887,26 @@ function Check-Scaled($hwnd) {
 $ToolsPart = 5
 $VersionPart = 6
 
-# Run, Tracks and Library from the left, then the empty Progress, Tools, and Version running to the right edge.
-# Version's rect stops where the size grip starts, or at the edge when the window is maximized and shows no grip.
-# Separators follow every part but Version, the empty part's on top of the slack's.
+# A part's share of the bar's width, or its minimum in DIPs
+function Get-PartWidth([int]$barWidth, [int]$minimum, [int]$percent) { [math]::Max((S $minimum), [math]::Floor($barWidth * $percent / 100)) }
+
+# Run, Tracks and Library from the left, then the empty Progress, Tools, and Version running to the right edge, each at
+# its share of the bar or its minimum; Library gives way when they don't fit. Version's rect stops where the size grip
+# starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but Version, the
+# empty part's on top of the slack's.
 function Check-StatusParts([string]$what, $hwnd) {
 	$status = Get-StatusBar $hwnd
 	$cw = Get-ClientWidth $hwnd
+	$left = @((Get-PartWidth $cw 250 22), (Get-PartWidth $cw 100 10), (Get-PartWidth $cw 150 36))
+	$tools = Get-PartWidth $cw 100 8
+	$missing = ($left | Measure-Object -Sum).Sum - ($cw - $tools - (S 80))
+	if ($missing -gt 0) { $left[2] = [math]::Max(0, $left[2] - $missing) }
 	$edges = @()
 	$right = 0
-	foreach ($width in 270, 150, 450) { $right += S $width; $edges += $right }
-	$edges += $cw - (S 120) - (S 80)
-	$parts = $edges + @($edges[-1], ($cw - (S 80)))
-	$edges += $cw - (S 80)
+	foreach ($width in $left) { $right += $width; $edges += $right }
+	$edges += [math]::Max($right, $cw - $tools - (S 80))
+	$parts = $edges + @($edges[-1], ($edges[-1] + $tools))
+	$edges += $edges[-1] + $tools
 	$grip = $cw - [W]::StatusPartRect($status, $VersionPart).Right
 	$fits = if ([W]::IsZoomed($hwnd)) { $grip -eq 0 } else { $grip -gt 0 -and $grip -le (S 20) }
 	Check $what "$([W]::StatusParts($status)) | stops at grip: $fits" "$($parts -join ' ') -1 | stops at grip: True"

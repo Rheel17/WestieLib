@@ -864,11 +864,12 @@ function statusBar(s, cfg) {
 	const progress = cfg.firstRun
 		? `<div class="p" style="border-left:1px solid #cfcfcf">Installing tools… ffmpeg 45%<span class="pbar ctl" style="width:60px"><i style="width:45%"></i></span></div>`
 		: '';
-	return `<div class="statusbar"><div class="p" style="width:270px">${run}</div>
-		<div class="p" style="width:150px">${s.tracks.size} tracks</div>
-		<div class="p" style="width:450px">${LIBRARY}</div>
+	// The parts' shares of a 1280 px window (see ui.md, Status bar)
+	return `<div class="statusbar"><div class="p" style="width:278px">${run}</div>
+		<div class="p" style="width:126px">${s.tracks.size} tracks</div>
+		<div class="p" style="width:455px">${LIBRARY}</div>
 		<div style="margin-left:auto"></div>${progress}
-		<div class="p" style="width:120px;${progress ? '' : 'border-left:1px solid #cfcfcf'}">${tools}</div>
+		<div class="p" style="width:101px;${progress ? '' : 'border-left:1px solid #cfcfcf'}">${tools}</div>
 		<div class="p" style="width:80px;justify-content:center;border-right:0">v1.2.0</div><div class="grip" style="margin-left:0">${ic('grip')}</div></div>`;
 }
 

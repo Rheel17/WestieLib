@@ -343,12 +343,26 @@ The inspector scrolls vertically when its content is taller than the panel.
 ```
 
 - The status bar is the native one, 23 px tall, or taller when the system font needs it. It ends in a size grip.
-- Run, Tracks and Library are 270, 150 and 450 px wide, from the left. Tools (120 px) and Version (80 px) sit against
-  the right edge, Version last, with its text centered between its separator and the grip, or the window edge when
-  maximized. No separator follows it. The space between Library and the right-hand parts stays empty.
+- The parts follow the window's width. Each takes a share of the status bar's width, but never less than its minimum:
+
+  | Part     | Share   | Minimum | Why the minimum                                              |
+  |----------|---------|---------|--------------------------------------------------------------|
+  | Run      | 22%     | 250 px  | `Syncing 12 of 400` and its 120 px bar                       |
+  | Tracks   | 10%     | 100 px  | `12,345 tracks`                                              |
+  | Library  | 36%     | 150 px  | a drive and a folder or two; the middle of a path gives way  |
+  | (gap)    | the rest | 0      |                                                              |
+  | Progress | its content | its content | see below                                      |
+  | Tools    | 8%      | 100 px  | `Tools ⚠`                                                    |
+  | Version  | –       | 80 px   | `v1.2.0`                                                     |
+
+  So at 1280 px (the mockup) Run, Tracks, Library and Tools are 278, 126, 455 and 101 px, with a 224 px gap; at the
+  1100 px minimum they're 250, 108, 390 and 100 px; maximized on a 1920 px screen, 418, 190, 685 and 152 px.
+- Run, Tracks and Library sit on the left. Tools and Version sit against the right edge, Version last, with its text
+  centered between its separator and the grip, or the window edge when maximized. No separator follows it. The gap
+  between Library and the right-hand parts stays empty.
 - Progress sits right before Tools and is only there while tools are at work. It is as wide as its content: the
-  text, 7 px, and a 60 × 16 px progress bar. It takes its width from the empty space first, and from the Library part when
-  the window is too narrow for that.
+  text, 7 px, and a 60 × 16 px progress bar. It takes its width from the gap first, and from the Library part when
+  the gap is too small.
 
 **Tools.** The part shows the first that applies:
 

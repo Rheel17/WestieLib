@@ -53,7 +53,8 @@ saved `Placement` and asks it for the current one.
 - `MainToolbar` (`src/ui/toolbar/`) is a strip window. It paints the white background and the bottom rule, and hosts
   a `Toolbar` control. A button click, or a choice from the Sync all dropdown, goes to the callback `MainWindow`
   gives it, which is `run_command`. `update(CommandState)` enables the buttons and keeps the state for the dropdown.
-- `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths, its spacing, and the part texts:
+- `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths (the `*WidthDips` shares and minimums,
+  from `plan/ui.md`), its spacing, and the part texts:
   Run, Tracks and Library from the left, an empty part, then Progress, Tools and Version against the right edge, with
   Version's text centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows
   the folder in effect, with a path ellipsis, and is the part that gives way when Progress needs the room. The texts

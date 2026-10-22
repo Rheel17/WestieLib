@@ -1,8 +1,6 @@
 #include "ui/statusbar/MainStatusBar.h"
 
 #include <algorithm>
-#include <array>
-#include <iterator>
 #include <utility>
 
 #include "ResourceIds.h"
@@ -19,8 +17,11 @@ constexpr int TextSidePaddingDips = 8;
 constexpr int GapDips = 7;
 constexpr int IconDips = 12;
 constexpr framework::Size ProgressBarDips{60, 16};
-constexpr std::array LeftPartWidthsDips = {270, 150, 450};
-constexpr int ToolsWidthDips = 120;
+// Shares of the bar's width, with their minimums in DIPs; plan/ui.md gives the reasons for each
+constexpr framework::PartWidth RunWidthDips{.minimum = 250, .percent = 22};
+constexpr framework::PartWidth TracksWidthDips{.minimum = 100, .percent = 10};
+constexpr framework::PartWidth LibraryWidthDips{.minimum = 150, .percent = 36};
+constexpr framework::PartWidth ToolsWidthDips{.minimum = 100, .percent = 8};
 constexpr int VersionWidthDips = 80;
 
 enum class Part { Run, Tracks, Library, Slack, Progress, Tools, Version };
@@ -103,11 +104,12 @@ void MainStatusBar::show_tools() {
 }
 
 void MainStatusBar::set_parts() {
-    framework::StatusParts parts{
-            .right_widths = {progress_width(), dpi_.scale(ToolsWidthDips), dpi_.scale(VersionWidthDips)}, .yielding = std::to_underlying(Part::Library)
-    };
-    std::ranges::transform(LeftPartWidthsDips, std::back_inserter(parts.left_widths), [this](int dips) { return dpi_.scale(dips); });
-    status_bar_.set_parts(std::move(parts));
+    auto scaled = [this](framework::PartWidth dips) { return framework::PartWidth{.minimum = dpi_.scale(dips.minimum), .percent = dips.percent}; };
+    status_bar_.set_parts({
+        .left = {scaled(RunWidthDips), scaled(TracksWidthDips), scaled(LibraryWidthDips)},
+        .right = {{.minimum = progress_width()}, scaled(ToolsWidthDips), {.minimum = dpi_.scale(VersionWidthDips)}},
+        .yielding = std::to_underlying(Part::Library),
+    });
 }
 
 int MainStatusBar::progress_width() const {

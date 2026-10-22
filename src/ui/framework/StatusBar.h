@@ -28,9 +28,14 @@ struct PartFormat {
     const IconResource* icon = nullptr;
 };
 
+struct PartWidth {
+    int minimum = 0;
+    int percent = 0;
+};
+
 struct StatusParts {
-    std::vector<int> left_widths{};
-    std::vector<int> right_widths{};
+    std::vector<PartWidth> left{};
+    std::vector<PartWidth> right{};
     // The left part that narrows when the window is too narrow for all of them
     int yielding = 0;
 };

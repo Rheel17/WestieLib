@@ -16,10 +16,20 @@ namespace westie::ui::framework {
 
 namespace {
 
+constexpr int WholePercent = 100;
+
 int measure(HDC dc, std::wstring_view text) {
     SIZE size{};
     platform::win32::check(GetTextExtentPoint32W(dc, text.data(), static_cast<int>(text.size()), &size), "GetTextExtentPoint32W");
     return size.cx;
+}
+
+std::vector<int> widths_in(std::span<const PartWidth> parts, int bar_width) {
+    std::vector<int> widths;
+    for (const PartWidth& part : parts) {
+        widths.push_back(std::max(part.minimum, bar_width * part.percent / WholePercent));
+    }
+    return widths;
 }
 
 }
@@ -124,10 +134,13 @@ void StatusBar::apply_parts() {
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
 
-    // When the window is too narrow, the yielding part gives up what's missing
-    std::vector<int> left_widths = parts_.left_widths;
-    int right_total = std::reduce(parts_.right_widths.begin(), parts_.right_widths.end());
-    int room = std::max(0, static_cast<int>(client.right) - right_total);
+    // Each part takes its share of the bar, or its minimum. When the window is too narrow for that, the yielding part
+    // gives up what's missing.
+    int bar_width = client.right;
+    std::vector<int> left_widths = widths_in(parts_.left, bar_width);
+    std::vector<int> right_widths = widths_in(parts_.right, bar_width);
+    int right_total = std::reduce(right_widths.begin(), right_widths.end());
+    int room = std::max(0, bar_width - right_total);
     int missing = std::reduce(left_widths.begin(), left_widths.end()) - room;
     if (missing > 0 && std::cmp_less(parts_.yielding, left_widths.size())) {
         left_widths[parts_.yielding] = std::max(0, left_widths[parts_.yielding] - missing);
@@ -141,10 +154,10 @@ void StatusBar::apply_parts() {
         right += width;
         right_edges.push_back(right);
     }
-    right = std::max(right, static_cast<int>(client.right) - right_total);
+    right = std::max(right, bar_width - right_total);
     right_edges.push_back(right);
-    for (std::size_t index = 0; index + 1 < parts_.right_widths.size(); ++index) {
-        right += parts_.right_widths[index];
+    for (std::size_t index = 0; index + 1 < right_widths.size(); ++index) {
+        right += right_widths[index];
         right_edges.push_back(right);
     }
     right_edges.push_back(-1);
@@ -177,7 +190,7 @@ void StatusBar::place_tips() {
 }
 
 bool StatusBar::is_last_part(int part) const noexcept {
-    return std::cmp_equal(part, parts_.left_widths.size() + parts_.right_widths.size());
+    return std::cmp_equal(part, parts_.left.size() + parts_.right.size());
 }
 
 Rect StatusBar::part_rect(int part) const {
