@@ -57,7 +57,7 @@ void PlaylistCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts
 void PlaylistCard::set_contents(const PlaylistRow& playlist) {
     title_.set(source_logo_icon(playlist.type), playlist.name);
     subtitle_.set_text(playlist_type_text(playlist.type));
-    link_.set_text(playlist.url);
+    link_.set_text(playlist.id);
     tracks_.set_text(std::format(L"{}", playlist.counts.total));
     synced_.set_counts(playlist.counts);
 }

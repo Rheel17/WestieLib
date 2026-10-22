@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 
@@ -21,7 +22,9 @@ std::optional<PlaylistRow> row_of(const std::string& key, const core::Playlist& 
     }
     // Until its first fetch a playlist has no name
     std::wstring name = playlist.name.empty() ? playlist_type_text(*type) : platform::win32::to_utf16(playlist.name);
-    return PlaylistRow{.key = key, .type = *type, .name = std::move(name), .url = platform::win32::to_utf16(playlist.url)};
+    // The key is the source's prefix, a colon and the playlist's ID
+    std::wstring id = platform::win32::to_utf16(std::string_view(key).substr(core::source_prefix(*type).size() + 1));
+    return PlaylistRow{.key = key, .type = *type, .name = std::move(name), .id = std::move(id), .url = platform::win32::to_utf16(playlist.url)};
 }
 
 }

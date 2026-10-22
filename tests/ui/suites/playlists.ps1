@@ -274,7 +274,7 @@ function Check-Cards($hwnd) {
 	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 82) | buttons "
 	if ($Screenshot) { Save-Screenshot $hwnd ("$($Screenshot -replace '\.png$', '')-library.png") }
 	Click-PlaylistRow $hwnd 1
-	Check 'Row 1: inspector' (Get-CardTexts $hwnd) ("Playlist card: $SpotifyName / Spotify playlist / Playlist / Link / $SpotifyLink / Tracks / 0 / " +
+	Check 'Row 1: inspector' (Get-CardTexts $hwnd) ("Playlist card: $SpotifyName / Spotify playlist / Playlist / Link / $SpotifyId / Tracks / 0 / " +
 		"Synced / 0/0 / Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
 	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 23),$(S 82) | buttons 0,$(S 6)"
 	# The synced value spans the value column, and its bar runs up to 6 before the counts
@@ -287,7 +287,7 @@ function Check-Cards($hwnd) {
 	$buttons = @([W]::Children((Get-InspectorCard $hwnd), 'Button') | ForEach-Object { [W]::IsWindowEnabled($_) })
 	Check '  buttons enabled' ($buttons -join ' ') 'True True'
 	Press-ListKey $hwnd 0x28
-	Check 'Down: row 2' (Get-CardTexts $hwnd) ("Playlist card: $YouTubeName / YouTube Music playlist / Playlist / Link / $YouTubeLink / Tracks / 0 / " +
+	Check 'Down: row 2' (Get-CardTexts $hwnd) ("Playlist card: $YouTubeName / YouTube Music playlist / Playlist / Link / PLx9k2_-Ab / Tracks / 0 / " +
 		"Synced / 0/0 / Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
 	Press-ListKey $hwnd 0x24
 	Check 'Home: All tracks' ([W]::TextOf((Get-InspectorCard $hwnd))) 'Library card'

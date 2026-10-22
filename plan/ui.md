@@ -385,7 +385,7 @@ them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 │                                 │   │   YouTube Music playlist        │
 │ Library ─────────────────────── │   │                                 │
 │ Folder    C:\Users\…\WestieLib  │   │ Playlist ────────────────────── │
-│ Tracks    0 tracks · 0 synced   │   │ Link      https://music.youtu…  │
+│ Tracks    0 tracks · 0 synced   │   │ Link      PLGXm7qiSwxfBEFj0x0K… │
 │                                 │   │ Tracks    0                     │
 │ [Open library folder]           │   │ Synced    ░░░░░░░░░░░░░░░░░ 0/0 │
 │                                 │   │ Last sync Never                 │
@@ -405,7 +405,7 @@ The cards, from the top, in DIPs:
 - **Rows**: a gray key in a 74 px column, 8 px, then the value; rows are 16 px lines, 4 px apart. Values end in an
   ellipsis, except the folder, which loses its middle (`C:\Users\...\WestieLib`).
   - Library: `Folder` is the library folder in effect, `Tracks` reads like the All tracks row (`0 tracks · 0 synced`).
-  - Playlist: `Link` is the playlist's URL as a link (`#0066CC`, underlined while the mouse is over it, the hand
+  - Playlist: `Link` is the playlist's ID (the source shows in the title and subtitle above) as a link to its URL (`#0066CC`, underlined while the mouse is over it, the hand
     cursor over its text); a click opens it in the browser. `Tracks` is the count, `Synced` a bar like the row's
     that fills the value's width, 6 px, then `synced/total`. `Last sync` reads `Never` until syncing exists. The `Waiting`, `Failed`,
     `To review` (non-zero only) and `Shared` rows come with tracks.

@@ -820,7 +820,8 @@ function playlistCard(s, p) {
 	const others = new Set(PL_ORDER.filter(id => id !== p.id && s.pl[id]).flatMap(id => s.pl[id].keys));
 	const shared = p.keys.filter(k => others.has(k)).length;
 	const rows = [
-		['Link', `<span class="link">${esc(p.url)}</span>`],
+		// The ID only: the title and subtitle already name the source, and the link opens the full URL
+		['Link', `<span class="link">${esc(p.url.split(/[/=]/).pop())}</span>`],
 		['Tracks', c.all],
 		['Synced', `<span class="pbar"><i style="width:${c.synced / c.all * 100}%"></i></span>${c.synced}/${c.all}`, 'bar'],
 	];
