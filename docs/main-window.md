@@ -144,7 +144,30 @@ saved `Placement` and asks it for the current one.
   - The panel is `WS_VSCROLL` with a `framework::VerticalScroll`. Its content is the card's height plus the padding;
     scrolling moves the card window, not its children. A new card, or new contents, starts at the top.
   - The cards' buttons and the link send `CommandId`s (the link `OpenPlaylistPage`, which isn't in the menu bar) to
-    `run_command`. Until their features exist they do nothing.
+    `run_command`, like the menus. `Sync playlist` does nothing until syncing exists.
+
+## Playlist actions
+
+- **Context menu.** `PlaylistList` handles `WM_CONTEXTMENU`. A right-click hit-tests the rows, selects the one it hit
+  (`on_select`) and takes the focus; the keyboard's (-1, -1) uses the selected row's bottom-left corner, and does
+  nothing for All tracks. Then `PlaylistEvents::on_context_menu` hands the screen point to
+  `MainWindow::show_playlist_menu`, which shows `choose_playlist_command` (`PlaylistMenu.cpp`): a popup built from a
+  `command_item` table, its states set by `update_menu_items` from `command_state()`, tracked with `TPM_RETURNCMD`
+  (and `TPM_NONOTIFY`, since it sets the states itself). The chosen command goes to `run_command`. `CopyPlaylistLink`
+  and `OpenPlaylistPage` aren't in the menu bar; like the others that need a playlist, `playlist_selected` enables
+  them.
+- **The commands** act on the selected playlist (`selected_row`, which is `playlist_row` for the selection):
+  - `RemovePlaylist` asks `confirm_remove_playlist` (`RemovePlaylistDialog.cpp`, a TaskDialog with `Remove` as `IDOK`
+    and Cancel the default), then `core::remove_playlist` (`src/core/playlists/RemovePlaylist.cpp`) erases it through
+    `StateStore::update`, the selection goes back to All tracks and `show_playlists` brings the window up to date,
+    welcome screen and all after the last one.
+  - `OpenPlaylistPage` and `OpenLibraryFolder` go through `platform::win32::open_with_shell` (`ShellExecuteExW`,
+    `open`). Without `SEE_MASK_FLAG_NO_UI` the shell reports its own failures, so the result only says whether it
+    worked. The library folder may not exist before the first sync, so `platform::nearest_existing_folder` (which
+    the folder picker shares) gives the folder or the nearest one above it.
+  - `CopyPlaylistLink` calls `platform::win32::set_clipboard_text` (`ClipboardScope` opens and closes the clipboard,
+    `UniqueGlobal` holds the memory until `SetClipboardData` takes it). Another program may hold the clipboard, so a
+    failure beeps instead of ending the app.
 - `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
   the constructor shows zeros.
 

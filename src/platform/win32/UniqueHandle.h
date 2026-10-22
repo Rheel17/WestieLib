@@ -55,6 +55,7 @@ using UniqueCFile = UniqueHandle<std::FILE*, close_c_file>;
 using UniqueInternet = UniqueHandle<HINTERNET, WinHttpCloseHandle>;
 using UniqueAlgorithmProvider = UniqueHandle<BCRYPT_ALG_HANDLE, close_algorithm_provider>;
 using UniqueHash = UniqueHandle<BCRYPT_HASH_HANDLE, BCryptDestroyHash>;
+using UniqueGlobal = UniqueHandle<HGLOBAL, GlobalFree>;
 
 // CreateFileW fails with INVALID_HANDLE_VALUE, not null
 inline UniqueFile adopt_file(HANDLE file) noexcept {

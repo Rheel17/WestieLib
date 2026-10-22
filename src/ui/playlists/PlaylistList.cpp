@@ -69,7 +69,8 @@ LRESULT PlaylistList::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
     case WM_LBUTTONDOWN:    on_left_button_down(point_of(lparam)); return 0;
     case WM_LBUTTONUP:      on_left_button_up(point_of(lparam)); return 0;
     case WM_CAPTURECHANGED: repaint_if(mouse_.cancel()); return 0;
-    case WM_KEYDOWN:        on_key_down(wparam); return 0;
+    case WM_KEYDOWN:        return on_key_down(wparam) ? 0 : Window::handle_message(message, wparam, lparam);
+    case WM_CONTEXTMENU:    on_context_menu(point_of(lparam)); return 0;
     case WM_VSCROLL:        scrolled(scroll_.on_scroll(hwnd(), LOWORD(wparam))); return 0;
     case WM_MOUSEWHEEL:     scrolled(scroll_.on_wheel(hwnd(), GET_WHEEL_DELTA_WPARAM(wparam))); return 0;
     case WM_COMMAND:        on_command(wparam); return 0;
@@ -220,7 +221,7 @@ void PlaylistList::on_left_button_up(POINT point) {
     }
 }
 
-void PlaylistList::on_key_down(WPARAM key) {
+bool PlaylistList::on_key_down(WPARAM key) {
     // All tracks comes before the first playlist
     int last = static_cast<int>(rows_.size());
     std::optional<std::size_t> selected = selected_index();
@@ -235,12 +236,39 @@ void PlaylistList::on_key_down(WPARAM key) {
     case VK_NEXT:  target = current + page; break;
     case VK_HOME:  target = 0; break;
     case VK_END:   target = last; break;
-    default:       return;
+    default:       return false;
     }
     target = std::clamp(target, 0, last);
     if (target != current) {
         events_.on_select(target == 0 ? std::nullopt : std::optional(rows_[static_cast<std::size_t>(target - 1)].key));
     }
+    return true;
+}
+
+void PlaylistList::on_context_menu(POINT screen) {
+    // From the keyboard the point is (-1, -1), and the menu goes to the selected row
+    if (screen.x == -1 && screen.y == -1) {
+        std::optional<std::size_t> index = selected_index();
+        if (!index) {
+            return;
+        }
+        reveal_selection();
+        framework::Rect bounds = row_bounds(*index);
+        POINT corner{bounds.left, bounds.bottom};
+        platform::win32::check(ClientToScreen(hwnd(), &corner), "ClientToScreen");
+        events_.on_context_menu(corner);
+        return;
+    }
+
+    POINT point = screen;
+    platform::win32::check(ScreenToClient(hwnd(), &point), "ScreenToClient");
+    std::optional<std::size_t> index = row_at(point);
+    if (!index) {
+        return;
+    }
+    SetFocus(hwnd());
+    events_.on_select(rows_[*index].key);
+    events_.on_context_menu(screen);
 }
 
 void PlaylistList::on_command(WPARAM wparam) const {

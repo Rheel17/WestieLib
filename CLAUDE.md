@@ -23,11 +23,12 @@ $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
 $cmake = "C:\Users\Levi van Rheenen\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe"
 & $cmake -S "D:\C++\WestieLib" -B $build -G Ninja "-DCMAKE_MAKE_PROGRAM=C:\Users\Levi van Rheenen\AppData\Local\Programs\CLion\bin\ninja\win\x64\ninja.exe"
 & $cmake --build $build
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe $build\WestieLib.exe -Screenshot <png>
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe $build\WestieLib.exe -Suite <names> -Screenshot <png>
 ```
 
-Use the session scratchpad as `$build`; `cmake-build-debug/` belongs to CLion. The build must have zero warnings, and
-`ui-checks.ps1` must report 0 failures.
+Use the session scratchpad as `$build`; `cmake-build-debug/` belongs to CLion. The build must have zero warnings.
+While working, run the check suites the change touches (`docs/testing.md` maps source folders to suites); at the end
+of a phase, run all of them (no `-Suite`). Either must report 0 failures.
 
 ## Workflow
 

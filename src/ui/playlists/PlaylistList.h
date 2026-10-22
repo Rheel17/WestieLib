@@ -50,7 +50,8 @@ private:
     void paint() const;
     void on_left_button_down(POINT point);
     void on_left_button_up(POINT point);
-    void on_key_down(WPARAM key);
+    bool on_key_down(WPARAM key);
+    void on_context_menu(POINT screen);
     void on_command(WPARAM wparam) const;
 
     PlaylistEvents events_;

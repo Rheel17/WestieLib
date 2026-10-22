@@ -225,7 +225,25 @@ navigation pane:
 - Adding a playlist selects it. When the selected playlist goes away, All tracks is selected.
 - Every start begins on All tracks; the selection isn't saved.
 
-The context menu offers Sync, Open in browser, Copy URL and Remove playlist….
+**Context menu.** A playlist row's context menu has **S**ync, **O**pen in browser, **C**opy URL, ─, **R**emove
+playlist….
+
+- A right-click selects the row under the mouse first, and gives the list the focus. A right-click between or below
+  the rows, or on All tracks, shows no menu.
+- Shift+F10 and the menu key open it for the selected playlist, at the row's bottom-left corner, while the list has
+  the focus. With All tracks selected they show nothing.
+- Its items follow the command rules: they need a selected playlist, and Sync also needs no sync running. Sync does
+  what `Sync selected playlist` does.
+- **Open in browser** opens the playlist's URL in the default browser, as the playlist card's link does. **Copy URL**
+  puts the URL on the clipboard; when another program holds the clipboard, it beeps instead.
+
+**Remove playlist…** (File menu, context menu, playlist card) asks first (see Dialogs › Confirmations). After a
+removal All tracks is selected; removing the last playlist brings back the welcome screen and the inspector's
+placeholder.
+
+**Open library folder** (File menu, Library card) opens the library folder in Explorer, or the nearest folder above it
+that exists while the first sync hasn't created it yet. When even the drive is missing it does nothing. When Windows
+can't open a folder or a link, it says so in its own message.
 
 ## Main panel
 
@@ -552,7 +570,9 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 - **About** is a TaskDialog with the app icon, `WestieLib` as the main instruction, `Version 1.2.0` (the build's
   version) and OK.
 - **Confirmations** use a TaskDialog:
-  - Remove playlist says how many tracks become Removed.
+  - Remove playlist: title `Remove playlist`, main instruction `Remove "<name>"?`, content "Synced tracks will not be
+    deleted from your library." Buttons `Remove` and `Cancel`, with Cancel the default. Tracks left in no playlist
+    become Removed, and the infobar offers to review them afterwards.
   - Move to Recycle Bin says how many files.
   - Rebuild says it replaces track entries.
 - **First run** has no playlists, so the main panel shows its welcome screen (see Main panel › First run). Tools install
@@ -590,7 +610,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
-| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |

@@ -34,6 +34,7 @@ add_executable(WestieLib WIN32
 	src/core/playlists/AddPlaylist.cpp
 	src/core/playlists/PlaylistLink.cpp
 	src/core/playlists/PlaylistLookup.cpp
+	src/core/playlists/RemovePlaylist.cpp
 	src/core/settings/SettingsStore.cpp
 	src/core/sources/SourceType.cpp
 	src/core/sources/SpotifyPlaylistName.cpp
@@ -46,7 +47,10 @@ add_executable(WestieLib WIN32
 	src/core/tools/ToolSource.cpp
 	src/core/tools/ToolsStore.cpp
 	src/core/tools/YtDlp.cpp
+	src/platform/NearestExistingFolder.cpp
 	src/platform/win32/BCryptHasher.cpp
+	src/platform/win32/Clipboard.cpp
+	src/platform/win32/ClipboardScope.cpp
 	src/platform/win32/ComApartment.cpp
 	src/platform/win32/CommandLine.cpp
 	src/platform/win32/Environment.cpp
@@ -57,6 +61,7 @@ add_executable(WestieLib WIN32
 	src/platform/win32/PathProbe.cpp
 	src/platform/win32/Pipe.cpp
 	src/platform/win32/RegistryKey.cpp
+	src/platform/win32/ShellOpen.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32FileOps.cpp
@@ -78,6 +83,7 @@ add_executable(WestieLib WIN32
 	src/ui/dialogs/LinkLinePainter.cpp
 	src/ui/dialogs/LinkLookup.cpp
 	src/ui/dialogs/PlaylistLinkCheck.cpp
+	src/ui/dialogs/RemovePlaylistDialog.cpp
 	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/dialogs/ToolListView.cpp
 	src/ui/events/CoreEventQueue.cpp
@@ -130,6 +136,7 @@ add_executable(WestieLib WIN32
 	src/ui/main/WindowState.cpp
 	src/ui/playlists/AllTracksRow.cpp
 	src/ui/playlists/PlaylistList.cpp
+	src/ui/playlists/PlaylistMenu.cpp
 	src/ui/playlists/PlaylistPanel.cpp
 	src/ui/playlists/PlaylistRowPainter.cpp
 	src/ui/playlists/PlaylistRows.cpp

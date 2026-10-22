@@ -8,11 +8,16 @@
 
 #include "ResourceIds.h"
 #include "core/playlists/AddPlaylist.h"
+#include "core/playlists/RemovePlaylist.h"
+#include "platform/NearestExistingFolder.h"
+#include "platform/win32/Clipboard.h"
+#include "platform/win32/ShellOpen.h"
 #include "platform/win32/UniqueHandle.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/commands/CommandMenu.h"
 #include "ui/dialogs/AboutDialog.h"
 #include "ui/dialogs/AddPlaylistDialog.h"
+#include "ui/dialogs/RemovePlaylistDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Instance.h"
@@ -21,6 +26,7 @@
 #include "ui/framework/WindowClass.h"
 #include "ui/main/MainMenu.h"
 #include "ui/main/WindowState.h"
+#include "ui/playlists/PlaylistMenu.h"
 #include "ui/playlists/PlaylistRows.h"
 
 namespace westie::ui {
@@ -53,6 +59,7 @@ MainWindow::MainWindow(
                 {
                     .on_command = [this](CommandId command) { run_command(command); },
                     .on_select = [this](std::optional<std::string> key) { select_playlist(std::move(key)); },
+                    .on_context_menu = [this](POINT screen) { show_playlist_menu(screen); },
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
@@ -189,8 +196,7 @@ void MainWindow::show_inspector() {
         inspector_.show_first_run();
         return;
     }
-    std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(state_.state(), *selected_playlist_) : std::nullopt;
-    if (playlist) {
+    if (std::optional<PlaylistRow> playlist = selected_row()) {
         inspector_.show_playlist(*playlist);
     } else {
         inspector_.show_library(settings_.library_path, track_counts_);
@@ -262,13 +268,57 @@ void MainWindow::run_command(CommandId command) {
     }
 
     switch (command) {
-    case CommandId::AddPlaylist:     add_playlist(); return;
-    case CommandId::Exit:           SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
-    case CommandId::ToggleLog:       toggle_log(); return;
-    case CommandId::Settings:        show_settings(); return;
-    case CommandId::CheckForUpdates: tools_.run(true); return;
-    case CommandId::About:           show_about_dialog(hwnd()); return;
-    default:                         return;
+    case CommandId::AddPlaylist:       add_playlist(); return;
+    case CommandId::RemovePlaylist:    remove_playlist(); return;
+    case CommandId::OpenLibraryFolder: open_library_folder(); return;
+    case CommandId::OpenPlaylistPage:  open_playlist_page(); return;
+    case CommandId::CopyPlaylistLink:  copy_playlist_link(); return;
+    case CommandId::Exit:              SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::ToggleLog:         toggle_log(); return;
+    case CommandId::Settings:          show_settings(); return;
+    case CommandId::CheckForUpdates:   tools_.run(true); return;
+    case CommandId::About:             show_about_dialog(hwnd()); return;
+    default:                           return;
+    }
+}
+
+std::optional<PlaylistRow> MainWindow::selected_row() const {
+    return selected_playlist_ ? playlist_row(state_.state(), *selected_playlist_) : std::nullopt;
+}
+
+void MainWindow::show_playlist_menu(POINT screen) {
+    if (std::optional<CommandId> command = choose_playlist_command(hwnd(), screen, command_state())) {
+        run_command(*command);
+    }
+}
+
+void MainWindow::remove_playlist() {
+    std::optional<PlaylistRow> playlist = selected_row();
+    if (!playlist || !confirm_remove_playlist(hwnd(), playlist->name)) {
+        return;
+    }
+    core::remove_playlist(state_, playlist->key);
+    selected_playlist_.reset();
+    show_playlists();
+}
+
+void MainWindow::open_library_folder() const {
+    // The first sync creates the folder, so until then its nearest existing parent opens
+    if (std::optional<std::filesystem::path> folder = platform::nearest_existing_folder(settings_.library_path)) {
+        platform::win32::open_with_shell(hwnd(), folder->wstring());
+    }
+}
+
+void MainWindow::open_playlist_page() const {
+    if (std::optional<PlaylistRow> playlist = selected_row()) {
+        platform::win32::open_with_shell(hwnd(), playlist->url);
+    }
+}
+
+void MainWindow::copy_playlist_link() const {
+    std::optional<PlaylistRow> playlist = selected_row();
+    if (playlist && !platform::win32::set_clipboard_text(hwnd(), playlist->url)) {
+        MessageBeep(MB_ICONWARNING);
     }
 }
 

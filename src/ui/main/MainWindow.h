@@ -34,6 +34,7 @@
 #include "ui/main/MainLayout.h"
 #include "ui/main/WindowPlacement.h"
 #include "ui/playlists/PlaylistPanel.h"
+#include "ui/playlists/PlaylistRow.h"
 #include "ui/statusbar/MainStatusBar.h"
 #include "ui/toolbar/MainToolbar.h"
 #include "ui/tools/ToolBoard.h"
@@ -73,6 +74,12 @@ private:
     CommandState command_state() const;
     void update_commands();
     void run_command(CommandId command);
+    std::optional<PlaylistRow> selected_row() const;
+    void show_playlist_menu(POINT screen);
+    void remove_playlist();
+    void open_library_folder() const;
+    void open_playlist_page() const;
+    void copy_playlist_link() const;
     void toggle_log();
     void show_settings();
     void show_tools();

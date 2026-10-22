@@ -1,10 +1,9 @@
 #include "ui/dialogs/FolderPicker.h"
 
-#include <system_error>
-
 #include <windows.h>
 #include <shobjidl.h>
 
+#include "platform/NearestExistingFolder.h"
 #include "platform/win32/UniqueHandle.h"
 #include "platform/win32/Win32Error.h"
 
@@ -12,20 +11,9 @@ namespace westie::ui {
 
 namespace {
 
-// The dialog can only open at a folder that exists
-std::optional<std::filesystem::path> nearest_existing_folder(std::filesystem::path folder) {
-    std::error_code error;
-    while (!std::filesystem::is_directory(folder, error)) {
-        if (!folder.has_relative_path()) {
-            return std::nullopt;
-        }
-        folder = folder.parent_path();
-    }
-    return folder;
-}
-
 void open_at(IFileOpenDialog& dialog, const std::filesystem::path& start) {
-    std::optional<std::filesystem::path> folder = nearest_existing_folder(start);
+    // The dialog can only open at a folder that exists
+    std::optional<std::filesystem::path> folder = platform::nearest_existing_folder(start);
     if (!folder) {
         return;
     }

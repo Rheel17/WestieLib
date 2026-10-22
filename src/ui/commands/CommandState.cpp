@@ -5,7 +5,8 @@ namespace westie::ui {
 bool CommandState::enabled(CommandId command) const {
     switch (command) {
     case CommandId::RemovePlaylist:
-    case CommandId::OpenPlaylistPage:     return playlist_selected;
+    case CommandId::OpenPlaylistPage:
+    case CommandId::CopyPlaylistLink:     return playlist_selected;
     case CommandId::SyncAll:              return has_playlists && !syncing;
     case CommandId::SyncSelectedPlaylist: return playlist_selected && !syncing;
     case CommandId::CancelSync:           return syncing;
