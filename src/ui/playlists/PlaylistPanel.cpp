@@ -1,6 +1,7 @@
 #include "ui/playlists/PlaylistPanel.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 #include "ResourceIds.h"
@@ -49,6 +50,11 @@ void PlaylistPanel::set_track_counts(const TrackCounts& counts) {
     all_tracks_.set_counts(counts);
 }
 
+void PlaylistPanel::set_has_playlists(bool has_playlists) {
+    has_playlists_ = has_playlists;
+    layout();
+}
+
 LRESULT PlaylistPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE:       layout(); return 0;
@@ -83,7 +89,7 @@ void PlaylistPanel::layout() {
 
     framework::DeferredPositions positions;
     positions.place(all_tracks_.hwnd(), row);
-    positions.place(empty_text_.hwnd(), empty);
+    positions.place(empty_text_.hwnd(), has_playlists_ ? std::nullopt : std::optional(empty));
     positions.place(add_button_.hwnd(), add);
     positions.apply();
 }

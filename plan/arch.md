@@ -116,18 +116,21 @@ The state separates what playlists list from what is on disk:
     "ytm:PLxxxxxxxx": {
       "url": "https://music.youtube.com/playlist?list=PLxxxxxxxx",
       "name": "WCS",
+      "addedAt": "2026-10-11T14:02:00Z",
       "lastSync": "2026-10-11T14:03:00Z",
       "sources": [ "ytm:aaaaaaaaaaa", "ytm:ccccccccccc" ]
     },
     "spotify:37i9dQZF1DXxxxxxxx": {
       "url": "https://open.spotify.com/playlist/37i9dQZF1DXxxxxxxx",
       "name": "Her playlist",
+      "addedAt": "2026-10-11T14:04:00Z",
       "lastSync": "2026-10-11T14:05:00Z",
       "sources": [ "spotify:6r8k1vznHrzlEKYxxxxxxx", "spotify:7yq3vB0cNvb1Xxxxxxxxxx" ]
     },
     "spotify:5aX8kq1sTn2Yz9wxxxxxxx": {
       "url": "https://open.spotify.com/playlist/5aX8kq1sTn2Yz9wxxxxxxx",
       "name": "Slow & bluesy",
+      "addedAt": "2026-10-09T20:10:00Z",
       "lastSync": "2026-10-09T20:12:00Z",
       "fetchError": "HTTP 404 from api-partner.spotify.com",
       "fetchErrorAt": "2026-10-11T14:05:00Z",
@@ -201,6 +204,10 @@ In this example, the WCS playlist (YouTube Music) and Her playlist (Spotify) bot
 picked the same video (`ccccccccccc`) that WCS lists, so the two sources share one track and one file.
 
 **Playlist fields.**
+- The key is `ytm:<list id>` or `spotify:<playlist id>`, and `url` is the canonical link built from it (see Playlist
+  links), whatever form the user pasted.
+- `name` is empty until the first fetch.
+- `addedAt` is when the playlist was added. The UI lists playlists in that order.
 - `sources` is the ordered list of source keys.
 - `fetchError` and `fetchErrorAt` are set when the last fetch failed, and cleared by the next successful fetch.
 - `lastSync` keeps the time of the last successful sync.
@@ -299,7 +306,7 @@ The cover art comes from the first of:
 |------------------|--------------------------------------------------------------------------------------|
 | `HttpClient`     | WinHTTP (`WinHttpClient`). `get` returns a body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
 | `ProcessRunner`  | `CreateProcessW` with stdout/stderr pipes, line splitting, UTF-8 decoding, exit code. Every child joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; cancelling a run terminates the job. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. |
-| `FileOps`        | Atomic replace via `ReplaceFileW` (with backup), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
+| `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
 | `ArchiveExtractor` | miniz (`MinizArchiveExtractor`). Extracts the named files from a zip into a folder. miniz opens files by narrow name, so it gets a `FILE*` from `_wfopen`, and writes go through `CreateFileW`. A stop request ends it with `Cancelled`. |
 | `TextNormalizer` | `NormalizeString` (NFKD), combining marks dropped, case folded.                      |
@@ -316,9 +323,17 @@ defaults that `main.cpp` gives it. `main.cpp` loads it before any window shows. 
 app with a message that names the file, rather than writing the defaults over it. Each change is saved at once:
 `FileOps::replace_file` writes `settings.json.tmp`, flushes it, and renames it over `settings.json`.
 
-`StateStore` owns `state.json` in memory behind a mutex. Every write
+`StateStore` (`src/core/state/`) owns `state.json` in memory behind a mutex. Every write
 goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which keeps the previous version as
 `state.json.bak`. The SyncEngine saves after every finished track, so an interrupted run resumes where it stopped.
+
+- `main.cpp` makes it before any window shows, and it loads the file then. Without a file the state is empty. A file
+  that doesn't read stops the app with a message that names it and points at `state.json.bak`, as for
+  `settings.json`: the state holds the user's edits, so it is never overwritten.
+- `update(change)` applies a change to a copy, saves the copy, and only then keeps it, so a failed save leaves the
+  state as it was.
+- So far the state has only playlists, with `url`, `name` and `addedAt`, and only the UI thread uses it. The mutex
+  arrives with the first worker thread, the SyncEngine's.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
 
@@ -444,6 +459,17 @@ public:
 
 The source type follows from the URL: `music.youtube.com` / `youtube.com` playlist URLs go to
 `YouTubeMusicSource`, `open.spotify.com/playlist/...` URLs go to `SpotifySource`.
+
+**Playlist links.** `parse_playlist_link` (`src/core/playlists/`) turns a pasted link into a source type and a
+playlist id. It drops spaces around the text; `http://` or `https://` is optional, and host names ignore case.
+
+| Source        | Accepted                                                                                  | Id                         | Canonical `url`                                  |
+|---------------|-------------------------------------------------------------------------------------------|----------------------------|--------------------------------------------------|
+| YouTube Music | `music.youtube.com`, `youtube.com`, `www.youtube.com`, `m.youtube.com` with `/playlist?…list=<id>…`; `music.youtube.com/browse/VL<id>` | `[A-Za-z0-9_-]+`, except `LM`, `WL` and `LL` (Liked Music, Watch later, Liked videos), which are never public | `https://music.youtube.com/playlist?list=<id>` |
+| Spotify       | `open.spotify.com/playlist/<id>`, also after an `/intl-xx/` segment, with any query; the URI `spotify:playlist:<id>` | 22 characters of `[A-Za-z0-9]` | `https://open.spotify.com/playlist/<id>` |
+
+`addPlaylist` stores the playlist under `<source prefix>:<id>` with its canonical `url`, an empty `name` and
+`addedAt`, and refuses a key that is already there.
 
 **YouTubeMusicSource** runs `yt-dlp --flat-playlist -J <url>` and maps each entry to a `SourceTrack` with its
 `videoId`. The album and year of these sources come from yt-dlp's info JSON at download time.
@@ -674,10 +700,13 @@ src/
         events/     CoreEvent, EventSink
         github/     the latest release of a repository, from GitHub's API
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
+        playlists/  playlist links, addPlaylist
         settings/   Settings, SettingsStore
+        sources/    SourceType; later the PlaylistSources
+        state/      State, StateStore
         tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore and the tool types
-                    later areas get folders of their own: SyncEngine, sources, Matcher, Downloader, Tagger,
-                    Library, StateStore, SelfUpdater, RemoteConfig
+                    later areas get folders of their own: SyncEngine, Matcher, Downloader, Tagger,
+                    Library, SelfUpdater, RemoteConfig
     platform/       service interfaces
     platform/win32/ Win32 implementations of the platform services
     ui/             Win32 windows, EventSink implementation

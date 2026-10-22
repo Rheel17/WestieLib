@@ -12,6 +12,8 @@
 #define IDI_LIBRARY          10
 #define IDI_SYNCED           11
 #define IDI_WARN             12
+#define IDI_YTM              13
+#define IDI_SPOTIFY          14
 // The progress ring's 25 steps, empty to full, are IDI_RING_0 to IDI_RING_0 + 24
 #define IDI_RING_0           20
 
@@ -23,3 +25,8 @@
 #define IDC_AUTO_UPDATE_TOOLS     1004
 #define IDC_CHECK_FOR_UPDATES     1005
 #define IDC_LAST_CHECKED          1006
+
+#define IDD_ADD_PLAYLIST          101
+#define IDC_PLAYLIST_LINK         1100
+#define IDC_PLAYLIST_KIND         1101
+#define IDC_SYNC_NOW              1102

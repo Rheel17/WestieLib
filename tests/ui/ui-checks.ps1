@@ -440,8 +440,9 @@ public static class W {
 	}
 
 	public static string TextOf(IntPtr h) {
-		var s = new StringBuilder(256);
-		GetWindowTextW(h, s, 256);
+		// Long enough for an error message with two paths in it
+		var s = new StringBuilder(4096);
+		GetWindowTextW(h, s, s.Capacity);
 		return s.ToString();
 	}
 
@@ -1303,6 +1304,174 @@ function Check-BrokenSettings {
 	Check '  exit code, file kept' "$($process.ExitCode) $([IO.File]::ReadAllText($SettingsFile) -eq $broken)" '1 True'
 }
 
+$StateFile = Join-Path $DataDir 'state.json'
+$SpotifyId = '7mKq2pLxV9nT4cR1sY8wZa'
+$SpotifyLink = "https://open.spotify.com/playlist/$SpotifyId"
+$YouTubeLink = 'https://music.youtube.com/playlist?list=PLx9k2_-Ab'
+$NotSupported = 'Not a supported playlist link'
+# What the Add playlist dialog says under the link, and whether Add is enabled
+$LinkChecks = @(
+	@{ Link = ''; Line = ''; Add = 'False' },
+	@{ Link = $YouTubeLink; Line = 'YouTube Music playlist'; Add = 'True' },
+	@{ Link = "  https://www.youtube.com/playlist?si=x&list=PLx9k2_-Ab`r`n"; Line = 'YouTube Music playlist'; Add = 'True' },
+	@{ Link = 'MUSIC.youtube.com/browse/VLPLx9k2_-Ab'; Line = 'YouTube Music playlist'; Add = 'True' },
+	@{ Link = 'https://music.youtube.com/playlist?list=LM'; Line = $NotSupported; Add = 'False' },
+	@{ Link = 'https://music.youtube.com/watch?v=abc&list=PLx9k2_-Ab'; Line = $NotSupported; Add = 'False' },
+	@{ Link = "$SpotifyLink`?si=4f1c2e7a9b3d4e5f"; Line = 'Spotify playlist'; Add = 'True' },
+	@{ Link = "https://open.spotify.com/intl-nl/playlist/$SpotifyId"; Line = 'Spotify playlist'; Add = 'True' },
+	@{ Link = "spotify:playlist:$SpotifyId"; Line = 'Spotify playlist'; Add = 'True' },
+	@{ Link = "https://open.spotify.com/album/$SpotifyId"; Line = $NotSupported; Add = 'False' },
+	@{ Link = 'https://open.spotify.com/playlist/7mKq2pLx'; Line = $NotSupported; Add = 'False' },
+	@{ Link = 'hello'; Line = $NotSupported; Add = 'False' }
+)
+
+function Get-LinkLine($dialog) { "$([W]::TextOf([W]::GetDlgItem($dialog, 1101))) | $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1)))" }
+
+function Set-PlaylistLink($dialog, [string]$link) {
+	[W]::SetEditText([W]::GetDlgItem($dialog, 1100), $link)
+	Start-Sleep -Milliseconds 50
+}
+
+# The toolbar, File > Add playlist, Ctrl+N, the left panel's button and the welcome screen's each open Add playlist,
+# centered on the window. It starts empty, with Add disabled and Sync now checked; the line under the link follows the
+# typing. Cancel writes no state.json.
+function Check-AddPlaylistDialog($hwnd) {
+	$strip = Get-ToolbarStrip $hwnd
+	$toolbar = ([W]::Children($strip, 'ToolbarWindow32'))[0]
+	$command = [IntPtr][int][W]::CommandOf([W]::GetMenu($hwnd), '&Add playlist...')
+	$leftButton = ([W]::Children((Get-RowPanels $hwnd)[0], 'Button'))[0]
+	$welcomeButton = (Get-DirectChildren (Get-Panel $hwnd 'Welcome') 'Button')[0]
+	$opens = @(
+		@{ Name = 'the toolbar button'; Open = { [void][W]::PostMessageW($strip, 0x111, $command, $toolbar) } },
+		@{ Name = 'File > Add playlist'; Open = { Send-Command $hwnd '&Add playlist...' } },
+		@{ Name = 'Ctrl+N'; Open = { [W]::PostCtrlKey($hwnd, 0x4E) } },
+		@{ Name = 'the left panel button'; Open = { [void][W]::PostMessageW($leftButton, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero) } },
+		@{ Name = 'the welcome button'; Open = { [void][W]::PostMessageW($welcomeButton, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero) } }
+	)
+	foreach ($open in $opens) {
+		& $open.Open
+		$dialog = Wait-OwnedWindow $hwnd
+		Check "$($open.Name) opens Add playlist" "$([W]::ClassOf($dialog)) $([W]::TextOf($dialog))" '#32770 Add playlist'
+		[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+		Wait-Closed $dialog
+	}
+
+	Send-Command $hwnd '&Add playlist...'
+	$dialog = Wait-OwnedWindow $hwnd
+	$d = New-Object W+RECT
+	$o = New-Object W+RECT
+	[void][W]::GetWindowRect($dialog, [ref]$d)
+	[void][W]::GetWindowRect($hwnd, [ref]$o)
+	$offset = "$(($d.Left + $d.Right) - ($o.Left + $o.Right)) $(($d.Top + $d.Bottom) - ($o.Top + $o.Bottom))"
+	Check-That '  centered on the window (offset x2)' $offset ($offset -match '^-?[01] -?[01]$') '-1 to 1 each way'
+	$syncNow = [W]::SendMessageW([W]::GetDlgItem($dialog, 1102), 0xF0, [IntPtr]::Zero, [IntPtr]::Zero)
+	Check '  focus on the link | line | Add | Sync now' "$([W]::FocusOf($dialog) -eq [W]::GetDlgItem($dialog, 1100)) | $(Get-LinkLine $dialog) | $syncNow" 'True |  | False | 1'
+	foreach ($case in $LinkChecks) {
+		Set-PlaylistLink $dialog $case.Link
+		Check "  '$($case.Link.Trim())'" (Get-LinkLine $dialog) "$($case.Line) | $($case.Add)"
+	}
+	# Shared links are the longest: a Spotify link with its ?si= part, and a YouTube Music list id of 34 characters
+	$edit = [W]::GetDlgItem($dialog, 1100)
+	$c = New-Object W+RECT
+	[void][W]::GetClientRect($edit, [ref]$c)
+	$margins = [int64][W]::SendMessageW($edit, 0xD4, [IntPtr]::Zero, [IntPtr]::Zero)
+	$room = $c.Right - ($margins -band 0xFFFF) - (($margins -shr 16) -band 0xFFFF)
+	foreach ($link in "$SpotifyLink`?si=4f1c2e7a9b3d4e5f", 'https://music.youtube.com/playlist?list=PLWmMwQkx8mKVm2wQgkWMmwMWqWZqWmWZW') {
+		$width = [W]::TextWidth($link, $script:dpi)
+		Check-That "  fits without scrolling: $($link.Substring(8, 20))..." "$width of $room" ($width -le $room) "at most $room"
+	}
+	Set-PlaylistLink $dialog "$SpotifyLink`?si=4f1c2e7a9b3d4e5f"
+	Check '  a new playlist again, for the screenshot' (Get-LinkLine $dialog) 'Spotify playlist | True'
+	if ($Screenshot) {
+		Start-Sleep -Milliseconds 300
+		Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-add-playlist.png")
+	}
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	Check '  Cancel writes no state.json' (Test-Path $StateFile) 'False'
+}
+
+# The playlists in state.json, a file named here, as "key url [name] whether addedAt is an ISO 8601 time"
+function Get-SavedPlaylists([string]$file = $StateFile) {
+	if (-not (Test-Path $file)) { return 'no file' }
+	$json = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json
+	@($json.playlists.PSObject.Properties | ForEach-Object {
+		"$($_.Name) $($_.Value.url) [$($_.Value.name)] $($_.Value.addedAt -match '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$')"
+	}) -join ' / '
+}
+
+# Adds a playlist through File > Add playlist; returns the dialog's line for the link
+function Add-Playlist($hwnd, [string]$link) {
+	Send-Command $hwnd '&Add playlist...'
+	$dialog = Wait-OwnedWindow $hwnd
+	Set-PlaylistLink $dialog $link
+	$line = Get-LinkLine $dialog
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	$line
+}
+
+# Welcome screen and tracks panel visible; the left panel's "No playlists yet." and the inspector's placeholder visible
+function Get-PlaylistScreens($hwnd) {
+	$empty = ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.Label'))[0]
+	$placeholder = ([W]::Children((Get-Panel $hwnd 'Inspector'), 'WestieLib.Label'))[0]
+	"welcome $([W]::IsWindowVisible((Get-Panel $hwnd 'Welcome'))), tracks $([W]::IsWindowVisible((Get-Panel $hwnd 'Tracks'))), " +
+		"no playlists $([W]::IsWindowVisible($empty)), placeholder $([W]::IsWindowVisible($placeholder))"
+}
+
+$WithPlaylists = 'welcome False, tracks True, no playlists False, placeholder False'
+
+# Adding playlists stores them in state.json, under their key with the canonical link and no name. The welcome screen
+# gives way to the tracks panel, and Sync all enables. A link to a playlist already in the list can't be added again.
+function Check-AddingPlaylists($hwnd) {
+	$toolbar = ([W]::Children((Get-ToolbarStrip $hwnd), 'ToolbarWindow32'))[0]
+	$spotifyKey = "spotify:$SpotifyId $SpotifyLink []"
+	Check 'Add a Spotify playlist: the line | Add' (Add-Playlist $hwnd "$SpotifyLink`?si=4f1c2e7a9b3d4e5f") 'Spotify playlist | True'
+	Check '  state.json' (Get-SavedPlaylists) "$spotifyKey True"
+	Check '  no state.json.bak for the first save' (Test-Path "$StateFile.bak") 'False'
+	Check '  screens' (Get-PlaylistScreens $hwnd) $WithPlaylists
+	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
+	$menu = [W]::GetMenu($hwnd)
+	Update-MenuStates $hwnd
+	Check '  grayed menu items' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &selected playlist, &Cancel, ' +
+		'&Confirm match, C&hoose video..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
+
+	Send-Command $hwnd '&Add playlist...'
+	$dialog = Wait-OwnedWindow $hwnd
+	Set-PlaylistLink $dialog "spotify:playlist:$SpotifyId"
+	Check 'The same playlist again: line | Add' (Get-LinkLine $dialog) "Spotify playlist $([char]0x00B7) already added | False"
+	# IDOK can come without the button, which is disabled
+	[void][W]::PostMessageW($dialog, 0x111, [IntPtr]1, [IntPtr]::Zero)
+	Start-Sleep -Milliseconds 200
+	Check '  IDOK keeps the dialog open' ([W]::IsWindow($dialog)) 'True'
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+
+	Check 'Add a YouTube Music playlist' (Add-Playlist $hwnd $YouTubeLink) 'YouTube Music playlist | True'
+	$youTubeKey = "ytm:PLx9k2_-Ab $YouTubeLink []"
+	Check '  state.json' (Get-SavedPlaylists) "$spotifyKey True / $youTubeKey True"
+	Check '  state.json.bak keeps the version before' (Get-SavedPlaylists "$StateFile.bak") "$spotifyKey True"
+}
+
+# Starts the app with a state.json that isn't JSON: it shows the error, naming the file, instead of its window, exits
+# with 1, and leaves the file as it was
+function Check-BrokenState {
+	$broken = '{"version": 1, "playlists": {'
+	[IO.File]::WriteAllText($StateFile, $broken)
+	$process = Start-Process -FilePath $Exe -PassThru
+	$box = [IntPtr]::Zero
+	for ($i = 0; $i -lt 50 -and $box -eq [IntPtr]::Zero; $i++) {
+		Start-Sleep -Milliseconds 100
+		$box = [W]::WindowOfProcess($process.Id, '#32770')
+	}
+	$message = @([W]::Children($box, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like '*state.json.bak*' })
+	$window = [W]::FindWindowW('WestieLib.MainWindow', [NullString]::Value) -ne [IntPtr]::Zero
+	Check 'A broken state.json: error, names the backup, no window' "$([W]::TextOf($box)) $($message.Count) $window" 'WestieLib 1 False'
+	[void][W]::PostMessageW($box, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
+	if (-not $process.WaitForExit(5000)) { $process.Kill(); throw 'Process did not exit' }
+	Check '  exit code, file kept' "$($process.ExitCode) $([IO.File]::ReadAllText($StateFile) -eq $broken)" '1 True'
+}
+
 # Splitter drags don't make text blink on screen: the left panel's content stays exactly as it was while the playlists
 # splitter moves, and the inspector's placeholder and the welcome screen, which move with their panels, never lose
 # their text. The welcome drag stays short enough for its column to keep its width, so its text wraps the same.
@@ -1530,9 +1699,7 @@ try {
 	[W]::PostCtrlKey($h, 0x4C)
 	Check-Log '  and shows it again' $h (S 200)
 	Check-InspectorPlaceholder '  placeholder | sides | center offset x2' $h
-	[void][W]::SendMessageW(([W]::Children((Get-RowPanels $h)[0], 'Button'))[0], 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	Start-Sleep -Milliseconds 200
-	Check 'Add playlist button: no dialog yet, still running' "$([W]::OwnedWindow($h) -eq [IntPtr]::Zero) $($app.Process.HasExited)" 'True False'
+	Check-AddPlaylistDialog $h
 	[W]::SetEditText((Get-FolderEdit $h), $ClosedFolder)
 	"File > Exit, with a folder typed but the field never left"
 	Stop-App $app -ExitCommand
@@ -1600,7 +1767,31 @@ try {
 	Check-BrokenSettings
 	Remove-Item $SettingsFile
 
-	"--- Run 6: moved to a monitor with another DPI"
+	"--- Run 6: adding playlists"
+	$app = Start-App
+	$h = $app.Hwnd
+	Check 'No playlists yet: screens' (Get-PlaylistScreens $h) 'welcome True, tracks False, no playlists True, placeholder True'
+	Check-AddingPlaylists $h
+	Stop-App $app
+
+	"--- Run 7: playlists kept"
+	$app = Start-App
+	$h = $app.Hwnd
+	Check 'Screens' (Get-PlaylistScreens $h) $WithPlaylists
+	Send-Command $h '&Add playlist...'
+	$dialog = Wait-OwnedWindow $h
+	Set-PlaylistLink $dialog $YouTubeLink
+	Check '  a kept playlist is already added' (Get-LinkLine $dialog) "YouTube Music playlist $([char]0x00B7) already added | False"
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-playlists.png") }
+	Stop-App $app
+
+	"--- Run 8: state.json doesn't read"
+	Check-BrokenState
+	Remove-Item $StateFile, "$StateFile.bak"
+
+	"--- Run 9: moved to a monitor with another DPI"
 	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
 	$app = Start-App
 	$h = $app.Hwnd
@@ -1617,7 +1808,7 @@ try {
 		Check-Scaled $h
 		Stop-App $app
 
-		"--- Run 7: restored onto that monitor"
+		"--- Run 10: restored onto that monitor"
 		$app = Start-App
 		$h = $app.Hwnd
 		"DPI $script:dpi"

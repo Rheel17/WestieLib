@@ -29,10 +29,11 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 saved `Placement` and asks it for the current one.
 
 1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/settings/`) with the defaults and loads the `Settings`;
-   a `settings.json` that doesn't read ends the app there. Its files live in `%LOCALAPPDATA%\WestieLib`, or in the
-   folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue` and the
-   `ToolManager`, so both outlive the window. `MainWindow` gets the store, the loaded settings, the queue and the tool
-   manager, and makes itself the queue's target.
+   a `settings.json` that doesn't read ends the app there. Then it makes the `StateStore` (`src/core/state/`), which
+   loads `state.json`; one that doesn't read ends the app too. The files live in `%LOCALAPPDATA%\WestieLib`, or in
+   the folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue` and the
+   `ToolManager`, so both outlive the window. `MainWindow` gets the settings store, the loaded settings, the state
+   store, the queue and the tool manager, and makes itself the queue's target.
 2. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
 3. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
    `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
@@ -99,10 +100,28 @@ saved `Placement` and asks it for the current one.
 - `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
   the constructor shows zeros.
 
+## Adding a playlist
+
+- `Add playlist` (toolbar, File menu, Ctrl+N, the left panel's button, the welcome button) runs `add_playlist`, which
+  shows `AddPlaylistDialog` (`src/ui/dialogs/`). The dialog gets a predicate that says whether a link's playlist is
+  in the state already.
+- On every `EN_CHANGE` the dialog runs `check_playlist_link` (`PlaylistLinkCheck.cpp`): empty, not supported, already
+  added, or new, with the parsed `core::PlaylistLink` (`core::parse_playlist_link`, `src/core/playlists/`).
+  `link_check_text` has the wording, `playlist_type_text` (`src/ui/PlaylistTypeText.cpp`) the source's name and
+  `source_logo_icon` (`src/ui/SourceLogo.cpp`) its logo. The line under the link is an `SS_OWNERDRAW` static that the
+  dialog paints in `WM_DRAWITEM`, loading the logo at the static's DPI; its window text is the line's text, for
+  screen readers and the UI checks. `Add` is enabled only for a new playlist.
+- On `Add` the dialog returns an `AddPlaylistRequest`. `core::add_playlist` stores it through `StateStore::update`,
+  which saves `state.json` (keeping `state.json.bak`). `Sync now` has no effect until syncing exists.
+- `show_playlists` then brings the window up to date with the state: the left panel's `No playlists yet.` and the
+  inspector's placeholder hide, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
+  follow (`has_playlists` enables Sync all). The welcome screen may have had the keyboard focus, so it goes to the
+  window. The constructor calls it too, for playlists from an earlier start.
+
 ## Welcome screen
 
 - `WelcomePanel` (`src/ui/welcome/`) is the main column while there are no playlists; `layout_panels` hides the
-  `TrackPanel` meanwhile. It paints the app icon and lays out its labels, the `LibraryFolderField` and the default
+  `TrackPanel` meanwhile, and the other way round once there are. It paints the app icon and lays out its labels, the `LibraryFolderField` and the default
   `Add your first playlist` button in one centered column. The button's click goes to `run_command`, as in the side
   panels.
 - `LibraryFolderField` is a panel with the `Edit`, `Browse…` and the hint `Label` under them. It keeps the folder in

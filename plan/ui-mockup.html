@@ -447,8 +447,9 @@ const SONGS = [
 	["You Don't Know Me", "Ray Charles", "Modern Sounds in Country and Western Music", 1962, "3:15", "K"],
 ];
 
-const PL_ORDER = ['wcs', 'her', 'slow', 'comp'];
+const PL_ORDER = ['wcs', 'her', 'slow', 'comp', 'new'];
 const LIBRARY = 'D:\\Music\\WestieLib';
+const NEW_PLAYLIST_ID = '7mKq2pLxV9nT4cR1sY8wZa';
 
 function buildBase() {
 	const r = rng(20261020);
@@ -591,7 +592,8 @@ function playlistRow(s, p, selected, hot) {
 	const list = p.keys.map(k => s.tracks.get(k));
 	const c = counts(list);
 	const inRun = s.run && s.run.pls.includes(p.id);
-	const icon = p.fetchFailed ? 'warn' : c.failed ? 'failed' : c.waiting ? 'waiting' : 'synced';
+	// A playlist that was never synced counts as waiting, even though it has no tracks yet
+	const icon = p.fetchFailed ? 'warn' : c.failed ? 'failed' : c.waiting || p.neverSynced ? 'waiting' : 'synced';
 	const parts = [];
 	if (c.waiting) parts.push(`${c.waiting} waiting`);
 	if (c.failed) parts.push(`<span class="red">${c.failed} failed</span>`);
@@ -855,7 +857,7 @@ function logPane(s) {
 // ---------- status bar ----------
 function statusBar(s, cfg) {
 	let run = 'Ready · last sync today 14:05';
-	if (cfg.firstRun) run = 'Ready';
+	if (cfg.firstRun || cfg.neverSynced) run = 'Ready';
 	if (s.run) {
 		const { done, total } = runProgress(s);
 		run = `Syncing ${done} of ${total}<span class="pbar ctl" style="width:120px"><i style="width:${done / total * 100}%"></i></span>`;
@@ -872,16 +874,19 @@ function statusBar(s, cfg) {
 }
 
 // ---------- dialogs ----------
-function addDialog() {
-	return `<div class="dlg" style="width:470px">${dlgTitle('Add playlist')}
+// A link to a playlist that is already in the list keeps its logo and line, and Add stays disabled
+function addDialog(alreadyAdded) {
+	const link = alreadyAdded ? `https://open.spotify.com/playlist/${NEW_PLAYLIST_ID}?si=4f1c2e7a9b3d4e5f` : 'https://open.spotify.com/playlist/3k9QeTqH2wVfXbN7RjL0aC';
+	// Wide enough for a whole shared link, ?si=… included
+	return `<div class="dlg" style="width:640px">${dlgTitle('Add playlist')}
 		<div class="db">
 			<p>Paste a link to a public YouTube Music or Spotify playlist.</p>
 			<div class="lbl">Playlist link:</div>
-			<div class="edit focus"><span>https://open.spotify.com/playlist/3k9QeTqH2wVfXbN7RjL0aC</span><span class="caret" style="margin-left:-3px"></span></div>
-			<div class="detect">${glyph('spotify')}<span>Spotify playlist</span></div>
+			<div class="edit focus"><span>${link}</span><span class="caret" style="margin-left:-3px"></span></div>
+			<div class="detect">${glyph('spotify')}<span>Spotify playlist${alreadyAdded ? ' · already added' : ''}</span></div>
 			<span class="chk"><i>${CHECK}</i>Sync now</span>
 		</div>
-		<div class="df">${btn('Add', 'def')}${btn('Cancel')}</div></div>`;
+		<div class="df">${btn('Add', alreadyAdded ? 'dis' : 'def')}${btn('Cancel')}</div></div>`;
 }
 
 function settingsDialog() {
@@ -986,7 +991,8 @@ function editTrackDialog(t) {
 function dialogHtml(s, cfg) {
 	const t = cfg.sel && cfg.sel.length ? find(s, cfg.sel[0]) : null;
 	switch (cfg.dialog) {
-		case 'add': return addDialog();
+		case 'add': return addDialog(false);
+		case 'add-again': return addDialog(true);
 		case 'settings': return settingsDialog();
 		case 'choose': return chooseVideoDialog(t, true);
 		case 'nomatch': return chooseVideoDialog(t, false);
@@ -1014,6 +1020,9 @@ function windowHtml(s, cfg) {
 const base = buildBase();
 const variant = fn => fn(structuredClone(base));
 const empty = { pl: {}, tracks: new Map(), run: null };
+// One playlist, just added: nothing fetched, so no name and no tracks yet
+const justAdded = { pl: { new: { id: 'new', src: 'spotify', name: 'Spotify playlist', url: 'open.spotify.com/playlist/' + NEW_PLAYLIST_ID,
+	last: 'Never synced', neverSynced: true, keys: [] } }, tracks: new Map(), run: null };
 
 const SCREENS = [
 	{
@@ -1141,6 +1150,17 @@ const SCREENS = [
 			'The line under the field follows the typing: red when the text can\'t be the library folder, gray when the folder doesn\'t exist yet.',
 			'The status bar shows tool installation progress. Sync all is disabled because there are no playlists yet, not because of the tools.',
 			'The filter bar, status tabs and table appear once the first playlist is added.',
+		],
+	},
+	{
+		id: 'added', title: 'First playlist added', state: justAdded,
+		cfg: { scope: 'all', tab: 'all', sort: 'title', neverSynced: true, inactive: true, dialog: 'add-again' },
+		cap: 'A Spotify playlist was just added without syncing, and the same link is pasted into Add playlist again.',
+		notes: [
+			'Until its first fetch, a playlist has no name, so its row reads <i>Spotify playlist</i> or <i>YouTube Music playlist</i>.',
+			`It has no tracks yet. Its last line reads <i>Never synced</i> after ${ic('waiting')}, because a playlist that was never synced is waiting.`,
+			'The welcome screen gave way to the filter bar, the status tabs and the table. Sync all is enabled.',
+			'A link to a playlist that is already in the list says so on the detection line, and Add stays disabled. The <code>?si=</code> part of a shared link doesn’t make it another playlist.',
 		],
 	},
 ];

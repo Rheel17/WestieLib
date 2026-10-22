@@ -31,7 +31,11 @@ add_executable(WestieLib WIN32
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
+	src/core/playlists/AddPlaylist.cpp
+	src/core/playlists/PlaylistLink.cpp
 	src/core/settings/SettingsStore.cpp
+	src/core/sources/SourceType.cpp
+	src/core/state/StateStore.cpp
 	src/core/tools/ToolInstaller.cpp
 	src/core/tools/ToolManager.cpp
 	src/core/tools/ToolPackage.cpp
@@ -50,12 +54,16 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Win32FileOps.cpp
 	src/platform/win32/WinHttpClient.cpp
 	src/ui/FatalError.cpp
+	src/ui/PlaylistTypeText.cpp
 	src/ui/RelativeDayText.cpp
+	src/ui/SourceLogo.cpp
 	src/ui/TrackCountText.cpp
 	src/ui/commands/CommandMenu.cpp
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
+	src/ui/dialogs/AddPlaylistDialog.cpp
 	src/ui/dialogs/FolderPicker.cpp
+	src/ui/dialogs/PlaylistLinkCheck.cpp
 	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/dialogs/ToolListView.cpp
 	src/ui/events/CoreEventQueue.cpp

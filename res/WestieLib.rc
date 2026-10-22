@@ -19,6 +19,8 @@ IDI_GEAR_DISABLED    ICON "glyphs/gear-disabled.ico"
 IDI_LIBRARY          ICON "glyphs/lib.ico"
 IDI_SYNCED           ICON "glyphs/synced.ico"
 IDI_WARN             ICON "glyphs/warn.ico"
+IDI_YTM              ICON "glyphs/ytm.ico"
+IDI_SPOTIFY          ICON "glyphs/spotify.ico"
 IDI_RING_0           ICON "glyphs/ring-00.ico"
 (IDI_RING_0 +  1)    ICON "glyphs/ring-01.ico"
 (IDI_RING_0 +  2)    ICON "glyphs/ring-02.ico"
@@ -62,6 +64,20 @@ BEGIN
 	LTEXT           "", IDC_VERSION, 9, 141, 150, 8
 	DEFPUSHBUTTON   "OK", IDOK, 208, 139, 43, 12
 	PUSHBUTTON      "Cancel", IDCANCEL, 256, 139, 43, 12
+END
+
+IDD_ADD_PLAYLIST DIALOGEX 0, 0, 360, 104
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Add playlist"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+	LTEXT           "Paste a link to a public YouTube Music or Spotify playlist.", -1, 9, 9, 342, 8
+	LTEXT           "Playlist &link:", -1, 9, 24, 342, 8
+	EDITTEXT        IDC_PLAYLIST_LINK, 9, 34, 342, 12, ES_AUTOHSCROLL
+	CONTROL         "", IDC_PLAYLIST_KIND, "Static", SS_OWNERDRAW, 9, 50, 342, 10
+	AUTOCHECKBOX    "Sync &now", IDC_SYNC_NOW, 9, 66, 100, 10
+	DEFPUSHBUTTON   "Add", IDOK, 260, 85, 43, 12
+	PUSHBUTTON      "Cancel", IDCANCEL, 308, 85, 43, 12
 END
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "WestieLib.manifest"

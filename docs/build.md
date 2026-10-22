@@ -46,7 +46,9 @@ file names such as `Win32Error.cpp`.
   also at 12–36 px, for the status bar's 12 px icons. Glyphs marked `Disabled` also get a `-disabled` copy (grayscale
   at 45% opacity) for disabled toolbar buttons. The progress ring, which the mockup draws with `ring(percent)`, is
   built in the script as `ring-00.ico` to `ring-24.ico`, one per step of 24, in both sizes. The `.rc` names them
-  `IDI_RING_0` to `(IDI_RING_0 + 24)`; windres takes the sum. The files are
+  `IDI_RING_0` to `(IDI_RING_0 + 24)`; windres takes the sum. The brand logos (`ytm.ico`, `spotify.ico`) come from
+  the official SVG files in `res/` instead (`$BrandGlyphs`); a view box that isn't square is centered, and they're
+  also drawn at 14–42 px (`Row`), the playlist rows' size. The files are
   committed. To add a glyph, add its name to the table and run the script, then add an `ICON` line to the `.rc` and
   an `IDI_` macro. CMake globs `res/glyphs` for the `.rc`'s dependencies.
 - `make-icon.ps1` and `make-glyphs.ps1` share the ICO writer in `res/IconFile.ps1`.

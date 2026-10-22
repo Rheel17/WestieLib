@@ -13,8 +13,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `-Screenshot` saves the window to a PNG via `PrintWindow(PW_RENDERFULLCONTENT)`, cropped to
   `DWMWA_EXTENDED_FRAME_BOUNDS`. Read the PNG to look at it.
 - Expected sizes are written in DIPs and scaled with the window's DPI (the `S` helper).
-- When a monitor with another DPI is attached, runs 5 and 6 cover it. Run 5 moves the window there, which sends
-  `WM_DPICHANGED`, and run 6 restores it there from the saved state. Both check everything that scales
+- When a monitor with another DPI is attached, runs 9 and 10 cover it. Run 9 moves the window there, which sends
+  `WM_DPICHANGED`, and run 10 restores it there from the saved state. Both check everything that scales
   (`Check-Scaled`).
 - Usually every monitor runs at the same scale, and those runs print `Skipped`. After a change to DPI handling (fonts,
   image lists, bar heights, anything in `apply_dpi`), ask the user to set one monitor to another scale (Settings ›
@@ -33,13 +33,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - The app writes `HKCU\Software\WestieLib\Window` every time it closes. Any script that starts it must set the user's
   values aside first and put them back in a `finally` block, as `ui-checks.ps1` does. Never delete that key without
   restoring it. When the app saves a new value, add its name to `$StateNames`, or it won't be put back.
-- The app's files (`settings.json`, `tools\`) go to the folder `WESTIELIB_DATA_DIR` names, when it's set.
+- The app's files (`settings.json`, `state.json`, `tools\`) go to the folder `WESTIELIB_DATA_DIR` names, when it's set.
   `ui-checks.ps1` sets it to a new folder under `%TEMP%` for the apps it starts, and deletes that folder in its
   `finally` block, so `%LOCALAPPDATA%\WestieLib` is never touched. Any other script that starts the app does the same.
   The checks only type library folders (`C:\WestieLib-check-<random>`, …), and never create them.
 - The checks never reach the network: they set `WESTIELIB_GITHUB_API` to `http://127.0.0.1:9`, where nothing listens,
   so every release look-up fails within a couple of seconds with `Couldn't reach 127.0.0.1: …` (in Windows' language).
   `Start-App` waits for the app's first tool run to end (`Wait-ToolsIdle`: Check for updates is enabled again).
+- Runs 1 to 5 have no playlists, so they see the welcome screen. Run 6 adds playlists (`Add-Playlist`), run 7 starts
+  with them, and run 8 breaks `state.json`; then it is deleted, so the DPI runs see the welcome screen again.
 - Run 1 starts without tools, so yt-dlp's install fails. Run 2 starts with fake ones (`Install-FakeTools`: a
   `tools.json` and empty executables) and `autoUpdateTools` off, so nothing is looked up until Check for updates.
 - Downloads themselves aren't in the checks. To try them by hand, point `WESTIELIB_DATA_DIR` at a scratch folder and
@@ -91,7 +93,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   in a `PrintWindow` capture instead, as the columns darker than mid-gray (`StatusTextGaps`). `StatusSeparators` finds
   the bar's separator lines the same way. `Check-That` is for checks that pass within a range.
 - A `Label`, the All tracks row and buttons keep their text as the window text, which `GetWindowTextW` (`TextOf`) reads
-  from another process without a message.
+  from another process without a message. So does the Add playlist dialog's detection line, which paints itself
+  (`Get-LinkLine`).
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
   the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area

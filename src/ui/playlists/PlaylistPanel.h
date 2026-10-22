@@ -22,6 +22,7 @@ public:
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void set_track_counts(const TrackCounts& counts);
+    void set_has_playlists(bool has_playlists);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -37,6 +38,7 @@ private:
     framework::Button add_button_;
     framework::Rect rule_;
     int empty_text_height_ = 0;
+    bool has_playlists_ = false;
 };
 
 }

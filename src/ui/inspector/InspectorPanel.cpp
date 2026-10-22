@@ -27,6 +27,10 @@ void InspectorPanel::apply_fonts(const framework::FontSet& fonts) {
     layout();
 }
 
+void InspectorPanel::show_placeholder(bool shown) {
+    ShowWindow(placeholder_.hwnd(), shown ? SW_SHOWNA : SW_HIDE);
+}
+
 LRESULT InspectorPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE: layout(); return 0;

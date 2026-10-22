@@ -164,7 +164,7 @@ With no playlists, the list reads `No playlists yet.` in gray.
 
 | Line | Content |
 |------|---------|
-| 1 | Source logo (the YouTube Music or Spotify icon, 14 px) and the name in semibold |
+| 1 | Source logo (the YouTube Music or Spotify icon, 14 px) and the name in semibold. Until its first fetch a playlist has no name, and this reads `YouTube Music playlist` or `Spotify playlist` |
 | 2 | `55 tracks` |
 | 3 | synced/total bar, then `51/55` |
 | 4 | non-zero counts only: `3 waiting · 1 failed · 2 to review` in gray / red / amber. Left out when all are zero |
@@ -180,7 +180,7 @@ With no playlists, the list reads `No playlists yet.` in gray.
   | ⚠    | fetch failed      | the last fetch failed                               |
   | ✕    | failures          | some tracks failed                                  |
   | ⧗    | waiting for tools | its fetch, or some of its tracks, wait for a tool   |
-  | ○    | unsynced          | some tracks are waiting                             |
+  | ○    | unsynced          | some tracks are waiting, or it was never synced     |
   | ✓    | synced            | none of the above                                   |
 
   While it waits for tools, the last-sync text reads `Waiting for yt-dlp`.
@@ -194,6 +194,9 @@ With no playlists, the list reads `No playlists yet.` in gray.
   - While the playlist syncs, the line reads `Syncing… 6 of 22 ⟳`. The button turns into the blue ⟳, which
     spins clockwise at about one turn per 1.2 s, and the status icon steps aside because the sync supersedes it.
   - A playlist that is in the run but hasn't started yet reads `Queued ⟳`, with the icon still and faded.
+
+The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
+with `0/0`, and `○ Never synced ↻`.
 
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
 so their left edge is where the All tracks name starts.
@@ -407,10 +410,17 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 
 - **Add playlist**:
   - "Paste a link to a public YouTube Music or Spotify playlist."
-  - A URL edit, with a live detection line under it: the YouTube Music or Spotify logo with
-    `YouTube Music playlist` / `Spotify playlist`, or `Not a supported playlist link`.
-  - A `Sync now` check box (on by default).
-  - `Add` (default, disabled until the link is supported) and `Cancel`.
+  - A URL edit, wide enough to show a whole shared link (`https://open.spotify.com/playlist/<id>?si=<16 characters>`,
+    or a YouTube Music link with a 34-character list id) without scrolling, with a live detection line under it: the YouTube Music or Spotify logo with
+    `YouTube Music playlist` / `Spotify playlist`, or `Not a supported playlist link` in gray and without a logo.
+    The line is empty while the edit is. Spaces and line breaks around a pasted link don't count.
+  - A link to a playlist that is already in the list reads `Spotify playlist · already added` (with its logo). Two
+    links name the same playlist when they have the same playlist id, so a shared link's `?si=…` makes no
+    difference. The links WestieLib takes are in `arch.md` (Playlist links).
+  - A `Sync now` check box (on by default). Until syncing exists, it has no effect.
+  - `Add` (default, disabled until the link is a supported playlist that isn't in the list yet) and `Cancel`.
+  - `Add` stores the playlist without a name. The welcome screen gives way to the main panel, and the playlist
+    shows in the left panel.
 - **Choose a video**. Opened by `Choose video…` in the inspector, the Track menu or Edit track. One dialog
   covers both the case with several candidates and the case where nothing was found:
   - At the top: the source track (glyph, title, artists, album, length) and either "Current match: <title>,
@@ -498,13 +508,13 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
-| Left panel | All tracks is a custom-painted row window above the list. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon. The playlist list is a `LISTBOX` with `LBS_OWNERDRAWVARIABLE` (its items are at most 255 px tall, which a playlist row passes above ~260% scaling; settle this with the playlist rows); rows, bars and icons drawn in `WM_DRAWITEM`. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
 | Inspector | scrollable child window with statics, `WC_LINK`, buttons, edits, `SS_ETCHEDHORZ` section rules; covers decoded with WIC into an HBITMAP |
-| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
+| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (logo and text), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS` |
 
 The UI uses the Windows 10 palette:

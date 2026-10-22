@@ -7,6 +7,7 @@
 
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
+#include "core/state/StateStore.h"
 #include "core/tools/ToolManager.h"
 #include "core/tools/ToolStatus.h"
 #include "core/tools/ToolsChecked.h"
@@ -37,7 +38,7 @@ namespace westie::ui {
 
 class MainWindow final : public framework::Window {
 public:
-    MainWindow(core::SettingsStore& settings_store, core::Settings settings, CoreEventQueue& events, core::ToolManager& tools);
+    MainWindow(core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools);
 
     void show(int show_command) override;
 
@@ -51,6 +52,9 @@ private:
     void apply_dpi(framework::Dpi dpi);
     void show_track_counts(const TrackCounts& counts);
     void change_library_folder(const std::filesystem::path& folder);
+    bool has_playlists() const;
+    void add_playlist();
+    void show_playlists();
     void save_state() const;
     MainLayout current_layout() const;
     void layout_panels();
@@ -78,6 +82,7 @@ private:
 
     core::SettingsStore& settings_store_;
     core::Settings settings_;
+    core::StateStore& state_;
     CoreEventQueue& events_;
     core::ToolManager& tools_;
     ToolBoard tool_board_;

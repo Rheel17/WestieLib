@@ -12,7 +12,18 @@ namespace westie::platform::win32 {
 
 namespace {
 
+std::filesystem::path temporary_for(const std::filesystem::path& file) {
+    std::filesystem::path temporary = file;
+    temporary += L".tmp";
+    return temporary;
+}
+
 void write_flushed(const std::filesystem::path& file, std::string_view contents) {
+    if (contents.size() > std::numeric_limits<DWORD>::max()) {
+        throw std::length_error("replace_file: too much to write");
+    }
+    std::filesystem::create_directories(file.parent_path());
+
     UniqueFile handle = adopt_file(CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!handle) {
         throw_last_error("CreateFileW");
@@ -59,16 +70,21 @@ std::optional<std::string> Win32FileOps::read_file(const std::filesystem::path& 
 }
 
 void Win32FileOps::replace_file(const std::filesystem::path& file, std::string_view contents) {
-    if (contents.size() > std::numeric_limits<DWORD>::max()) {
-        throw std::length_error("replace_file: too much to write");
-    }
-    std::filesystem::create_directories(file.parent_path());
-
     // Renaming over the file replaces it in one step, so a crash leaves the old contents or the new, never half
-    std::filesystem::path temporary = file;
-    temporary += L".tmp";
+    std::filesystem::path temporary = temporary_for(file);
     write_flushed(temporary, contents);
     check(MoveFileExW(temporary.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
+}
+
+void Win32FileOps::replace_file_keeping_backup(const std::filesystem::path& file, const std::filesystem::path& backup, std::string_view contents) {
+    std::filesystem::path temporary = temporary_for(file);
+    write_flushed(temporary, contents);
+    // ReplaceFileW needs a file to replace; the first save has no previous version to keep
+    if (!is_file(file)) {
+        check(MoveFileExW(temporary.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
+        return;
+    }
+    check(ReplaceFileW(file.c_str(), temporary.c_str(), backup.c_str(), REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr), "ReplaceFileW");
 }
 
 void Win32FileOps::create_folders(const std::filesystem::path& folder) {

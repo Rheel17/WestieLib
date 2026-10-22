@@ -13,6 +13,7 @@ public:
     explicit InspectorPanel(HWND parent);
 
     void apply_fonts(const framework::FontSet& fonts);
+    void show_placeholder(bool shown);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

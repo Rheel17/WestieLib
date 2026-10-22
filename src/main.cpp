@@ -9,6 +9,7 @@
 #include "Version.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
+#include "core/state/StateStore.h"
 #include "core/tools/ToolManager.h"
 #include "platform/win32/BCryptHasher.h"
 #include "platform/win32/ComApartment.h"
@@ -58,13 +59,15 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         );
         // A settings file that doesn't read stops the app before it shows anything
         westie::core::Settings settings = settings_store.load();
+        // So does a state file that doesn't read
+        westie::core::StateStore state(files, data / L"state.json");
 
         // The window goes before the tool manager, whose worker may still report into the queue while it stops
         westie::ui::CoreEventQueue events;
         westie::core::ToolManager tools({.files = files, .http = http, .hasher = hasher, .archives = archives}, github_api_url(), data / L"tools", events);
 
         westie::ui::framework::init_common_controls();
-        westie::ui::MainWindow window(settings_store, settings, events, tools);
+        westie::ui::MainWindow window(settings_store, settings, state, events, tools);
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         // Started before the window shows, so its first paint already knows of the run
         tools.run(settings.auto_update_tools);

@@ -1,14 +1,17 @@
 #include "ui/main/MainWindow.h"
 
+#include <chrono>
 #include <optional>
 #include <utility>
 #include <variant>
 
 #include "ResourceIds.h"
+#include "core/playlists/AddPlaylist.h"
 #include "platform/win32/UniqueHandle.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/commands/CommandMenu.h"
 #include "ui/dialogs/AboutDialog.h"
+#include "ui/dialogs/AddPlaylistDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Instance.h"
@@ -27,10 +30,13 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 
 }
 
-MainWindow::MainWindow(core::SettingsStore& settings_store, core::Settings settings, CoreEventQueue& events, core::ToolManager& tools) :
+MainWindow::MainWindow(
+        core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools
+) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
         settings_(std::move(settings)),
+        state_(state),
         events_(events),
         tools_(tools),
         placement_(hwnd()),
@@ -62,7 +68,7 @@ MainWindow::MainWindow(core::SettingsStore& settings_store, core::Settings setti
     } else {
         placement_.apply_initial_size(InitialWindowDips);
     }
-    update_commands();
+    show_playlists();
     events_.set_target(hwnd());
 }
 
@@ -133,6 +139,30 @@ void MainWindow::change_library_folder(const std::filesystem::path& folder) {
     status_bar_.set_library_folder(folder);
 }
 
+bool MainWindow::has_playlists() const {
+    return !state_.state().playlists.empty();
+}
+
+void MainWindow::add_playlist() {
+    AddPlaylistDialog dialog([this](const core::PlaylistLink& link) { return state_.state().playlists.contains(link.key()); });
+    std::optional<AddPlaylistRequest> request = dialog.choose(hwnd());
+    // Nothing syncs yet, so Sync now has no effect
+    if (request && core::add_playlist(state_, request->link, std::chrono::system_clock::now())) {
+        show_playlists();
+    }
+}
+
+void MainWindow::show_playlists() {
+    playlists_.set_has_playlists(has_playlists());
+    inspector_.show_placeholder(!has_playlists());
+    layout_panels();
+    // A hidden window would keep the keyboard focus from going anywhere
+    if (IsChild(welcome_.hwnd(), GetFocus())) {
+        SetFocus(hwnd());
+    }
+    update_commands();
+}
+
 void MainWindow::save_state() const {
     save_window_state({.placement = placement_.current(), .panels = panels_});
 }
@@ -152,8 +182,9 @@ void MainWindow::layout_panels() {
     positions.place(playlists_.hwnd(), layout.playlists);
     positions.place(playlists_splitter_.hwnd(), layout.playlists_splitter);
     // Until there are playlists, the welcome screen takes the main column
-    positions.place(tracks_.hwnd(), std::nullopt);
-    positions.place(welcome_.hwnd(), layout.tracks);
+    bool welcome = !has_playlists();
+    positions.place(tracks_.hwnd(), welcome ? std::nullopt : std::optional(layout.tracks));
+    positions.place(welcome_.hwnd(), welcome ? std::optional(layout.tracks) : std::nullopt);
     positions.place(inspector_splitter_.hwnd(), layout.inspector_splitter);
     positions.place(inspector_.hwnd(), layout.inspector);
     positions.place(log_splitter_.hwnd(), layout.log_splitter);
@@ -163,7 +194,7 @@ void MainWindow::layout_panels() {
 }
 
 CommandState MainWindow::command_state() const {
-    return {.tools_busy = tool_board_.running(), .log_visible = panels_.log_visible};
+    return {.tools_busy = tool_board_.running(), .has_playlists = has_playlists(), .log_visible = panels_.log_visible};
 }
 
 void MainWindow::update_commands() {
@@ -176,7 +207,8 @@ void MainWindow::run_command(CommandId command) {
     }
 
     switch (command) {
-    case CommandId::Exit:            SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::AddPlaylist:     add_playlist(); return;
+    case CommandId::Exit:           SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
     case CommandId::ToggleLog:       toggle_log(); return;
     case CommandId::Settings:        show_settings(); return;
     case CommandId::CheckForUpdates: tools_.run(true); return;

@@ -2,6 +2,8 @@
 # res/glyphs/<name>.ico. Glyphs marked Disabled below also get <name>-disabled.ico: grayscale at 45% opacity, like
 # the mockup's disabled toolbar buttons. Glyphs marked Small also get the sizes of a 12 px glyph, as in the status bar.
 # The progress ring, which the mockup draws with ring(percent), becomes ring-00.ico to ring-24.ico, one per step.
+# The brand logos come from the official SVG files in res/ instead of the mockup's stand-ins, and are also drawn at
+# 14 px, as in the playlist rows.
 #
 #   powershell -ExecutionPolicy Bypass -File res/make-glyphs.ps1
 #
@@ -28,9 +30,16 @@ $Glyphs = [ordered]@{
 	warn = @{ Small = $true }
 }
 
-# 100% to 300% display scaling of a 16 px glyph, and of a 12 px one
+# Brand logo name, its SVG file in res/, and its options as above. Row glyphs are also drawn at 14 px.
+$BrandGlyphs = [ordered]@{
+	ytm = @{ File = 'Youtube_Music_icon.svg'; Row = $true }
+	spotify = @{ File = 'Spotify_icon.svg'; Row = $true }
+}
+
+# 100% to 300% display scaling of a 16 px glyph, of a 12 px one, and of a 14 px one
 $Sizes = 16, 20, 24, 28, 32, 40, 48
 $SmallSizes = 12, 15, 18, 21, 24, 30, 36
+$RowSizes = 14, 18, 21, 25, 28, 35, 42
 
 # The mockup's ring(): a gray track and a blue arc from 12 o'clock, clockwise
 $RingSteps = 24
@@ -53,8 +62,10 @@ function Get-RingMarkup([int]$step) {
 		$top = (8 - $RingRadius).ToString('0.####', $Invariant)
 		$body += "<path d=`"M8 $top A$RingRadius $RingRadius 0 $large 1 $x $y`" fill=`"none`" stroke=`"$RingArc`" stroke-width=`"$RingWidth`"/>"
 	}
-	[pscustomobject]@{ Body = $body; ViewBox = [double[]](0, 0, 16, 16) }
+	[pscustomobject]@{ Root = (ConvertTo-SvgRoot $body); ViewBox = [double[]](0, 0, 16, 16) }
 }
+
+function ConvertTo-SvgRoot([string]$body) { ([xml]"<svg>$body</svg>").DocumentElement }
 $DisabledOpacity = 0.45
 $InheritedAttributes = 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'
 
@@ -62,7 +73,23 @@ function Get-GlyphMarkup([string]$html, [string]$name) {
 	$match = [regex]::Match($html, "(?m)^\s*$name\s*:\s*SVG\('([^']*)'(?:,\s*'([^']*)')?\)")
 	if (-not $match.Success) { throw "Glyph '$name' isn't in $Mockup" }
 	$viewBox = if ($match.Groups[2].Success) { $match.Groups[2].Value } else { '0 0 16 16' }
-	[pscustomobject]@{ Body = $match.Groups[1].Value; ViewBox = [double[]]($viewBox -split ' ') }
+	[pscustomobject]@{ Root = (ConvertTo-SvgRoot $match.Groups[1].Value); ViewBox = [double[]]($viewBox -split ' ') }
+}
+
+function Get-SvgFileGlyph([string]$path) {
+	$settings = New-Object System.Xml.XmlReaderSettings
+	# Illustrator declares its namespaces as entities in an internal DTD; nothing is fetched from outside
+	$settings.DtdProcessing = [System.Xml.DtdProcessing]::Parse
+	$settings.XmlResolver = $null
+	$reader = [System.Xml.XmlReader]::Create($path, $settings)
+	try {
+		$document = New-Object System.Xml.XmlDocument
+		$document.Load($reader)
+	} finally {
+		$reader.Dispose()
+	}
+	$root = $document.DocumentElement
+	[pscustomobject]@{ Root = $root; ViewBox = [double[]]($root.GetAttribute('viewBox').Trim() -split '[\s,]+') }
 }
 
 function Get-Number($element, [string]$name) {
@@ -91,7 +118,10 @@ function Get-Pen([hashtable]$style) {
 	$pen
 }
 
-function Add-Shape($context, [System.Xml.XmlElement]$element, [hashtable]$inherited) {
+$NonDrawingElements = 'metadata', 'title', 'desc', 'defs'
+
+function Add-Shape($context, [System.Xml.XmlNode]$element, [hashtable]$inherited) {
+	if ($element -isnot [System.Xml.XmlElement] -or $NonDrawingElements -contains $element.LocalName) { return }
 	$style = $inherited.Clone()
 	foreach ($name in $InheritedAttributes) {
 		$value = $element.GetAttribute($name)
@@ -105,6 +135,11 @@ function Add-Shape($context, [System.Xml.XmlElement]$element, [hashtable]$inheri
 		}
 		'path' {
 			$geometry = [System.Windows.Media.Geometry]::Parse($element.GetAttribute('d'))
+		}
+		'polygon' {
+			$numbers = $element.GetAttribute('points').Trim() -split '[\s,]+'
+			$pairs = for ($i = 0; $i -lt $numbers.Count; $i += 2) { "$($numbers[$i]),$($numbers[$i + 1])" }
+			$geometry = [System.Windows.Media.Geometry]::Parse("M$($pairs -join ' L')Z")
 		}
 		'circle' {
 			$center = New-Object System.Windows.Point (Get-Number $element 'cx'), (Get-Number $element 'cy')
@@ -125,10 +160,15 @@ function Add-Shape($context, [System.Xml.XmlElement]$element, [hashtable]$inheri
 function Get-GlyphPixels($glyph, [int]$size) {
 	$visual = New-Object System.Windows.Media.DrawingVisual
 	$context = $visual.RenderOpen()
-	$scale = $size / $glyph.ViewBox[2]
-	$context.PushTransform((New-Object System.Windows.Media.MatrixTransform $scale, 0, 0, $scale, (-$glyph.ViewBox[0] * $scale), (-$glyph.ViewBox[1] * $scale)))
-	$svg = [xml]"<svg>$($glyph.Body)</svg>"
-	foreach ($element in $svg.DocumentElement.ChildNodes) { Add-Shape $context $element @{} }
+	# A view box that isn't square is centered in the square glyph
+	$width = $glyph.ViewBox[2]
+	$height = $glyph.ViewBox[3]
+	$side = [math]::Max($width, $height)
+	$scale = $size / $side
+	$x = (($side - $width) / 2 - $glyph.ViewBox[0]) * $scale
+	$y = (($side - $height) / 2 - $glyph.ViewBox[1]) * $scale
+	$context.PushTransform((New-Object System.Windows.Media.MatrixTransform $scale, 0, 0, $scale, $x, $y))
+	foreach ($element in $glyph.Root.ChildNodes) { Add-Shape $context $element @{} }
 	$context.Pop()
 	$context.Close()
 
@@ -159,12 +199,18 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 $work = @($Glyphs.Keys | ForEach-Object { [pscustomobject]@{ Name = $_; Glyph = (Get-GlyphMarkup $html $_); Options = $Glyphs[$_] } })
 # The track table shows the ring at 16 px, and the status bar at 12 px
 $work += @(0..$RingSteps | ForEach-Object { [pscustomobject]@{ Name = 'ring-{0:D2}' -f $_; Glyph = (Get-RingMarkup $_); Options = @{ Small = $true } } })
+$work += @($BrandGlyphs.Keys | ForEach-Object {
+	[pscustomobject]@{ Name = $_; Glyph = (Get-SvgFileGlyph (Join-Path $PSScriptRoot $BrandGlyphs[$_].File)); Options = $BrandGlyphs[$_] }
+})
 
 foreach ($item in $work) {
 	$name = $item.Name
 	$options = $item.Options
 	$glyph = $item.Glyph
-	$glyphSizes = if ($options.Small) { $Sizes + $SmallSizes | Sort-Object -Unique } else { $Sizes }
+	$glyphSizes = $Sizes
+	if ($options.Small) { $glyphSizes += $SmallSizes }
+	if ($options.Row) { $glyphSizes += $RowSizes }
+	$glyphSizes = @($glyphSizes | Sort-Object -Unique)
 	$frames = @()
 	$disabledFrames = @()
 	foreach ($size in $glyphSizes) {
