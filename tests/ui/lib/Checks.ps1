@@ -514,9 +514,41 @@ function Write-ManyPlaylists([int]$count) {
 	[IO.File]::WriteAllText($StateFile, '{"version": 1, "playlists": {' + ($entries -join ', ') + '}}')
 }
 
+$MiddleDot = [char]0xB7
+
+function Get-TrackPanel($hwnd) { Get-Panel $hwnd 'Tracks' }
+
+function Get-StatusTabs($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'SysTabControl32')[0] }
+
+function Get-ResultLine($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'WestieLib.Label')[0] }
+
+function Get-TrackTable($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'SysListView32')[0] }
+
 # The inspector's visible card
 function Get-InspectorCard($hwnd) {
 	@(Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Panel' | Where-Object { [W]::IsWindowVisible($_) })[0]
+}
+
+# A card's name, then the texts of its windows from the top, and left to right within a row
+function Get-CardTexts($hwnd) {
+	$card = Get-InspectorCard $hwnd
+	$windows = @([W]::Children($card, [NullString]::Value) | Where-Object { [W]::GetAncestor($_, 1) -eq $card } |
+		ForEach-Object { [pscustomobject]@{ Rect = [W]::RectIn($_, $card); Text = [W]::TextOf($_) } })
+	$texts = @($windows | Sort-Object { $_.Rect.Top }, { $_.Rect.Left } | ForEach-Object { $_.Text })
+	"$([W]::TextOf($card)): $($texts -join ' / ')"
+}
+
+# Adds a playlist through File > Add playlist; returns the dialog's line for the link. Sync now is turned off unless
+# -SyncNow says to leave it on, so a check of state.json doesn't race a sync.
+function Add-Playlist($hwnd, [string]$link, [switch]$SyncNow) {
+	Send-Command $hwnd '&Add playlist...'
+	$dialog = Wait-OwnedWindow $hwnd
+	if (-not $SyncNow) { [void][W]::SendMessageW([W]::GetDlgItem($dialog, 1102), 0xF1, [IntPtr]::Zero, [IntPtr]::Zero) }
+	Set-PlaylistLink $dialog $link
+	$line = Wait-LinkLine $dialog
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
+	$line
 }
 
 function LParam([int]$x, [int]$y) { [IntPtr]([int64]($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)) }

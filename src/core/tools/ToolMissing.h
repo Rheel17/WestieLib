@@ -9,7 +9,12 @@ namespace westie::core {
 
 class ToolMissing final : public std::runtime_error {
 public:
-    explicit ToolMissing(ToolPackage package) : std::runtime_error(std::format("{} isn't installed", tool_package_name(package))) {}
+    explicit ToolMissing(ToolPackage package) : std::runtime_error(std::format("{} isn't installed", tool_package_name(package))), package_(package) {}
+
+    ToolPackage package() const noexcept { return package_; }
+
+private:
+    ToolPackage package_;
 };
 
 }

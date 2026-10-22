@@ -270,6 +270,12 @@ Each time, if another track already has that video, the two tracks merge:
 
 Sources stay attached to their track until the track is removed.
 
+**Tracks that leave every playlist.** After a fetch and after `removePlaylist`, a track none of whose sources is in a
+playlist anymore is looked at again (`prune_tracks`, `src/core/state/`):
+- A track without a file (`pending`, `failed`) is deleted with its sources: there is nothing in the library to decide
+  on.
+- A track with a file becomes `orphaned` (see SyncEngine › Orphans).
+
 **Effective metadata.** Tags and file names use, per field, the first of:
 1. `edits`;
 2. the track's first Spotify source, because Spotify metadata is the cleanest (separate artists, proper album,
@@ -333,8 +339,13 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   `settings.json`: the state holds the user's edits, so it is never overwritten.
 - `update(change)` applies a change to a copy, saves the copy, and only then keeps it, so a failed save leaves the
   state as it was.
-- So far the state has only playlists, with `url`, `name` and `addedAt`, and only the UI thread uses it. The mutex
-  arrives with the first worker thread, the SyncEngine's.
+- The SyncEngine's worker writes the state while the UI reads it. So the store keeps the state as a
+  `std::shared_ptr<const State>`: `snapshot()` hands out the current one under a mutex, and a reader keeps it for as
+  long as it needs, unchanged. `update` holds a second mutex for its whole run, so changes never interleave, and swaps
+  the new state in only after the save.
+- So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
+  `fetchErrorAt`; sources with `title`, `artists`, `durationMs` and `track`; and tracks with `sources`, `status` and
+  `addedAt`. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
 
@@ -506,6 +517,14 @@ A new look-up stops the one before, and so does `stop()`; a stopped look-up answ
 **YouTubeMusicSource** runs `yt-dlp --flat-playlist -J <url>` and maps each entry to a `SourceTrack` with its
 `videoId`. The album and year of these sources come from yt-dlp's info JSON at download time.
 
+- `fetch_youtube_music_playlist` (`src/core/sources/YouTubeMusicPlaylist.cpp`) does it. A playlist of about 1000
+  entries takes yt-dlp some 7 s and 1.2 MB of JSON.
+- An entry gives `id`, `title`, `duration` (seconds) and `channel`. The channel is the only artist the flat list
+  knows. Songs from an auto-generated channel have ` - Topic` after the artist's name, which is dropped.
+- `[Private video]` and `[Deleted video]` entries can't be downloaded, so they are skipped.
+- Errors read as in the look-up (`src/core/sources/YtDlpError.cpp`). A playlist that doesn't exist or is private
+  fails with "The playlist doesn't exist or is private."
+
 **SpotifySource** reads public Spotify playlists:
 
 1. `GET https://open.spotify.com/embed/playlist/<id>` and parse the `__NEXT_DATA__` JSON. It holds an anonymous
@@ -659,6 +678,22 @@ A `kept` or `orphaned` track that one of its sources brings back into a playlist
 **Cancellation** sets the run's `CancelToken` and terminates the Job Object. In-flight tracks return to `pending`
 and their work folders are cleaned.
 
+**So far** (`src/core/sync/`), a run only fetches, and only YouTube Music playlists; Spotify playlists are left out
+until SpotifySource exists.
+- `sync(keys)` queues the playlists that aren't queued yet and emits `SyncQueued`. Without a run it starts one on a
+  worker thread (`std::jthread`); during a run they join its queue. The queue is behind a mutex, so a run that finds
+  it empty and ends can't miss a `sync` that comes at the same moment.
+- Per playlist the run emits `PlaylistFetching` and fetches. `apply_fetch` (`ApplyFetch.cpp`) puts the result in
+  the state: the playlist's `name` and `sources`, `lastSync`, no `fetchError`, the source values from the playlist,
+  a `pending` track for each new source (keyed like the source), then `prune_tracks`. A playlist removed during
+  the fetch is left alone. Then the run emits `PlaylistFetched`.
+- A failed fetch stores `fetchError` / `fetchErrorAt` and emits `PlaylistFetchFailed`; the run goes on.
+- Without yt-dlp, the run emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs it
+  (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
+- `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, the queue is dropped,
+  and nothing is written.
+- Every run ends with `SyncFinished`, cancelled or not.
+
 ## Core API
 
 ### Commands (UI layer to core)
@@ -667,7 +702,7 @@ and their work folders are cleaned.
 |------------------------------------------|----------------------------------------------------------------|
 | `lookUpPlaylist(link)`                   | Finds a playlist's name before it is added; answers with `PlaylistLookedUp` |
 | `addPlaylist(url, name)`                 | Adds a playlist with the name its look-up found; the source type follows from the URL |
-| `removePlaylist(id)`                     | Removes a playlist; tracks left with no source in a playlist become `orphaned` |
+| `removePlaylist(id)`                     | Removes a playlist; tracks left with no source in a playlist are deleted, or become `orphaned` when they have a file |
 | `sync(playlistIds)`                      | Starts a sync run                                              |
 | `cancel()`                               | Cancels the running sync                                       |
 | `retry(trackKeys)`                       | Queues the given tracks again without fetching playlists       |
@@ -686,6 +721,8 @@ and their work folders are cleaned.
 | Event                          | Payload                                         |
 |--------------------------------|-------------------------------------------------|
 | `SyncStarted` / `SyncFinished` | run summary                                     |
+| `SyncQueued`                   | so far: playlist keys added to the run's queue (it replaces `SyncStarted`) |
+| `PlaylistFetching`             | playlist key, the tools its fetch waits for     |
 | `PlaylistLookedUp`             | playlist key, outcome, name or error            |
 | `PlaylistFetched`              | playlist id, name, track count                  |
 | `PlaylistFetchFailed`          | playlist id, error                              |
@@ -736,10 +773,11 @@ src/
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
         playlists/  playlist links, the playlist look-up, addPlaylist
         settings/   Settings, SettingsStore
-        sources/    SourceType, each source's playlist name; later the PlaylistSources
-        state/      State, StateStore
+        sources/    SourceType, each source's playlist name, the YouTube Music fetch; later SpotifySource
+        state/      State, StateStore, prune_tracks
+        sync/       SyncEngine, apply_fetch and the sync events
         tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore, ToolFolder, YtDlp and the tool types
-                    later areas get folders of their own: SyncEngine, Matcher, Downloader, Tagger,
+                    later areas get folders of their own: Matcher, Downloader, Tagger,
                     Library, SelfUpdater, RemoteConfig
     platform/       service interfaces
     platform/win32/ Win32 implementations of the platform services

@@ -1,11 +1,17 @@
 #include "core/state/StateStore.h"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdint>
 #include <format>
 #include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include <glaze/glaze.hpp>
 
@@ -19,9 +25,36 @@ namespace {
 
 constexpr int StateVersion = 1;
 
+struct StatusName {
+    TrackStatus status = TrackStatus::Pending;
+    std::string_view name{};
+};
+
+constexpr std::array StatusNames = {
+    StatusName{TrackStatus::Pending, "pending"},   StatusName{TrackStatus::Downloaded, "downloaded"}, StatusName{TrackStatus::Failed, "failed"},
+    StatusName{TrackStatus::Orphaned, "orphaned"}, StatusName{TrackStatus::Kept, "kept"},
+};
+
 struct PlaylistJson {
     std::string url{};
     std::string name{};
+    std::string added_at{};
+    std::optional<std::string> last_sync{};
+    std::optional<std::string> fetch_error{};
+    std::optional<std::string> fetch_error_at{};
+    std::vector<std::string> sources{};
+};
+
+struct SourceJson {
+    std::string title{};
+    std::vector<std::string> artists{};
+    std::int64_t duration_ms = 0;
+    std::string track{};
+};
+
+struct TrackJson {
+    std::vector<std::string> sources{};
+    std::string status{};
     std::string added_at{};
 };
 
@@ -29,12 +62,57 @@ struct PlaylistJson {
 struct StateJson {
     int version = StateVersion;
     std::map<std::string, PlaylistJson> playlists{};
+    std::map<std::string, SourceJson> sources{};
+    std::map<std::string, TrackJson> tracks{};
 };
 
 std::filesystem::path backup_for(const std::filesystem::path& file) {
     std::filesystem::path backup = file;
     backup += L".bak";
     return backup;
+}
+
+std::string_view status_name(TrackStatus status) {
+    return std::ranges::find(StatusNames, status, &StatusName::status)->name;
+}
+
+TrackStatus status_named(std::string_view name) {
+    auto found = std::ranges::find(StatusNames, name, &StatusName::name);
+    // A status from a later version makes the track wait for another try rather than losing it
+    return found == StatusNames.end() ? TrackStatus::Pending : found->status;
+}
+
+std::optional<std::chrono::system_clock::time_point> parse_optional_time(const std::optional<std::string>& text) {
+    return text ? parse_iso_time(*text) : std::nullopt;
+}
+
+std::optional<std::string> format_optional_time(const std::optional<std::chrono::system_clock::time_point>& time) {
+    return time ? std::optional(format_iso_time(*time)) : std::nullopt;
+}
+
+Playlist playlist_of(PlaylistJson&& json) {
+    return {
+        .url = std::move(json.url),
+        .name = std::move(json.name),
+        // A time that doesn't read puts the playlist first rather than losing it
+        .added_at = parse_iso_time(json.added_at).value_or(std::chrono::system_clock::time_point{}),
+        .sources = std::move(json.sources),
+        .last_sync = parse_optional_time(json.last_sync),
+        .fetch_error = std::move(json.fetch_error).value_or(""),
+        .fetch_error_at = parse_optional_time(json.fetch_error_at),
+    };
+}
+
+PlaylistJson json_of(const Playlist& playlist) {
+    return {
+        .url = playlist.url,
+        .name = playlist.name,
+        .added_at = format_iso_time(playlist.added_at),
+        .last_sync = format_optional_time(playlist.last_sync),
+        .fetch_error = playlist.fetch_error.empty() ? std::nullopt : std::optional(playlist.fetch_error),
+        .fetch_error_at = format_optional_time(playlist.fetch_error_at),
+        .sources = playlist.sources,
+    };
 }
 
 }
@@ -44,22 +122,37 @@ std::filesystem::path backup_for(const std::filesystem::path& file) {
 template<>
 struct glz::meta<westie::core::PlaylistJson> {
     using T = westie::core::PlaylistJson;
-    constexpr static auto value = glz::object("url", &T::url, "name", &T::name, "addedAt", &T::added_at);
+    constexpr static auto value = glz::object(
+            "url", &T::url, "name", &T::name, "addedAt", &T::added_at, "lastSync", &T::last_sync, "fetchError", &T::fetch_error, "fetchErrorAt",
+            &T::fetch_error_at, "sources", &T::sources
+    );
+};
+
+template<>
+struct glz::meta<westie::core::SourceJson> {
+    using T = westie::core::SourceJson;
+    constexpr static auto value = glz::object("title", &T::title, "artists", &T::artists, "durationMs", &T::duration_ms, "track", &T::track);
+};
+
+template<>
+struct glz::meta<westie::core::TrackJson> {
+    using T = westie::core::TrackJson;
+    constexpr static auto value = glz::object("sources", &T::sources, "status", &T::status, "addedAt", &T::added_at);
 };
 
 template<>
 struct glz::meta<westie::core::StateJson> {
     using T = westie::core::StateJson;
-    constexpr static auto value = glz::object("version", &T::version, "playlists", &T::playlists);
+    constexpr static auto value = glz::object("version", &T::version, "playlists", &T::playlists, "sources", &T::sources, "tracks", &T::tracks);
 };
 
 namespace westie::core {
 
 StateStore::StateStore(platform::FileOps& files, std::filesystem::path file) :
-        files_(files), file_(std::move(file)), backup_(backup_for(file_)), state_(load()) {}
+        files_(files), file_(std::move(file)), backup_(backup_for(file_)), state_(std::make_shared<const State>(load())) {}
 
-const State& StateStore::state() const noexcept {
-    return state_;
+std::shared_ptr<const State> StateStore::snapshot() const noexcept {
+    return state_.load();
 }
 
 State StateStore::load() const {
@@ -81,9 +174,22 @@ State StateStore::load() const {
 
     State state;
     for (auto& [key, playlist] : json.playlists) {
-        // A time that doesn't read puts the playlist first rather than losing it
-        std::chrono::system_clock::time_point added_at = parse_iso_time(playlist.added_at).value_or(std::chrono::system_clock::time_point{});
-        state.playlists[key] = {.url = std::move(playlist.url), .name = std::move(playlist.name), .added_at = added_at};
+        state.playlists[key] = playlist_of(std::move(playlist));
+    }
+    for (auto& [key, source] : json.sources) {
+        state.sources[key] = {
+            .title = std::move(source.title),
+            .artists = std::move(source.artists),
+            .duration = std::chrono::milliseconds(source.duration_ms),
+            .track = std::move(source.track),
+        };
+    }
+    for (auto& [key, track] : json.tracks) {
+        state.tracks[key] = {
+            .sources = std::move(track.sources),
+            .status = status_named(track.status),
+            .added_at = parse_iso_time(track.added_at).value_or(std::chrono::system_clock::time_point{}),
+        };
     }
     return state;
 }
@@ -91,7 +197,13 @@ State StateStore::load() const {
 void StateStore::save(const State& state) {
     StateJson json;
     for (const auto& [key, playlist] : state.playlists) {
-        json.playlists[key] = {.url = playlist.url, .name = playlist.name, .added_at = format_iso_time(playlist.added_at)};
+        json.playlists[key] = json_of(playlist);
+    }
+    for (const auto& [key, source] : state.sources) {
+        json.sources[key] = {.title = source.title, .artists = source.artists, .duration_ms = source.duration.count(), .track = source.track};
+    }
+    for (const auto& [key, track] : state.tracks) {
+        json.tracks[key] = {.sources = track.sources, .status = std::string(status_name(track.status)), .added_at = format_iso_time(track.added_at)};
     }
 
     glz::expected<std::string, glz::error_ctx> contents = glz::write<PrettyJsonWriteOptions>(json);

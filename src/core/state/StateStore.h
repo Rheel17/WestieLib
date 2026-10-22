@@ -1,7 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <concepts>
 #include <filesystem>
+#include <memory>
+#include <mutex>
 #include <utility>
 
 #include "core/state/State.h"
@@ -13,13 +16,15 @@ class StateStore {
 public:
     StateStore(platform::FileOps& files, std::filesystem::path file);
 
-    const State& state() const noexcept;
+    std::shared_ptr<const State> snapshot() const noexcept;
 
     void update(std::invocable<State&> auto change) {
-        State changed = state_;
+        // Changes from the UI and the sync never interleave, and a reader never sees one halfway
+        std::scoped_lock updating(update_mutex_);
+        State changed = *snapshot();
         change(changed);
         save(changed);
-        state_ = std::move(changed);
+        state_.store(std::make_shared<const State>(std::move(changed)));
     }
 
 private:
@@ -29,7 +34,8 @@ private:
     platform::FileOps& files_;
     std::filesystem::path file_;
     std::filesystem::path backup_;
-    State state_;
+    std::mutex update_mutex_;
+    std::atomic<std::shared_ptr<const State>> state_;
 };
 
 }

@@ -19,7 +19,8 @@ enum class SortDirection { Ascending, Descending };
 struct ListColumn {
     const wchar_t* title = nullptr;
     int width = 0;
-    // Stays with the column wherever it moves; the list asks for cell texts by it
+    // Stays with the column wherever it moves. The list asks for cell texts by the column's index, which
+    // column_subitem turns back into this
     int subitem = 0;
     bool right_aligned = false;
 };
@@ -43,6 +44,7 @@ public:
     void set_column_order(std::span<const int> order);
     void set_sort_arrow(std::optional<ListSortArrow> arrow);
     void set_item_count(int count);
+    RECT cell_rect(int item, int column_index) const;
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

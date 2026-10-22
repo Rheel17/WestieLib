@@ -114,6 +114,13 @@ void ListView::set_item_count(int count) {
     platform::win32::check(SendMessageW(hwnd(), LVM_SETITEMCOUNT, count, 0), "LVM_SETITEMCOUNT");
 }
 
+RECT ListView::cell_rect(int item, int column_index) const {
+    // The message reads which rect from left, and which column from top
+    RECT rect{LVIR_BOUNDS, column_index, 0, 0};
+    platform::win32::check(SendMessageW(hwnd(), LVM_GETSUBITEMRECT, item, reinterpret_cast<LPARAM>(&rect)), "LVM_GETSUBITEMRECT");
+    return rect;
+}
+
 LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     LRESULT result = Control::handle_message(message, wparam, lparam);
     if (message != WM_NOTIFY || reinterpret_cast<const NMHDR*>(lparam)->hwndFrom != header()) {

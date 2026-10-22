@@ -201,6 +201,9 @@ With no playlists, the list reads `No playlists yet.` in gray.
 The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
 with `0/0`, and `○ Never synced ↻`.
 
+**So far** a sync only fetches YouTube Music playlists: their tracks show as Waiting, and nothing downloads. Spotify
+playlists are left out of a sync and stay `Never synced` until fetching them exists.
+
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
 so their left edge is where the All tracks name starts.
 
@@ -531,7 +534,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     - Looking up a YouTube Music playlist needs yt-dlp; a Spotify playlist needs no tool. While yt-dlp isn't installed
       the line waits, and the look-up starts by itself once yt-dlp is (see Vocabulary › Waiting for tools).
     - A long reason ends in an ellipsis.
-  - A `Sync now` check box (on by default). Until syncing exists, it has no effect.
+  - A `Sync now` check box (on by default). With it, `Add` also syncs the new playlist; during a sync it joins the
+    sync's queue.
   - `Add` (default, enabled only once the look-up found a playlist that isn't in the list yet) and `Cancel`. `Cancel`
     also cancels the look-up.
   - `Add` stores the playlist with the name the look-up found. The welcome screen gives way to the main panel, and the

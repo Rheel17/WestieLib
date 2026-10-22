@@ -38,8 +38,13 @@ add_executable(WestieLib WIN32
 	src/core/settings/SettingsStore.cpp
 	src/core/sources/SourceType.cpp
 	src/core/sources/SpotifyPlaylistName.cpp
+	src/core/sources/YouTubeMusicPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylistName.cpp
+	src/core/sources/YtDlpError.cpp
+	src/core/state/PruneTracks.cpp
 	src/core/state/StateStore.cpp
+	src/core/sync/ApplyFetch.cpp
+	src/core/sync/SyncEngine.cpp
 	src/core/tools/ToolFolder.cpp
 	src/core/tools/ToolInstaller.cpp
 	src/core/tools/ToolManager.cpp
@@ -74,6 +79,7 @@ add_executable(WestieLib WIN32
 	src/ui/SourceLogo.cpp
 	src/ui/SyncBar.cpp
 	src/ui/TrackCountText.cpp
+	src/ui/TrackCounts.cpp
 	src/ui/commands/CommandMenu.cpp
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
@@ -145,6 +151,7 @@ add_executable(WestieLib WIN32
 	src/ui/playlists/PlaylistRowPainter.cpp
 	src/ui/playlists/PlaylistRows.cpp
 	src/ui/statusbar/MainStatusBar.cpp
+	src/ui/sync/SyncBoard.cpp
 	src/ui/toolbar/MainToolbar.cpp
 	src/ui/tools/ToolBoard.cpp
 	src/ui/tools/ToolMark.cpp
@@ -154,6 +161,7 @@ add_executable(WestieLib WIN32
 	src/ui/tracks/StatusFilter.cpp
 	src/ui/tracks/StatusTabText.cpp
 	src/ui/tracks/TrackPanel.cpp
+	src/ui/tracks/TrackRows.cpp
 	src/ui/tracks/TrackTable.cpp
 	src/ui/welcome/LibraryFolderCheck.cpp
 	src/ui/welcome/LibraryFolderField.cpp

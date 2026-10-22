@@ -40,6 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
 | `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView` |
+| `sync` | Sync all, Sync selected and Sync now: what a fetch writes to state.json, the table's rows, the tab counts and result line, the cards; Spotify left out, a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, and a fetch that waits for yt-dlp | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `ui/sync/`, `ui/tracks/TrackRows`, `ui/tracks/TrackTable`, `ui/TrackCounts` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -72,10 +73,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
     and with Spotify's error page for any other id. Given a `YtDlp` to serve, it also answers yt-dlp's latest release
     on GitHub's API (other repositories get 404), and holds the download back until `AssetGate` is set.
   - The fake yt-dlp is a C# console program the script compiles (`lib/FakeYtDlp.cs`, with
-    `Add-Type -OutputType ConsoleApplication`). It answers a playlist look-up by its list id (the file lists them) and
-    adds each run's arguments to `yt-dlp-runs.txt` beside it. `Install-FakeTools` installs it with empty ffmpeg files.
+    `Add-Type -OutputType ConsoleApplication`). It answers a playlist look-up (`--playlist-items 0`) and a fetch by
+    the list id (the file lists them): songs for `PLtracks…` and `PLshared…`, which share one, with a ` - Topic`
+    channel, a private video, a repeat and a missing length among them. It adds each run's arguments to
+    `yt-dlp-runs.txt` beside it. `Install-FakeTools` installs it with empty ffmpeg files.
 - The Add playlist look-ups start 300 ms after the link last changed, so read the dialog's line with `Wait-LinkLine`,
   which waits while it says `Looking up…`. `Get-LinkLine` reads it at once, with the Add button's text and state.
+- `Add-Playlist` turns `Sync now` off, unless it gets `-SyncNow`: a sync saves state.json again, which a check of the
+  file or its backup would race.
+- A sync enables Cancel until it ends (`Test-Syncing`). The `sync` suite waits for one with `Wait-Fetches`: first until
+  the fake yt-dlp has logged the fetches it expects, which comes after the window knows of the sync, then until Cancel
+  grays. `Get-TrackRows` reads the table's rows through `ListViewRow`, and `Get-SavedPlaylistSync`,
+  `Get-SavedSources` and `Get-SavedTracks` read state.json.
 - Suites start without playlists, so they see the welcome screen. The `playlists` suite adds some in run 1
   (`Add-Playlist`), starts with them in run 2, starts with more than fit in run 3 (`Write-ManyPlaylists`) and scrolls
   them, and breaks `state.json` in run 4. The `tools` suite's run 3 serves yt-dlp from `FakeWeb` and checks that Add
@@ -173,7 +182,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `CB_SETCURSEL` and `TCM_SETCURSEL` don't notify. The `tracks` suite chooses a source with `CB_SETCURSEL` and then
   sends the parent `CBN_SELCHANGE`, as a choice by the user would, and clicks tabs and headers with mouse messages at
   `TCM_GETITEMRECT` / `HDM_GETITEMRECT` (`Click-Tab`, `Click-Header`). `Double-Click-Header` sends the down, up,
-  `WM_LBUTTONDBLCLK`, up of two quick clicks. The table holds no rows, so the row height
+  `WM_LBUTTONDBLCLK`, up of two quick clicks. The `tracks` suite's table holds no rows, so the row height
   check gives it three with `LVM_SETITEMCOUNT` and measures one.
 - A TaskDialog's buttons aren't child windows. Post it `TDM_CLICK_BUTTON` (`WM_USER + 102`) with the button's id.
 - The checks never run Open in browser, the playlist card's link, Open library folder or Copy URL: they would open a

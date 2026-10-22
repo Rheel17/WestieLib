@@ -32,9 +32,9 @@ saved `Placement` and asks it for the current one.
    a `settings.json` that doesn't read ends the app there. Then it makes the `StateStore` (`src/core/state/`), which
    loads `state.json`; one that doesn't read ends the app too. The files live in `%LOCALAPPDATA%\WestieLib`, or in
    the folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue`, the
-   `ToolFolder`, the `ToolManager`, `YtDlp` and the `PlaylistLookup`, so they outlive the window. `MainWindow` gets the
-   settings store, the loaded settings, the state store, the queue, the tool manager and the look-up, and makes itself
-   the queue's target.
+   `ToolFolder`, the `ToolManager`, `YtDlp`, the `PlaylistLookup` and the `SyncEngine`, so they outlive the window.
+   `MainWindow` gets the settings store, the loaded settings, the state store, the queue, the tool manager, the
+   look-up and the sync engine, and makes itself the queue's target.
 2. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
 3. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
    `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
@@ -43,7 +43,8 @@ saved `Placement` and asks it for the current one.
    `WM_PAINT`, so the first paint already shows the run. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` /
    `SW_SHOWDEFAULT` into `SW_SHOWMAXIMIZED` when the saved window was maximized; any other show command, say from a
    shortcut, wins.
-5. `WM_DESTROY` → `ToolManager::stop()`, `PlaylistLookup::stop()` and `CoreEventQueue::set_target(nullptr)` →
+5. `WM_DESTROY` → `ToolManager::stop()`, `PlaylistLookup::stop()`, `SyncEngine::cancel()` and
+   `CoreEventQueue::set_target(nullptr)` →
    `save_state()` → `WelcomePanel::commit_library_folder()` → `PostQuitMessage(0)`. The workers wind down while the
    window goes, and `main.cpp` joins them after the window is gone; what they still report stays in the queue. The
    commit is for a folder still being typed, since a close doesn't take the focus from the field first.
@@ -88,6 +89,18 @@ saved `Placement` and asks it for the current one.
   until it reports that it ended.
 - `show_settings` keeps the dialog in `settings_dialog_` while it's open, so tool events reach its list. It saves the
   settings when anything in them changed.
+- **Sync.** `SyncBoard` (`src/ui/sync/`) is the UI's view of the `SyncEngine`'s run, as `ToolBoard` is of the tools:
+  whether it goes (from `SyncQueued` until `SyncFinished`), the playlists queued, the one being fetched and the tools
+  it waits for. `CommandState::syncing` comes from it.
+  - `Sync all` hands the engine every playlist in row order, `Sync selected playlist` (also the menu's Sync and the
+    card's button) the selected one, and Add playlist's `Sync now` the new one. The engine leaves Spotify playlists
+    out. `Cancel` calls `SyncEngine::cancel`.
+  - `PlaylistFetched` and `PlaylistFetchFailed` bring the window up to date from a new snapshot (`show_playlists`).
+  - Esc for Cancel isn't in the accelerator table, because the table would take Esc from every control, such as an
+    open drop-down list.
+- **State.** The sync's worker writes the state, so the window reads it through `StateStore::snapshot()`, a
+  `std::shared_ptr<const State>` that stays as it is while the window uses it. Every function that shows the state
+  takes one snapshot and works from it.
 - Both measure their height in `apply_dpi`. `MainWindow::apply_dpi` makes the `FontSet` and hands the regular font
   and the DPI to both, and the set to the side panels. It runs in the constructor, on `WM_DPICHANGED`, and on
   `WM_SETTINGCHANGE` with `SPI_SETNONCLIENTMETRICS` (a new system font size).
@@ -124,7 +137,7 @@ saved `Placement` and asks it for the current one.
   the button all start at `text_left()`, which adds up the same DIPs as `AllTracksRow::text_left()`, so everything
   lines up with All tracks at every scale. Rows have a fixed height until their counts can be non-zero.
 - `playlist_rows` (`PlaylistRows.cpp`) turns the state into `PlaylistRow`s, in the order the playlists were added,
-  with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name. `MainWindow::show_playlists`
+  with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name, and each one's `TrackCounts`. `MainWindow::show_playlists`
   hands them to the panel.
 - `AllTracksRow` is a window that paints the row: its look (hover, pressed or selected), glyph, name in semibold, and
   the counts.
@@ -144,7 +157,7 @@ saved `Placement` and asks it for the current one.
   - The panel is `WS_VSCROLL` with a `framework::VerticalScroll`. Its content is the card's height plus the padding;
     scrolling moves the card window, not its children. A new card, or new contents, starts at the top.
   - The cards' buttons and the link send `CommandId`s (the link `OpenPlaylistPage`, which isn't in the menu bar) to
-    `run_command`, like the menus. `Sync playlist` does nothing until syncing exists.
+    `run_command`, like the menus.
 
 ## Playlist actions
 
@@ -168,8 +181,9 @@ saved `Placement` and asks it for the current one.
   - `CopyPlaylistLink` calls `platform::win32::set_clipboard_text` (`ClipboardScope` opens and closes the clipboard,
     `UniqueGlobal` holds the memory until `SetClipboardData` takes it). Another program may hold the clipboard, so a
     failure beeps instead of ending the app.
-- `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
-  the constructor shows zeros.
+- `count_tracks` (`src/ui/TrackCounts.cpp`) counts a playlist's tracks, or all of them, by status: a track the
+  playlist lists twice, or through two sources, counts once. `MainWindow::show_track_counts` hands the library's to
+  the All tracks row and the status bar, and keeps them for the Library card.
 
 ## Adding a playlist
 
@@ -204,7 +218,7 @@ saved `Placement` and asks it for the current one.
   checks. `Add` is enabled only for a new playlist that was found.
 - On `Add` the dialog returns an `AddPlaylistRequest` with the found name. `core::add_playlist` stores it through
   `StateStore::update`, which saves `state.json` (keeping `state.json.bak`). Closing the dialog stops the look-up.
-  `Sync now` has no effect until syncing exists.
+  With `Sync now`, the new playlist then goes to the `SyncEngine`.
 - `show_playlists` then brings the window up to date with the state: the left panel gets the rows, the inspector
   shows the card for the selection, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
   follow (`has_playlists` enables Sync all). The welcome screen may have had the keyboard focus, so it goes to the
@@ -235,8 +249,7 @@ saved `Placement` and asks it for the current one.
 
 ## Main panel
 
-`TrackPanel` (`src/ui/tracks/`) is the main column once there are playlists. It holds no tracks yet: every count is
-0 and the table has no rows. From the top it stacks the `FilterBar`, the `StatusFilter` strip, the result line (a
+`TrackPanel` (`src/ui/tracks/`) is the main column once there are playlists. From the top it stacks the `FilterBar`, the `StatusFilter` strip, the result line (a
 gray `Label`) and the `TrackTable`, with the paddings from `plan/ui.md` (Main panel), and paints the hairline above
 the table itself, through `BufferedPaint`.
 
@@ -255,9 +268,19 @@ the table itself, through `BufferedPaint`.
   of the order, or deletes it, and goes back to the scope's default sort. `LVN_COLUMNCLICK` sorts by the clicked
   column, or turns the order round when it's sorted by that column already, and moves the header's arrow. Source,
   Match and File are in the table but hidden: the header menu that shows them comes later.
-- `MainWindow::show_scope` hands the panel the selected playlist's name, or nothing for All tracks, then shows the
-  inspector. `select_playlist` and `show_playlists` call it; `result_line_text` (`ResultLineText.cpp`) adds the
-  `in …` part.
+- `track_rows` (`TrackRows.cpp`) turns a snapshot into the scope's `TrackRow`s: all tracks, in key order, or the
+  playlist's, by where it first lists each. A row has the track's status as a `StatusTab`, the title, artists and
+  length of its first source, the names of the playlists that list it (in the order they were added), and its
+  position. Filtering and sorting them come next.
+- `TrackTable::set_rows` keeps the rows and hands the list their count. The list asks for each cell in
+  `LVN_GETDISPINFOW` by the column's index, which `column_subitem` turns into the `TrackColumn`. The Status column has
+  no text: `NM_CUSTOMDRAW` draws the status's 16 DIP icon in the cell after the row is painted (`ListView::cell_rect`).
+  So far Waiting, Synced and Needs review have icons. Its tooltip comes with the other statuses.
+- `MainWindow::show_scope` hands `TrackPanel::show_tracks` the selected playlist's row (or nothing for All tracks),
+  the rows and the library's track count, then shows the counts and the inspector. A playlist that isn't the one
+  before goes back to the default sort; the same one, with new rows after a fetch, keeps its sort. The status tabs
+  count the rows (`status_counts`), and `result_line_text` (`ResultLineText.cpp`) adds the `in …` part.
+  `select_playlist` and `show_playlists` call it.
 
 ## Layout
 

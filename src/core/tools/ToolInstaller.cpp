@@ -54,6 +54,7 @@ InstalledTool ToolInstaller::install(ToolPackage package, const ToolDownload& do
             services_.files.move_replacing(file, folder_.program(package));
         }
     }
+    folder_.notify_installed(package);
     services_.files.remove_tree(staging);
     return {.release = download.release, .digest = std::move(digest)};
 }

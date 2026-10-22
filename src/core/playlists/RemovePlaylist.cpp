@@ -1,13 +1,17 @@
 #include "core/playlists/RemovePlaylist.h"
 
+#include "core/state/PruneTracks.h"
+
 namespace westie::core {
 
 bool remove_playlist(StateStore& store, const std::string& key) {
-    if (!store.state().playlists.contains(key)) {
+    if (!store.snapshot()->playlists.contains(key)) {
         return false;
     }
-    // Tracks don't exist yet; once they do, the ones left in no playlist become orphaned here
-    store.update([&](State& state) { state.playlists.erase(key); });
+    store.update([&](State& state) {
+        state.playlists.erase(key);
+        prune_tracks(state);
+    });
     return true;
 }
 

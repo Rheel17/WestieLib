@@ -17,5 +17,6 @@ struct PlaylistLink {
 };
 
 std::optional<PlaylistLink> parse_playlist_link(std::string_view text);
+std::optional<PlaylistLink> playlist_link_of_key(std::string_view key);
 
 }

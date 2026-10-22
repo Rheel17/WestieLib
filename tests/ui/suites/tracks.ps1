@@ -1,8 +1,6 @@
 # The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns.
 # Dot-sourced by ui-checks.ps1.
 
-function Get-TrackPanel($hwnd) { Get-Panel $hwnd 'Tracks' }
-
 function Get-FilterBar($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'WestieLib.Panel')[0] }
 
 function Get-SearchField($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Edit'))[0] }
@@ -10,12 +8,6 @@ function Get-SearchField($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Edit'))
 function Get-SourceBox($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'ComboBox'))[0] }
 
 function Get-ClearButton($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Button'))[0] }
-
-function Get-StatusTabs($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'SysTabControl32')[0] }
-
-function Get-ResultLine($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'WestieLib.Label')[0] }
-
-function Get-TrackTable($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'SysListView32')[0] }
 
 function Get-SelectedTab($hwnd) { [int][W]::SendMessageW((Get-StatusTabs $hwnd), 0x130B, [IntPtr]::Zero, [IntPtr]::Zero) }
 

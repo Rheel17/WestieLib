@@ -141,6 +141,14 @@ std::string PlaylistLink::url() const {
     return {};
 }
 
+std::optional<PlaylistLink> playlist_link_of_key(std::string_view key) {
+    std::optional<SourceType> type = source_type_of_key(key);
+    if (!type) {
+        return std::nullopt;
+    }
+    return PlaylistLink{.type = *type, .id = std::string(key.substr(source_prefix(*type).size() + 1))};
+}
+
 std::optional<PlaylistLink> parse_playlist_link(std::string_view text) {
     text = trim(text);
     if (starts_with_ignoring_case(text, SpotifyUriPrefix)) {

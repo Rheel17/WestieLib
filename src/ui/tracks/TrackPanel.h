@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <windows.h>
 
@@ -9,8 +10,10 @@
 #include "ui/framework/FontSet.h"
 #include "ui/framework/Label.h"
 #include "ui/framework/Panel.h"
+#include "ui/playlists/PlaylistRow.h"
 #include "ui/tracks/FilterBar.h"
 #include "ui/tracks/StatusFilter.h"
+#include "ui/tracks/TrackRows.h"
 #include "ui/tracks/TrackTable.h"
 
 namespace westie::ui {
@@ -20,7 +23,7 @@ public:
     explicit TrackPanel(HWND parent);
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
-    void show_scope(std::optional<std::wstring> playlist_name);
+    void show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -37,7 +40,11 @@ private:
     StatusFilter status_;
     framework::Label result_;
     TrackTable table_;
+    // The scope's playlist, or nothing for All tracks
+    std::optional<std::string> playlist_;
     std::optional<std::wstring> playlist_name_;
+    int shown_ = 0;
+    int library_total_ = 0;
     int result_height_ = 0;
     int rule_top_ = 0;
 };

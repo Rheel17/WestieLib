@@ -1,15 +1,26 @@
 #include "ui/tracks/TrackTable.h"
 
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstddef>
+#include <format>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
+
+#include "ResourceIds.h"
+#include "platform/win32/Win32Error.h"
 
 namespace westie::ui {
 
 namespace {
 
 constexpr int RowHeightDips = 22;
+constexpr int StatusIconDips = 16;
+constexpr int StatusIconLeftDips = 9;
+constexpr int SecondsPerMinute = 60;
 
 struct ColumnSpec {
     TrackColumn column = TrackColumn::Title;
@@ -17,6 +28,11 @@ struct ColumnSpec {
     int width_dips = 0;
     bool right_aligned = false;
     bool shown = true;
+};
+
+struct StatusIconSpec {
+    StatusTab status = StatusTab::Waiting;
+    int resource_id = 0;
 };
 
 // A position only means something inside a playlist, so # shows only in a playlist scope, always first
@@ -35,6 +51,13 @@ constexpr std::array Columns = {
     ColumnSpec{.column = TrackColumn::File, .title = L"File", .width_dips = 200, .shown = false},
 };
 
+// The statuses with an icon so far; the others come with their features
+constexpr std::array StatusIcons = {
+    StatusIconSpec{StatusTab::Synced, IDI_SYNCED},
+    StatusIconSpec{StatusTab::Waiting, IDI_WAITING},
+    StatusIconSpec{StatusTab::NeedsReview, IDI_WARN},
+};
+
 framework::ListColumn list_column(const ColumnSpec& spec, framework::Dpi dpi) {
     return {
         .title = spec.title,
@@ -46,6 +69,24 @@ framework::ListColumn list_column(const ColumnSpec& spec, framework::Dpi dpi) {
 
 TrackSort default_sort(bool playlist) {
     return {.column = playlist ? TrackColumn::Number : TrackColumn::Title};
+}
+
+std::wstring time_text(std::chrono::milliseconds duration) {
+    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+    return std::format(L"{}:{:02}", seconds / SecondsPerMinute, seconds % SecondsPerMinute);
+}
+
+// The Status column shows only its icon
+std::wstring cell_text(const TrackRow& row, TrackColumn column) {
+    switch (column) {
+    case TrackColumn::Number:    return std::format(L"{}", row.position);
+    case TrackColumn::Title:     return row.title;
+    case TrackColumn::Artists:   return row.artists;
+    case TrackColumn::Album:     return row.album;
+    case TrackColumn::Playlists: return row.playlists;
+    case TrackColumn::Time:      return time_text(row.duration);
+    default:                     return {};
+    }
 }
 
 }
@@ -73,6 +114,10 @@ HWND TrackTable::hwnd() const noexcept {
 
 void TrackTable::apply_dpi(framework::Dpi dpi, const framework::MessageFont& font) {
     list_.apply_dpi(dpi, font, RowHeightDips);
+    status_icons_.clear();
+    for (const StatusIconSpec& spec : StatusIcons) {
+        status_icons_.push_back({.status = spec.status, .icon = framework::IconResource(spec.resource_id, dpi.scale(StatusIconDips))});
+    }
 }
 
 void TrackTable::show_scope(bool playlist) {
@@ -86,10 +131,18 @@ void TrackTable::show_scope(bool playlist) {
     show_sort();
 }
 
+void TrackTable::set_rows(std::vector<TrackRow> rows) {
+    rows_ = std::move(rows);
+    list_.set_item_count(static_cast<int>(rows_.size()));
+    // A virtual list doesn't know its texts changed
+    platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
 LRESULT TrackTable::on_notify(NMHDR& header) {
     switch (header.code) {
     case LVN_COLUMNCLICK:  sort_by(reinterpret_cast<const NMLISTVIEW&>(header).iSubItem); return 0;
     case LVN_GETDISPINFOW: show_cell(reinterpret_cast<NMLVDISPINFOW&>(header).item); return 0;
+    case NM_CUSTOMDRAW:    return on_custom_draw(reinterpret_cast<const NMLVCUSTOMDRAW&>(header));
     default:               return 0;
     }
 }
@@ -119,11 +172,43 @@ void TrackTable::show_sort() {
     list_.set_sort_arrow(index ? std::optional(framework::ListSortArrow{.index = *index, .direction = sort_.direction}) : std::nullopt);
 }
 
-void TrackTable::show_cell(LVITEMW& item) {
-    // Until there are tracks, every cell is empty
-    if ((item.mask & LVIF_TEXT) && item.cchTextMax > 0) {
-        item.pszText[0] = L'\0';
+void TrackTable::show_cell(LVITEMW& item) const {
+    if (!(item.mask & LVIF_TEXT) || item.cchTextMax <= 0) {
+        return;
     }
+    std::wstring text;
+    if (item.iItem >= 0 && std::cmp_less(item.iItem, rows_.size())) {
+        // The list asks by the column's index, which changes as # comes and goes
+        text = cell_text(rows_[item.iItem], static_cast<TrackColumn>(list_.column_subitem(item.iSubItem)));
+    }
+    // The list's buffer is all the room there is; the list ends a cut text in an ellipsis itself
+    std::size_t length = std::min(text.size(), static_cast<std::size_t>(item.cchTextMax - 1));
+    std::copy_n(text.begin(), length, item.pszText);
+    item.pszText[length] = L'\0';
+}
+
+LRESULT TrackTable::on_custom_draw(const NMLVCUSTOMDRAW& draw) const {
+    switch (draw.nmcd.dwDrawStage) {
+    case CDDS_PREPAINT:      return CDRF_NOTIFYITEMDRAW;
+    case CDDS_ITEMPREPAINT:  return CDRF_NOTIFYPOSTPAINT;
+    case CDDS_ITEMPOSTPAINT: draw_status(draw.nmcd.hdc, static_cast<int>(draw.nmcd.dwItemSpec)); return CDRF_DODEFAULT;
+    default:                 return CDRF_DODEFAULT;
+    }
+}
+
+void TrackTable::draw_status(HDC dc, int item) const {
+    std::optional<int> column = list_.column_index(std::to_underlying(TrackColumn::Status));
+    if (!column || item < 0 || std::cmp_greater_equal(item, rows_.size())) {
+        return;
+    }
+    auto found = std::ranges::find(status_icons_, rows_[item].status, &StatusIcon::status);
+    if (found == status_icons_.end()) {
+        return;
+    }
+    RECT cell = list_.cell_rect(item, *column);
+    framework::Dpi dpi = framework::Dpi::of(list_.hwnd());
+    const framework::IconResource& icon = found->icon;
+    icon.draw(dc, cell.left + dpi.scale(StatusIconLeftDips), cell.top + (cell.bottom - cell.top - icon.size()) / 2);
 }
 
 }

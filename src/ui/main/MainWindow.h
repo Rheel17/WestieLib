@@ -11,7 +11,14 @@
 #include "core/playlists/PlaylistLookup.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
+#include "core/state/State.h"
 #include "core/state/StateStore.h"
+#include "core/sync/PlaylistFetchFailed.h"
+#include "core/sync/PlaylistFetched.h"
+#include "core/sync/PlaylistFetching.h"
+#include "core/sync/SyncEngine.h"
+#include "core/sync/SyncFinished.h"
+#include "core/sync/SyncQueued.h"
 #include "core/tools/ToolManager.h"
 #include "core/tools/ToolStatus.h"
 #include "core/tools/ToolsChecked.h"
@@ -36,6 +43,7 @@
 #include "ui/playlists/PlaylistPanel.h"
 #include "ui/playlists/PlaylistRow.h"
 #include "ui/statusbar/MainStatusBar.h"
+#include "ui/sync/SyncBoard.h"
 #include "ui/toolbar/MainToolbar.h"
 #include "ui/tools/ToolBoard.h"
 #include "ui/tracks/TrackPanel.h"
@@ -51,7 +59,8 @@ public:
             core::StateStore& state,
             CoreEventQueue& events,
             core::ToolManager& tools,
-            core::PlaylistLookup& lookup
+            core::PlaylistLookup& lookup,
+            core::SyncEngine& sync
     );
 
     void show(int show_command) override;
@@ -64,7 +73,7 @@ private:
 
     void attach_menu();
     void apply_dpi(framework::Dpi dpi);
-    void show_track_counts(const TrackCounts& counts);
+    void show_track_counts(const core::State& state);
     void change_library_folder(const std::filesystem::path& folder);
     bool has_playlists() const;
     std::optional<std::string> added_playlist_name(const core::PlaylistLink& link) const;
@@ -79,6 +88,7 @@ private:
     CommandState command_state() const;
     void update_commands();
     void run_command(CommandId command);
+    void sync_all();
     std::optional<PlaylistRow> selected_row() const;
     void show_playlist_menu(POINT screen);
     void remove_playlist();
@@ -93,6 +103,11 @@ private:
     void apply_event(const core::ToolStatus& status);
     void apply_event(const core::ToolsChecked& event);
     void apply_event(const core::PlaylistLookedUp& event);
+    void apply_event(const core::SyncQueued& event);
+    void apply_event(const core::PlaylistFetching& event);
+    void apply_event(const core::PlaylistFetched& event);
+    void apply_event(const core::PlaylistFetchFailed& event);
+    void apply_event(const core::SyncFinished& event);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_activate(WORD state);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
@@ -112,7 +127,9 @@ private:
     CoreEventQueue& events_;
     core::ToolManager& tools_;
     core::PlaylistLookup& lookup_;
+    core::SyncEngine& sync_;
     ToolBoard tool_board_;
+    SyncBoard sync_board_;
     WindowPlacement placement_;
     framework::WindowIcon icon_;
     framework::MenuBarPainter menu_bar_;

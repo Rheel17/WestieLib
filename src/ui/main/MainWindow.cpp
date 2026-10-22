@@ -1,10 +1,12 @@
 #include "ui/main/MainWindow.h"
 
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "ResourceIds.h"
 #include "core/playlists/AddPlaylist.h"
@@ -28,6 +30,7 @@
 #include "ui/main/WindowState.h"
 #include "ui/playlists/PlaylistMenu.h"
 #include "ui/playlists/PlaylistRows.h"
+#include "ui/tracks/TrackRows.h"
 
 namespace westie::ui {
 
@@ -44,7 +47,8 @@ MainWindow::MainWindow(
         core::StateStore& state,
         CoreEventQueue& events,
         core::ToolManager& tools,
-        core::PlaylistLookup& lookup
+        core::PlaylistLookup& lookup,
+        core::SyncEngine& sync
 ) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
@@ -53,6 +57,7 @@ MainWindow::MainWindow(
         events_(events),
         tools_(tools),
         lookup_(lookup),
+        sync_(sync),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
@@ -81,7 +86,6 @@ MainWindow::MainWindow(
         status_bar_(hwnd()) {
     apply_dpi(framework::Dpi::of(hwnd()));
     attach_menu();
-    show_track_counts({});
     welcome_.set_library_folder(settings_.library_path);
     status_bar_.set_library_folder(settings_.library_path);
 
@@ -154,11 +158,10 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     fonts_ = std::move(fonts);
 }
 
-void MainWindow::show_track_counts(const TrackCounts& counts) {
-    track_counts_ = counts;
-    playlists_.set_track_counts(counts);
-    status_bar_.set_track_count(counts.total);
-    show_inspector();
+void MainWindow::show_track_counts(const core::State& state) {
+    track_counts_ = count_tracks(state, std::nullopt);
+    playlists_.set_track_counts(track_counts_);
+    status_bar_.set_track_count(track_counts_.total);
 }
 
 void MainWindow::change_library_folder(const std::filesystem::path& folder) {
@@ -169,12 +172,13 @@ void MainWindow::change_library_folder(const std::filesystem::path& folder) {
 }
 
 bool MainWindow::has_playlists() const {
-    return !state_.state().playlists.empty();
+    return !state_.snapshot()->playlists.empty();
 }
 
 std::optional<std::string> MainWindow::added_playlist_name(const core::PlaylistLink& link) const {
-    auto playlist = state_.state().playlists.find(link.key());
-    if (playlist == state_.state().playlists.end()) {
+    std::shared_ptr<const core::State> state = state_.snapshot();
+    auto playlist = state->playlists.find(link.key());
+    if (playlist == state->playlists.end()) {
         return std::nullopt;
     }
     return playlist->second.name;
@@ -184,10 +188,13 @@ void MainWindow::add_playlist() {
     add_playlist_dialog_.emplace([this](const core::PlaylistLink& link) { return added_playlist_name(link); }, lookup_, tool_board_);
     std::optional<AddPlaylistRequest> request = add_playlist_dialog_->choose(hwnd());
     add_playlist_dialog_.reset();
-    // Nothing syncs yet, so Sync now has no effect
-    if (request && core::add_playlist(state_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
-        selected_playlist_ = request->link.key();
-        show_playlists();
+    if (!request || !core::add_playlist(state_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
+        return;
+    }
+    selected_playlist_ = request->link.key();
+    show_playlists();
+    if (request->sync_now) {
+        sync_.sync({request->link.key()});
     }
 }
 
@@ -199,8 +206,10 @@ void MainWindow::select_playlist(std::optional<std::string> key) {
 }
 
 void MainWindow::show_scope() {
-    std::optional<PlaylistRow> playlist = selected_row();
-    tracks_.show_scope(playlist ? std::optional(playlist->name) : std::nullopt);
+    std::shared_ptr<const core::State> state = state_.snapshot();
+    std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(*state, *selected_playlist_) : std::nullopt;
+    tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_), static_cast<int>(state->tracks.size()));
+    show_track_counts(*state);
     show_inspector();
 }
 
@@ -217,10 +226,11 @@ void MainWindow::show_inspector() {
 }
 
 void MainWindow::show_playlists() {
-    if (selected_playlist_ && !state_.state().playlists.contains(*selected_playlist_)) {
+    std::shared_ptr<const core::State> state = state_.snapshot();
+    if (selected_playlist_ && !state->playlists.contains(*selected_playlist_)) {
         selected_playlist_.reset();
     }
-    playlists_.set_playlists(playlist_rows(state_.state()));
+    playlists_.set_playlists(playlist_rows(*state));
     playlists_.show_selection(selected_playlist_);
     show_scope();
     layout_panels();
@@ -263,6 +273,7 @@ void MainWindow::layout_panels() {
 
 CommandState MainWindow::command_state() const {
     return {
+        .syncing = sync_board_.running(),
         .tools_busy = tool_board_.running(),
         .has_playlists = has_playlists(),
         .playlist_selected = selected_playlist_.has_value(),
@@ -281,22 +292,33 @@ void MainWindow::run_command(CommandId command) {
     }
 
     switch (command) {
-    case CommandId::AddPlaylist:       add_playlist(); return;
-    case CommandId::RemovePlaylist:    remove_playlist(); return;
-    case CommandId::OpenLibraryFolder: open_library_folder(); return;
-    case CommandId::OpenPlaylistPage:  open_playlist_page(); return;
-    case CommandId::CopyPlaylistLink:  copy_playlist_link(); return;
-    case CommandId::Exit:              SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
-    case CommandId::ToggleLog:         toggle_log(); return;
-    case CommandId::Settings:          show_settings(); return;
-    case CommandId::CheckForUpdates:   tools_.run(true); return;
-    case CommandId::About:             show_about_dialog(hwnd()); return;
-    default:                           return;
+    case CommandId::AddPlaylist:          add_playlist(); return;
+    case CommandId::RemovePlaylist:       remove_playlist(); return;
+    case CommandId::OpenLibraryFolder:    open_library_folder(); return;
+    case CommandId::OpenPlaylistPage:     open_playlist_page(); return;
+    case CommandId::CopyPlaylistLink:     copy_playlist_link(); return;
+    case CommandId::SyncAll:              sync_all(); return;
+    case CommandId::SyncSelectedPlaylist: sync_.sync({*selected_playlist_}); return;
+    case CommandId::CancelSync:           sync_.cancel(); return;
+    case CommandId::Exit:                 SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::ToggleLog:            toggle_log(); return;
+    case CommandId::Settings:             show_settings(); return;
+    case CommandId::CheckForUpdates:      tools_.run(true); return;
+    case CommandId::About:                show_about_dialog(hwnd()); return;
+    default:                              return;
     }
 }
 
+void MainWindow::sync_all() {
+    std::vector<std::string> keys;
+    for (const PlaylistRow& row : playlist_rows(*state_.snapshot())) {
+        keys.push_back(row.key);
+    }
+    sync_.sync(keys);
+}
+
 std::optional<PlaylistRow> MainWindow::selected_row() const {
-    return selected_playlist_ ? playlist_row(state_.state(), *selected_playlist_) : std::nullopt;
+    return selected_playlist_ ? playlist_row(*state_.snapshot(), *selected_playlist_) : std::nullopt;
 }
 
 void MainWindow::show_playlist_menu(POINT screen) {
@@ -399,6 +421,28 @@ void MainWindow::apply_event(const core::PlaylistLookedUp& event) {
     }
 }
 
+void MainWindow::apply_event(const core::SyncQueued& event) {
+    sync_board_.apply(event);
+}
+
+void MainWindow::apply_event(const core::PlaylistFetching& event) {
+    sync_board_.apply(event);
+}
+
+void MainWindow::apply_event(const core::PlaylistFetched& event) {
+    sync_board_.finish_playlist(event.playlist);
+    show_playlists();
+}
+
+void MainWindow::apply_event(const core::PlaylistFetchFailed& event) {
+    sync_board_.finish_playlist(event.playlist);
+    show_playlists();
+}
+
+void MainWindow::apply_event(const core::SyncFinished&) {
+    sync_board_.finish();
+}
+
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
     // Only menus and accelerators send WM_COMMAND without a control
     if (lparam == 0) {
@@ -481,6 +525,7 @@ void MainWindow::on_destroy() {
     // The workers wind down while the window goes, and whatever they still report stays in the queue
     tools_.stop();
     lookup_.stop();
+    sync_.cancel();
     events_.set_target(nullptr);
     save_state();
     // A folder typed into the field takes effect when the field loses focus, which a close doesn't wait for

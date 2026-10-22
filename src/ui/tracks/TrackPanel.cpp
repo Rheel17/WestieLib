@@ -56,9 +56,18 @@ void TrackPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) 
     layout();
 }
 
-void TrackPanel::show_scope(std::optional<std::wstring> playlist_name) {
-    playlist_name_ = std::move(playlist_name);
-    table_.show_scope(playlist_name_.has_value());
+void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total) {
+    std::optional<std::string> key = playlist ? std::optional(playlist->key) : std::nullopt;
+    // Another scope starts at its default sort; new tracks in the same one keep the sort
+    if (key != playlist_) {
+        playlist_ = std::move(key);
+        table_.show_scope(playlist_.has_value());
+    }
+    playlist_name_ = playlist ? std::optional(playlist->name) : std::nullopt;
+    shown_ = static_cast<int>(rows.size());
+    library_total_ = library_total;
+    status_.set_counts(status_counts(rows));
+    table_.set_rows(std::move(rows));
     show_result_line();
 }
 
@@ -130,9 +139,8 @@ void TrackPanel::clear_status() {
 }
 
 void TrackPanel::show_result_line() {
-    // Until there are tracks, both counts are 0
     std::optional<std::wstring_view> playlist_name = playlist_name_ ? std::optional<std::wstring_view>(*playlist_name_) : std::nullopt;
-    result_.set_text(result_line_text(0, 0, playlist_name));
+    result_.set_text(result_line_text(shown_, library_total_, playlist_name));
 }
 
 }

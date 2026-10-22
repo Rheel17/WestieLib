@@ -19,6 +19,7 @@ public:
     int height() const noexcept;
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     StatusTab selected() const noexcept;
+    void set_counts(const StatusCounts& counts);
     void reset();
     void on_selection_change();
 

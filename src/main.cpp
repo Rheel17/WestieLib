@@ -12,6 +12,7 @@
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
 #include "core/state/StateStore.h"
+#include "core/sync/SyncEngine.h"
 #include "core/tools/ToolFolder.h"
 #include "core/tools/ToolManager.h"
 #include "core/tools/YtDlp.h"
@@ -70,8 +71,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         // So does a state file that doesn't read
         westie::core::StateStore state(files, data / L"state.json");
 
-        // The window goes before the tool manager and the look-up, whose workers may still report into the queue while
-        // they stop
+        // The window goes before the tool manager, the look-up and the sync, whose workers may still report into the queue
+        // while they stop
         westie::ui::CoreEventQueue events;
         westie::core::ToolFolder tool_folder(data / L"tools");
         westie::core::ToolManager tools(
@@ -80,10 +81,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         );
         westie::core::YtDlp yt_dlp(tool_folder, files, processes);
         westie::core::PlaylistLookup lookup(yt_dlp, http, service_url(L"WESTIELIB_SPOTIFY_URL", "https://open.spotify.com"), events);
+        westie::core::SyncEngine sync(yt_dlp, tool_folder, state, events);
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;
-        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup);
+        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync);
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         // Started before the window shows, so its first paint already knows of the run
         tools.run(settings.auto_update_tools);

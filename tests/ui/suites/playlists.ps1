@@ -11,17 +11,6 @@ function Get-SavedPlaylists([string]$file = $StateFile) {
 	}) -join ' / '
 }
 
-# Adds a playlist through File > Add playlist; returns the dialog's line for the link
-function Add-Playlist($hwnd, [string]$link) {
-	Send-Command $hwnd '&Add playlist...'
-	$dialog = Wait-OwnedWindow $hwnd
-	Set-PlaylistLink $dialog $link
-	$line = Wait-LinkLine $dialog
-	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	Wait-Closed $dialog
-	$line
-}
-
 # Welcome screen and tracks panel visible; the left panel's "No playlists yet." visible; whether the inspector shows a card
 function Get-PlaylistScreens($hwnd) {
 	$empty = ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.Label'))[0]
@@ -228,15 +217,6 @@ function Check-BrokenState {
 	[void][W]::PostMessageW($box, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
 	if (-not $process.WaitForExit(5000)) { $process.Kill(); throw 'Process did not exit' }
 	Check '  exit code, file kept' "$($process.ExitCode) $([IO.File]::ReadAllText($StateFile) -eq $broken)" '1 True'
-}
-
-# A card's name, then the texts of its windows from the top, and left to right within a row
-function Get-CardTexts($hwnd) {
-	$card = Get-InspectorCard $hwnd
-	$windows = @([W]::Children($card, [NullString]::Value) | Where-Object { [W]::GetAncestor($_, 1) -eq $card } |
-		ForEach-Object { [pscustomobject]@{ Rect = [W]::RectIn($_, $card); Text = [W]::TextOf($_) } })
-	$texts = @($windows | Sort-Object { $_.Rect.Top }, { $_.Rect.Left } | ForEach-Object { $_.Text })
-	"$([W]::TextOf($card)): $($texts -join ' / ')"
 }
 
 # The card sits inside the inspector's padding. Its title starts at its left edge, the playlist's subtitle where the

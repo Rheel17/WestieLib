@@ -42,6 +42,11 @@ StatusTab StatusFilter::selected() const noexcept {
     return selected_;
 }
 
+void StatusFilter::set_counts(const StatusCounts& counts) {
+    counts_ = counts;
+    show();
+}
+
 void StatusFilter::reset() {
     selected_ = StatusTab::All;
     show();
