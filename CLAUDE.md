@@ -3,7 +3,8 @@
 This file provides guidance when working with code in this repository.
 
 WestieLib is a private Win32 desktop app: C++26, MinGW GCC, one static exe. It keeps YouTube Music and Spotify
-playlists in sync with a folder of tagged audio files for Mixxx.
+playlists in sync with a folder of tagged audio files for Mixxx. It targets Windows 10 and 11 only, and uses plain Win32:
+no other UI or cross-platform frameworks.
 
 ## Read next
 
@@ -34,11 +35,18 @@ of a phase, run all of them (no `-Suite`). Either must report 0 failures.
 
 - UI changes start in the spec: update `plan/ui.md` (and the mockup if something visible changes), then write C++.
   The user sketches layouts in ASCII; follow them, and say where you depart from them.
-- The user works in phases and reviews each one, so stop after a phase.
+- Split a task into phases only when that helps the review; a small task is one phase. After each phase, stop and
+  wait for the user's code review before starting the next.
+- Never commit; the user commits.
 - It's a private app: real brand logos are fine, and brand-guideline caveats aren't needed.
 
 ## Code rules
 
+- Write modern C++: RAII, value types, `std::` facilities over hand-rolled ones, no raw `new`/`delete`.
+- One responsibility per class. Split a growing class rather than letting one class (a big UI class especially) own
+  everything. Follow the existing layout in `src/`: `core/` holds the logic and never touches Win32 or `ui/`;
+  `platform/` holds OS interfaces with their Win32 implementations in `platform/win32/`; `ui/framework/` holds
+  generic window classes, and each feature gets its own folder under `ui/`.
 - Naming: PascalCase for types, `constexpr` constants, non-type template parameters, enums and their values.
   UPPER_SNAKE_CASE for macros. snake_case for everything else. Private members end in `_`. Files are named after
   their class (`MainWindow.h`); folders are lowercase.
