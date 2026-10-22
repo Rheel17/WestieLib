@@ -30,6 +30,7 @@ $Glyphs = [ordered]@{
 	synced = @{ Small = $true }
 	warn = @{ Small = $true }
 	waiting = @{ Row = $true }
+	toolwait = @{}
 	syncgray = @{ Row = $true }
 }
 

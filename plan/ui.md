@@ -78,6 +78,8 @@ failed shows in the status bar (see Status bar › Tools) and in Settings, not o
 
 | Work                                      | Needs           |
 |-------------------------------------------|-----------------|
+| Look up a Spotify playlist (Add playlist) | –               |
+| Look up a YouTube Music playlist (Add playlist) | yt-dlp    |
 | Fetch a Spotify playlist                  | –               |
 | Fetch a YouTube Music playlist            | yt-dlp          |
 | Match a Spotify track (search YouTube Music) | yt-dlp       |
@@ -85,7 +87,8 @@ failed shows in the status bar (see Status bar › Tools) and in Settings, not o
 | Choose a video: search                    | yt-dlp          |
 
 A track that waits shows the hourglass in the Status column, with `Waiting for ffmpeg` (or `Waiting for yt-dlp and
-ffmpeg`) as its tooltip and in the inspector. A playlist whose fetch waits shows it on line 5 (see Left panel).
+ffmpeg`) as its tooltip and in the inspector. A playlist whose fetch waits shows it on line 5 (see Left panel). The
+Add playlist dialog shows it on its detection line (see Dialogs).
 
 **Tracks and sources.** A row in the UI is a *track*: one file in the library. A track has one or more *sources*,
 which are YouTube Music videos or Spotify tracks. The same song in a YouTube Music playlist and a Spotify playlist
@@ -164,7 +167,7 @@ With no playlists, the list reads `No playlists yet.` in gray.
 
 | Line | Content |
 |------|---------|
-| 1 | Source logo (the YouTube Music or Spotify icon, 14 px) and the name in semibold. Until its first fetch a playlist has no name, and this reads `YouTube Music playlist` or `Spotify playlist` |
+| 1 | Source logo (the YouTube Music or Spotify icon, 14 px) and the name in semibold. The name comes from the look-up in Add playlist and is refreshed by every fetch. A playlist stored without a name (by an earlier version) reads `YouTube Music playlist` or `Spotify playlist` until its first fetch |
 | 2 | `55 tracks` |
 | 3 | synced/total bar, then `51/55` |
 | 4 | non-zero counts only: `3 waiting · 1 failed · 2 to review` in gray / red / amber. Left out when all are zero |
@@ -411,16 +414,40 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 - **Add playlist**:
   - "Paste a link to a public YouTube Music or Spotify playlist."
   - A URL edit, wide enough to show a whole shared link (`https://open.spotify.com/playlist/<id>?si=<16 characters>`,
-    or a YouTube Music link with a 34-character list id) without scrolling, with a live detection line under it: the YouTube Music or Spotify logo with
-    `YouTube Music playlist` / `Spotify playlist`, or `Not a supported playlist link` in gray and without a logo.
-    The line is empty while the edit is. Spaces and line breaks around a pasted link don't count.
-  - A link to a playlist that is already in the list reads `Spotify playlist · already added` (with its logo). Two
-    links name the same playlist when they have the same playlist id, so a shared link's `?si=…` makes no
-    difference. The links WestieLib takes are in `arch.md` (Playlist links).
+    or a YouTube Music link with a 34-character list id) without scrolling, with a live detection line under it.
+    Spaces and line breaks around a pasted link don't count. The line shows the first that applies:
+
+    | Detection line                                  | Icon      | Shown when                                        | Add |
+    |-------------------------------------------------|-----------|---------------------------------------------------|-----|
+    | (empty)                                         | –         | the edit is empty                                 | off |
+    | `Not a supported playlist link`, in gray        | –         | the text isn't a playlist link WestieLib takes    | off |
+    | `Waiting for required tools to be installed…`, in gray | ⧗  | a YouTube Music link, while yt-dlp isn't installed | off |
+    | `Looking up the YouTube Music playlist…`, in gray | spinner | the look-up runs                                  | off |
+    | `WCS` `YouTube Music playlist`                  | logo      | the look-up found the playlist, named `WCS`       | on  |
+    | `This playlist doesn't exist or is private.`    | ⚠         | the look-up found no public playlist              | off |
+    | `Couldn't look it up: <reason>`                 | ⚠         | the look-up failed otherwise, say without network | off |
+
+    - The spinner shows that the look-up is going on. It is the progress ring's gray circle (see Track table) with a
+      quarter of its blue arc, which turns clockwise smoothly, once a second. When Windows' animations are off
+      (`SPI_GETCLIENTAREAANIMATION`), it stands still. The source's logo takes its place once the playlist is found.
+    - A found playlist's line is its name in the text color, then, 6 px on, `YouTube Music playlist` or
+      `Spotify playlist` in gray. A long name ends in an ellipsis, so the source's name stays.
+    - **Already added.** A link to a playlist that is in the list already shows the line of a found playlist, with
+      the name from the list, and `Add` reads `Already added` and stays disabled. A playlist stored without a name (by
+      an earlier version) is looked up as usual for its line. `Add` is wide enough for `Already added`.
+    - Two links name the same playlist when they have the same playlist id, so a shared link's `?si=…` makes no
+      difference, and changing only that part doesn't look the playlist up again. The links WestieLib takes are in
+      `arch.md` (Playlist links).
+    - The look-up starts 300 ms after the link last changed, so a link typed by hand isn't looked up at every key. A
+      new link cancels the look-up of the one before.
+    - Looking up a YouTube Music playlist needs yt-dlp; a Spotify playlist needs no tool. While yt-dlp isn't installed
+      the line waits, and the look-up starts by itself once yt-dlp is (see Vocabulary › Waiting for tools).
+    - A long reason ends in an ellipsis.
   - A `Sync now` check box (on by default). Until syncing exists, it has no effect.
-  - `Add` (default, disabled until the link is a supported playlist that isn't in the list yet) and `Cancel`.
-  - `Add` stores the playlist without a name. The welcome screen gives way to the main panel, and the playlist
-    shows in the left panel.
+  - `Add` (default, enabled only once the look-up found a playlist that isn't in the list yet) and `Cancel`. `Cancel`
+    also cancels the look-up.
+  - `Add` stores the playlist with the name the look-up found. The welcome screen gives way to the main panel, and the
+    playlist shows in the left panel.
 - **Choose a video**. Opened by `Choose video…` in the inspector, the Track menu or Edit track. One dialog
   covers both the case with several candidates and the case where nothing was found:
   - At the top: the source track (glyph, title, artists, album, length) and either "Current match: <title>,
@@ -482,6 +509,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Core API | UI |
 |----------|----|
 | `addPlaylist` | toolbar, left panel button, File menu, first-run button → Add playlist dialog |
+| `lookUpPlaylist` / `PlaylistLookedUp` | Add playlist dialog's detection line |
 | `removePlaylist` | playlist context menu, File menu, inspector playlist card → confirmation |
 | `sync` / `cancel` | toolbar split button, Sync menu, playlist row sync button, playlist context menu, inspector card |
 | `resolveRemovals` | infobar → Removed tab, Track menu, inspector (single and bulk) |
@@ -514,7 +542,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
 | Inspector | scrollable child window with statics, `WC_LINK`, buttons, edits, `SS_ETCHEDHORZ` section rules; covers decoded with WIC into an HBITMAP |
-| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (logo and text), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
+| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS` |
 
 The UI uses the Windows 10 palette:

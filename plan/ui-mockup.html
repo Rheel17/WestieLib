@@ -231,6 +231,8 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .dlg p { margin: 0 0 12px; }
 .dlg .lbl { margin-bottom: 4px; }
 .dlg .detect { display: flex; align-items: center; gap: 6px; margin: 6px 0 12px; }
+.dlg .detect .found { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg .detect .gray { flex: none; }
 .fld { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
 .fld .lblw { width: 140px; flex: none; }
 .gbox { border: 1px solid #dcdcdc; padding: 4px 10px 10px; margin: 0 0 10px; font: inherit; }
@@ -539,6 +541,13 @@ function ring(percent) {
 	const c = 2 * Math.PI * 5.6;
 	return `<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="#d6d6d6" stroke-width="2.4"/>
 		<circle cx="8" cy="8" r="5.6" fill="none" stroke="#0078d7" stroke-width="2.4" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - percent / 100)}" transform="rotate(-90 8 8)"/></svg>`;
+}
+// Look-up spinner: the ring's grey track with a quarter of its blue arc, starting step × 30° clockwise from 12 o'clock.
+// The app turns it smoothly, once a second.
+function spin(step) {
+	const c = 2 * Math.PI * 5.6;
+	return `<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="#d6d6d6" stroke-width="2.4"/>
+		<circle cx="8" cy="8" r="5.6" fill="none" stroke="#0078d7" stroke-width="2.4" stroke-dasharray="${c / 4} ${c}" transform="rotate(${step * 30 - 90} 8 8)"/></svg>`;
 }
 function counts(list) {
 	const c = { all: list.length, synced: 0, waiting: 0, review: 0, failed: 0, removed: 0, kept: 0 };
@@ -863,7 +872,8 @@ function statusBar(s, cfg) {
 		run = `Syncing ${done} of ${total}<span class="pbar ctl" style="width:120px"><i style="width:${done / total * 100}%"></i></span>`;
 	}
 	// While tools install, the Tools part says so with the progress ring. It's always as wide as its widest text.
-	const tools = cfg.firstRun ? `Tools ${ring(45).replace('class="ic"', 'class="ic s12"')} installing ffmpeg 45%` : `Tools ${ic('synced', 's12')}`;
+	const work = cfg.toolsWork || { tool: 'ffmpeg', percent: 45 };
+	const tools = cfg.firstRun ? `Tools ${ring(work.percent).replace('class="ic"', 'class="ic s12"')} installing ${work.tool} ${work.percent}%` : `Tools ${ic('synced', 's12')}`;
 	// The parts' shares of a 1280 px window (see ui.md, Status bar); Tools and Version sit against the right edge
 	return `<div class="statusbar"><div class="p" style="width:278px">${run}</div>
 		<div class="p" style="width:126px">${s.tracks.size} tracks</div>
@@ -874,19 +884,30 @@ function statusBar(s, cfg) {
 }
 
 // ---------- dialogs ----------
-// A link to a playlist that is already in the list keeps its logo and line, and Add stays disabled
-function addDialog(alreadyAdded) {
-	const link = alreadyAdded ? `https://open.spotify.com/playlist/${NEW_PLAYLIST_ID}?si=4f1c2e7a9b3d4e5f` : 'https://open.spotify.com/playlist/3k9QeTqH2wVfXbN7RjL0aC';
+// A found playlist's line: its name, then the source's name in gray
+const foundLine = (name, src) => `${glyph(src)}<span class="found">${name}</span><span class="gray">${srcName(src)} playlist</span>`;
+
+// The detection line per state: found (a looked-up name, Add enabled), already in the list (the found line, and Add
+// reads Already added), and waiting for yt-dlp to look up a YouTube Music link. Add is enabled only for a playlist the
+// look-up found that isn't in the list yet.
+const ADD_DIALOG_STATES = {
+	found: { link: 'https://open.spotify.com/playlist/3k9QeTqH2wVfXbN7RjL0aC', line: foundLine('Sunday Social', 'spotify'), add: ['Add', 'def'] },
+	already: { link: `https://open.spotify.com/playlist/${NEW_PLAYLIST_ID}?si=4f1c2e7a9b3d4e5f`, line: foundLine('Late Night Swing', 'spotify'), add: ['Already added', 'dis'] },
+	wait: { link: 'https://music.youtube.com/playlist?list=PLrT5f8xQwZb3nYdK1mV9cJ0aLs7uEoHgi', line: `${ic('toolwait', 's14')}<span class="gray">Waiting for required tools to be installed…</span>`, add: ['Add', 'dis'] },
+};
+
+function addDialog(state) {
+	const { link, line, add: [addText, addState] } = ADD_DIALOG_STATES[state];
 	// Wide enough for a whole shared link, ?si=… included
 	return `<div class="dlg" style="width:640px">${dlgTitle('Add playlist')}
 		<div class="db">
 			<p>Paste a link to a public YouTube Music or Spotify playlist.</p>
 			<div class="lbl">Playlist link:</div>
 			<div class="edit focus"><span>${link}</span><span class="caret" style="margin-left:-3px"></span></div>
-			<div class="detect">${glyph('spotify')}<span>Spotify playlist${alreadyAdded ? ' · already added' : ''}</span></div>
+			<div class="detect">${line}</div>
 			<span class="chk"><i>${CHECK}</i>Sync now</span>
 		</div>
-		<div class="df">${btn('Add', alreadyAdded ? 'dis' : 'def')}${btn('Cancel')}</div></div>`;
+		<div class="df">${btn(addText, addState)}${btn('Cancel')}</div></div>`;
 }
 
 function settingsDialog() {
@@ -991,8 +1012,9 @@ function editTrackDialog(t) {
 function dialogHtml(s, cfg) {
 	const t = cfg.sel && cfg.sel.length ? find(s, cfg.sel[0]) : null;
 	switch (cfg.dialog) {
-		case 'add': return addDialog(false);
-		case 'add-again': return addDialog(true);
+		case 'add': return addDialog('found');
+		case 'add-again': return addDialog('already');
+		case 'add-wait': return addDialog('wait');
 		case 'settings': return settingsDialog();
 		case 'choose': return chooseVideoDialog(t, true);
 		case 'nomatch': return chooseVideoDialog(t, false);
@@ -1020,8 +1042,8 @@ function windowHtml(s, cfg) {
 const base = buildBase();
 const variant = fn => fn(structuredClone(base));
 const empty = { pl: {}, tracks: new Map(), run: null };
-// One playlist, just added: nothing fetched, so no name and no tracks yet
-const justAdded = { pl: { new: { id: 'new', src: 'spotify', name: 'Spotify playlist', url: 'open.spotify.com/playlist/' + NEW_PLAYLIST_ID,
+// One playlist, just added: named by its look-up, but nothing fetched, so no tracks yet
+const justAdded = { pl: { new: { id: 'new', src: 'spotify', name: 'Late Night Swing', url: 'open.spotify.com/playlist/' + NEW_PLAYLIST_ID,
 	last: 'Never synced', neverSynced: true, keys: [] } }, tracks: new Map(), run: null };
 
 const SCREENS = [
@@ -1125,7 +1147,9 @@ const SCREENS = [
 		cap: 'The modal dialog behind toolbar Add playlist, the + button in the left panel, File › Add playlist… and Ctrl+N.',
 		notes: [
 			'As in native Win32, the main window only turns inactive. It isn’t dimmed, and its list selection turns gray.',
-			'The detection line updates as you type. Add stays disabled until the link is a supported playlist.',
+			'The detection line updates as you type. A supported link is looked up 300 ms after the last change; the line then shows the playlist’s name and, in gray, its source, and Add enables.',
+			`While it looks up, the line reads <i>Looking up the Spotify playlist…</i> in gray after a spinner, ${spin(0)} ${spin(3)} ${spin(6)} ${spin(9)}, which turns clockwise smoothly, once a second. The logo takes its place once the playlist is found.`,
+			`A playlist that doesn’t exist or is private reads ${ic('warn')} <i>This playlist doesn’t exist or is private.</i>, and Add stays disabled.`,
 			'Sync now is on by default, so a new playlist starts syncing right away.',
 		],
 	},
@@ -1153,14 +1177,23 @@ const SCREENS = [
 		],
 	},
 	{
+		id: 'add-wait', title: 'Add playlist, waiting for yt-dlp', state: empty,
+		cfg: { scope: 'all', firstRun: true, inactive: true, dialog: 'add-wait', toolsWork: { tool: 'yt-dlp', percent: 45 } },
+		cap: 'On the first run, a YouTube Music link is pasted while yt-dlp is still installing.',
+		notes: [
+			`Looking up a YouTube Music playlist needs yt-dlp, so the line shows ${ic('toolwait')} <i>Waiting for required tools to be installed…</i> in gray, and Add stays disabled.`,
+			'Once yt-dlp is installed, the look-up starts by itself. A Spotify link needs no tool, so it never waits.',
+		],
+	},
+	{
 		id: 'added', title: 'First playlist added', state: justAdded,
 		cfg: { scope: 'all', tab: 'all', sort: 'title', neverSynced: true, inactive: true, dialog: 'add-again' },
 		cap: 'A Spotify playlist was just added without syncing, and the same link is pasted into Add playlist again.',
 		notes: [
-			'Until its first fetch, a playlist has no name, so its row reads <i>Spotify playlist</i> or <i>YouTube Music playlist</i>.',
+			'Its name comes from the look-up in Add playlist; the first fetch refreshes it.',
 			`It has no tracks yet. Its last line reads <i>Never synced</i> after ${ic('waiting')}, because a playlist that was never synced is waiting.`,
 			'The welcome screen gave way to the filter bar, the status tabs and the table. Sync all is enabled.',
-			'A link to a playlist that is already in the list says so on the detection line, and Add stays disabled. The <code>?si=</code> part of a shared link doesn’t make it another playlist.',
+			'A link to a playlist that is already in the list shows its name on the detection line, as a found playlist does, and the button reads <i>Already added</i> and stays disabled. The <code>?si=</code> part of a shared link doesn’t make it another playlist.',
 		],
 	},
 ];

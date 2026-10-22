@@ -36,6 +36,11 @@ bool ToolBoard::running() const noexcept {
     return running_;
 }
 
+bool ToolBoard::available(core::ToolPackage package) const noexcept {
+    // A failed update leaves the release before it in place, and so does an update that is going on
+    return !statuses_[std::to_underlying(package)].release.empty();
+}
+
 ToolMark ToolBoard::mark() const noexcept {
     if (running_) {
         return ToolMark::Working;

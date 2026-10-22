@@ -6,6 +6,7 @@
 
 #include "core/github/Release.h"
 #include "core/tools/InstalledTools.h"
+#include "core/tools/ToolFolder.h"
 #include "core/tools/ToolPackage.h"
 #include "core/tools/ToolServices.h"
 #include "core/tools/ToolSource.h"
@@ -17,7 +18,7 @@ class ToolInstaller {
 public:
     using Progress = std::function<void(ToolState state, int percent)>;
 
-    ToolInstaller(const ToolServices& services, std::filesystem::path folder);
+    ToolInstaller(const ToolServices& services, ToolFolder& folder);
 
     InstalledTool install(ToolPackage package, const ToolDownload& download, const Progress& report, const std::stop_token& stop);
     void clear_staging();
@@ -27,7 +28,7 @@ private:
     std::filesystem::path staging_folder() const;
 
     ToolServices services_;
-    std::filesystem::path folder_;
+    ToolFolder& folder_;
 };
 
 }

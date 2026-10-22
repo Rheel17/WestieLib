@@ -26,6 +26,7 @@ file names such as `Win32Error.cpp`.
   ComCtl32 v6, which `TaskDialogIndirect` needs. MinGW's `uxtheme` import library has no `OpenThemeDataForDpi`, so
   the code uses `OpenThemeData` and reopens the theme after a DPI change. `shell32`, `ole32` and `uuid` bring the
   known folders, COM and the folder picker. `winhttp` downloads the tools, and `bcrypt` checks their SHA-256.
+  `gdiplus` draws what needs anti-aliased shapes at any angle, such as the Add playlist spinner.
 - [glaze](https://github.com/stephenberry/glaze) reads and writes JSON. `FetchContent` clones it at a pinned tag
   (`GIT_TAG` in `CMakeLists.txt`) into `<build>/_deps`, so the first configure of a build folder needs the network.
   It's header-only, and `SYSTEM` keeps its headers out of the warnings. To update it, change the tag; its release

@@ -2,9 +2,13 @@
 
 #include <filesystem>
 #include <optional>
+#include <string>
 
 #include <windows.h>
 
+#include "core/playlists/PlaylistLink.h"
+#include "core/playlists/PlaylistLookedUp.h"
+#include "core/playlists/PlaylistLookup.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
 #include "core/state/StateStore.h"
@@ -15,6 +19,7 @@
 #include "ui/TrackCounts.h"
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
+#include "ui/dialogs/AddPlaylistDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/events/CoreEventQueue.h"
 #include "ui/framework/Dpi.h"
@@ -38,7 +43,10 @@ namespace westie::ui {
 
 class MainWindow final : public framework::Window {
 public:
-    MainWindow(core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools);
+    MainWindow(
+            core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools,
+            core::PlaylistLookup& lookup
+    );
 
     void show(int show_command) override;
 
@@ -53,6 +61,7 @@ private:
     void show_track_counts(const TrackCounts& counts);
     void change_library_folder(const std::filesystem::path& folder);
     bool has_playlists() const;
+    std::optional<std::string> added_playlist_name(const core::PlaylistLink& link) const;
     void add_playlist();
     void show_playlists();
     void save_state() const;
@@ -68,6 +77,7 @@ private:
     void apply_event(const core::ToolsRunChanged& event);
     void apply_event(const core::ToolStatus& status);
     void apply_event(const core::ToolsChecked& event);
+    void apply_event(const core::PlaylistLookedUp& event);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
     LRESULT on_draw_item(const DRAWITEMSTRUCT& item) const;
@@ -85,6 +95,7 @@ private:
     core::StateStore& state_;
     CoreEventQueue& events_;
     core::ToolManager& tools_;
+    core::PlaylistLookup& lookup_;
     ToolBoard tool_board_;
     WindowPlacement placement_;
     framework::WindowIcon icon_;
@@ -101,8 +112,9 @@ private:
     LogPanel log_;
     MainStatusBar status_bar_;
     PanelState panels_;
-    // Only while it's open, so tool events can reach it
+    // Only while they're open, so tool and look-up events can reach them
     std::optional<SettingsDialog> settings_dialog_;
+    std::optional<AddPlaylistDialog> add_playlist_dialog_;
 };
 
 }

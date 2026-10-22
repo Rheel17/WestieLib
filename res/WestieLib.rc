@@ -23,6 +23,7 @@ IDI_YTM              ICON "glyphs/ytm.ico"
 IDI_SPOTIFY          ICON "glyphs/spotify.ico"
 IDI_WAITING          ICON "glyphs/waiting.ico"
 IDI_SYNC_GRAY        ICON "glyphs/syncgray.ico"
+IDI_TOOL_WAIT        ICON "glyphs/toolwait.ico"
 IDI_RING_0           ICON "glyphs/ring-00.ico"
 (IDI_RING_0 +  1)    ICON "glyphs/ring-01.ico"
 (IDI_RING_0 +  2)    ICON "glyphs/ring-02.ico"
@@ -48,7 +49,6 @@ IDI_RING_0           ICON "glyphs/ring-00.ico"
 (IDI_RING_0 + 22)    ICON "glyphs/ring-22.ico"
 (IDI_RING_0 + 23)    ICON "glyphs/ring-23.ico"
 (IDI_RING_0 + 24)    ICON "glyphs/ring-24.ico"
-
 IDD_SETTINGS DIALOGEX 0, 0, 308, 158
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Settings"
@@ -78,7 +78,7 @@ BEGIN
 	EDITTEXT        IDC_PLAYLIST_LINK, 9, 34, 342, 12, ES_AUTOHSCROLL
 	CONTROL         "", IDC_PLAYLIST_KIND, "Static", SS_OWNERDRAW, 9, 50, 342, 10
 	AUTOCHECKBOX    "Sync &now", IDC_SYNC_NOW, 9, 66, 100, 10
-	DEFPUSHBUTTON   "Add", IDOK, 260, 85, 43, 12
+	DEFPUSHBUTTON   "Add", IDOK, 243, 85, 60, 12
 	PUSHBUTTON      "Cancel", IDCANCEL, 308, 85, 43, 12
 END
 

@@ -206,7 +206,8 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 **Playlist fields.**
 - The key is `ytm:<list id>` or `spotify:<playlist id>`, and `url` is the canonical link built from it (see Playlist
   links), whatever form the user pasted.
-- `name` is empty until the first fetch.
+- `name` comes from the look-up when the playlist is added (see Playlist look-up), and each fetch replaces it.
+  Playlists stored by an earlier version may have an empty name until their first fetch.
 - `addedAt` is when the playlist was added. The UI lists playlists in that order.
 - `sources` is the ordered list of source keys.
 - `fetchError` and `fetchErrorAt` are set when the last fetch failed, and cleared by the next successful fetch.
@@ -305,7 +306,7 @@ The cover art comes from the first of:
 | Service          | Implementation                                                                       |
 |------------------|--------------------------------------------------------------------------------------|
 | `HttpClient`     | WinHTTP (`WinHttpClient`). `get` returns a body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
-| `ProcessRunner`  | `CreateProcessW` with stdout/stderr pipes, line splitting, UTF-8 decoding, exit code. Every child joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; cancelling a run terminates the job. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. |
+| `ProcessRunner`  | `Win32ProcessRunner`. `run(program, arguments, stop)` starts the program with `CreateProcessW`, without a console window, and returns its exit code, stdout and stderr. Arguments and output are UTF-8; the arguments are quoted by the C runtime's rules. A child inherits only its own pipe ends and NUL as stdin (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so children started at the same time never hold each other's pipes open. It starts suspended, joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and only then runs. A `std::stop_token` cancels: its callback terminates the job, and the call throws `Cancelled`. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. So far it returns the whole output at the end; splitting it into lines as they arrive comes with the Downloader's progress. |
 | `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
 | `ArchiveExtractor` | miniz (`MinizArchiveExtractor`). Extracts the named files from a zip into a folder. miniz opens files by narrow name, so it gets a `FILE*` from `_wfopen`, and writes go through `CreateFileW`. A stop request ends it with `Cancelled`. |
@@ -384,11 +385,21 @@ Flow per tool:
 5. Extract zip archives (`ArchiveExtractor`) into `tools\.staging\<tool>\unpacked\`. Only the tool's own files come
    out, found by file name wherever they are in the zip (ffmpeg's are under `<build>\bin\`); ffplay and the docs stay
    in.
-6. Move the new files into `tools\` (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`) while no tool process is running,
-   then update `tools.json`.
+6. Move the new files into `tools\` (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`) while no tool process is running
+   (see Tool folder below), then update `tools.json`.
 
 `tools\.staging` is cleared when a run starts and when it ends; a run stopped by the app's close leaves its partial
 download there until the next one.
+
+**Tool folder.** `ToolFolder` (`src/core/tools/`) knows the tools folder and each tool's files, and holds a
+`std::shared_mutex` per download. Whatever runs a tool holds the shared lock for as long as the process runs
+(`lock_for_use`), and `ToolInstaller` holds the exclusive one while it moves the new files in (`lock_for_replace`). So an
+update waits for running tools to end, and a tool never starts halfway through an update. `main.cpp` makes it, and hands
+it to ToolManager and to the components that run tools.
+
+**yt-dlp.** `YtDlp` (`src/core/tools/`) runs yt-dlp through `ProcessRunner` under `lock_for_use`, always with
+`--ignore-config`, so a user's own yt-dlp configuration can't change its output. Without the executable it throws
+`ToolMissing`.
 
 ToolManager runs at startup and before the first sync of a session.
 - Missing tools are always installed.
@@ -400,6 +411,8 @@ tools it needs (ui.md, Vocabulary › Waiting for tools):
 
 | Step                                   | Needs          |
 |----------------------------------------|----------------|
+| Playlist look-up, Spotify              | –              |
+| Playlist look-up, YouTube Music        | yt-dlp         |
 | `SpotifySource` fetch                  | –              |
 | `YouTubeMusicSource` fetch             | yt-dlp         |
 | Matcher, `searchVideos`                | yt-dlp         |
@@ -468,8 +481,27 @@ playlist id. It drops spaces around the text; `http://` or `https://` is optiona
 | YouTube Music | `music.youtube.com`, `youtube.com`, `www.youtube.com`, `m.youtube.com` with `/playlist?…list=<id>…`; `music.youtube.com/browse/VL<id>` | `[A-Za-z0-9_-]+`, except `LM`, `WL` and `LL` (Liked Music, Watch later, Liked videos), which are never public | `https://music.youtube.com/playlist?list=<id>` |
 | Spotify       | `open.spotify.com/playlist/<id>`, also after an `/intl-xx/` segment, with any query; the URI `spotify:playlist:<id>` | 22 characters of `[A-Za-z0-9]` | `https://open.spotify.com/playlist/<id>` |
 
-`addPlaylist` stores the playlist under `<source prefix>:<id>` with its canonical `url`, an empty `name` and
-`addedAt`, and refuses a key that is already there.
+`addPlaylist` stores the playlist under `<source prefix>:<id>` with its canonical `url`, the `name` its look-up found
+and `addedAt`, and refuses a key that is already there.
+
+**Playlist look-up.** Before a playlist is added, `PlaylistLookup` (`src/core/playlists/`) finds its name, which also
+tells whether it is public. `lookUpPlaylist(link)` runs on a worker thread (`std::jthread`) and answers with
+`PlaylistLookedUp`: the playlist key and one of
+- `Found`, with the name;
+- `Unavailable`: the playlist doesn't exist or is private;
+- `ToolMissing`: yt-dlp isn't installed, so the look-up waits for it;
+- `Failed`, with the reason, for anything else (no network, an answer that doesn't read).
+
+A new look-up stops the one before, and so does `stop()`; a stopped look-up answers nothing. Per source:
+
+- **YouTube Music**: `yt-dlp --flat-playlist -J -I 0 <canonical url>` lists no entries, only the playlist, and reads
+  `title` from the JSON. A missing playlist ends with `ERROR: [youtube:tab] <id>: YouTube said: The playlist does not
+  exist.`; an `ERROR:` line that says the playlist doesn't exist or is private means `Unavailable`, and any other
+  failure is `Failed` with that line, without its `ERROR: [extractor] <id>:` prefix.
+- **Spotify**: `GET https://open.spotify.com/embed/playlist/<id>` and the `__NEXT_DATA__` JSON in it, read with glaze:
+  `props.pageProps.state.data.entity.name`. A missing or private playlist still answers 200, with an error page whose
+  `pageProps` has no `state`; that means `Unavailable`. `WESTIELIB_SPOTIFY_URL` replaces `https://open.spotify.com`;
+  the UI checks point it at a fake server of their own, so they never reach the network.
 
 **YouTubeMusicSource** runs `yt-dlp --flat-playlist -J <url>` and maps each entry to a `SourceTrack` with its
 `videoId`. The album and year of these sources come from yt-dlp's info JSON at download time.
@@ -633,7 +665,8 @@ and their work folders are cleaned.
 
 | Command                                  | Effect                                                         |
 |------------------------------------------|----------------------------------------------------------------|
-| `addPlaylist(url)`                       | Adds a playlist; the source type follows from the URL          |
+| `lookUpPlaylist(link)`                   | Finds a playlist's name before it is added; answers with `PlaylistLookedUp` |
+| `addPlaylist(url, name)`                 | Adds a playlist with the name its look-up found; the source type follows from the URL |
 | `removePlaylist(id)`                     | Removes a playlist; tracks left with no source in a playlist become `orphaned` |
 | `sync(playlistIds)`                      | Starts a sync run                                              |
 | `cancel()`                               | Cancels the running sync                                       |
@@ -653,6 +686,7 @@ and their work folders are cleaned.
 | Event                          | Payload                                         |
 |--------------------------------|-------------------------------------------------|
 | `SyncStarted` / `SyncFinished` | run summary                                     |
+| `PlaylistLookedUp`             | playlist key, outcome, name or error            |
 | `PlaylistFetched`              | playlist id, name, track count                  |
 | `PlaylistFetchFailed`          | playlist id, error                              |
 | `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for |
@@ -687,7 +721,7 @@ queued event at once. The queue owns the events, so nothing leaks when the windo
 - CMake, Ninja, MSYS2 MinGW-w64, C++26, Unicode entry point (`wWinMain`, `-municode`).
 - Linked statically (`-static`), producing one self-contained `WestieLib.exe`.
 - Libraries: TagLib, glaze, miniz.
-- Windows libraries: `winhttp`, `bcrypt`, `ole32`, `shell32`.
+- Windows libraries: `winhttp`, `bcrypt`, `ole32`, `shell32`, `gdiplus`.
 - The version comes from `project(VERSION)` and is compiled into a generated header and the executable's
   `VERSIONINFO` resource.
 - Releases are published on https://github.com/Rheel17/WestieLib as `vX.Y.Z` tags with `WestieLib.exe` attached.
@@ -700,11 +734,11 @@ src/
         events/     CoreEvent, EventSink
         github/     the latest release of a repository, from GitHub's API
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
-        playlists/  playlist links, addPlaylist
+        playlists/  playlist links, the playlist look-up, addPlaylist
         settings/   Settings, SettingsStore
-        sources/    SourceType; later the PlaylistSources
+        sources/    SourceType, each source's playlist name; later the PlaylistSources
         state/      State, StateStore
-        tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore and the tool types
+        tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore, ToolFolder, YtDlp and the tool types
                     later areas get folders of their own: SyncEngine, Matcher, Downloader, Tagger,
                     Library, SelfUpdater, RemoteConfig
     platform/       service interfaces

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 #include <utility>
 #include <variant>
 
@@ -32,7 +33,8 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 }
 
 MainWindow::MainWindow(
-        core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools
+        core::SettingsStore& settings_store, core::Settings settings, core::StateStore& state, CoreEventQueue& events, core::ToolManager& tools,
+        core::PlaylistLookup& lookup
 ) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
@@ -40,6 +42,7 @@ MainWindow::MainWindow(
         state_(state),
         events_(events),
         tools_(tools),
+        lookup_(lookup),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
@@ -144,11 +147,20 @@ bool MainWindow::has_playlists() const {
     return !state_.state().playlists.empty();
 }
 
+std::optional<std::string> MainWindow::added_playlist_name(const core::PlaylistLink& link) const {
+    auto playlist = state_.state().playlists.find(link.key());
+    if (playlist == state_.state().playlists.end()) {
+        return std::nullopt;
+    }
+    return playlist->second.name;
+}
+
 void MainWindow::add_playlist() {
-    AddPlaylistDialog dialog([this](const core::PlaylistLink& link) { return state_.state().playlists.contains(link.key()); });
-    std::optional<AddPlaylistRequest> request = dialog.choose(hwnd());
+    add_playlist_dialog_.emplace([this](const core::PlaylistLink& link) { return added_playlist_name(link); }, lookup_, tool_board_);
+    std::optional<AddPlaylistRequest> request = add_playlist_dialog_->choose(hwnd());
+    add_playlist_dialog_.reset();
     // Nothing syncs yet, so Sync now has no effect
-    if (request && core::add_playlist(state_, request->link, std::chrono::system_clock::now())) {
+    if (request && core::add_playlist(state_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
         show_playlists();
     }
 }
@@ -251,6 +263,9 @@ void MainWindow::show_tools() {
     if (settings_dialog_) {
         settings_dialog_->show_tools(command_state().enabled(CommandId::CheckForUpdates));
     }
+    if (add_playlist_dialog_) {
+        add_playlist_dialog_->show_tools();
+    }
 }
 
 void MainWindow::on_core_events() {
@@ -270,6 +285,12 @@ void MainWindow::apply_event(const core::ToolStatus& status) {
 
 void MainWindow::apply_event(const core::ToolsChecked& event) {
     tool_board_.set_checked_at(event.checked_at);
+}
+
+void MainWindow::apply_event(const core::PlaylistLookedUp& event) {
+    if (add_playlist_dialog_) {
+        add_playlist_dialog_->show_lookup(event);
+    }
 }
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
@@ -344,8 +365,9 @@ LRESULT MainWindow::on_non_client_paint(UINT message, WPARAM wparam, LPARAM lpar
 }
 
 void MainWindow::on_destroy() {
-    // The worker winds down while the window goes, and whatever it still reports stays in the queue
+    // The workers wind down while the window goes, and whatever they still report stays in the queue
     tools_.stop();
+    lookup_.stop();
     events_.set_target(nullptr);
     save_state();
     // A folder typed into the field takes effect when the field loses focus, which a close doesn't wait for

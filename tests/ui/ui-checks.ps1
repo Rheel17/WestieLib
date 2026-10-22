@@ -1,7 +1,8 @@
 # Drives WestieLib.exe through Win32 messages and checks the main window: DPI awareness, icons, menus and their
 # states, commands and shortcuts, the toolbar and status bar, the side panels' first-run content, sizes, splitter drags
-# and limits, the log pane, painting during a drag, the library folder, the Settings dialog, the tools' state, and
-# saving/restoring the window state and settings.json across restarts.
+# and limits, the log pane, painting during a drag, the library folder, the Settings dialog, the tools' state, adding
+# playlists and looking them up, and saving/restoring the window state and settings.json across restarts. A fake
+# yt-dlp and a local stand-in for Spotify and GitHub answer the look-ups, so nothing reaches the network.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Screenshot <png>]
 #
@@ -346,6 +347,29 @@ public static class W {
 		}
 	}
 
+	// The pixels of a child's first columns in a PrintWindow capture, as a string to compare
+	public static string ChildPixels(IntPtr window, IntPtr child, int width) {
+		RECT area;
+		GetClientRect(child, out area);
+		int dx, dy;
+		var pixels = new StringBuilder();
+		using (var bitmap = Capture(window, child, out dx, out dy)) {
+			for (int x = 0; x < Math.Min(width, area.Right); x++) {
+				for (int y = 0; y < area.Bottom; y++) pixels.Append(bitmap.GetPixel(x + dx, y + dy).ToArgb().ToString("x8"));
+			}
+		}
+		return pixels.ToString();
+	}
+
+	[DllImport("user32.dll")] static extern bool SystemParametersInfoW(uint action, uint param, out bool value, uint winIni);
+
+	// Whether Windows animates controls (SPI_GETCLIENTAREAANIMATION)
+	public static bool ClientAreaAnimation() {
+		bool on;
+		SystemParametersInfoW(0x1042, 0, out on, 0);
+		return on;
+	}
+
 	// The color of the icon in a status bar part: green (ready), blue (working), amber (attention), or none
 	public static string StatusIconColor(IntPtr window, IntPtr bar, int part) {
 		RECT area = StatusPartRect(bar, part);
@@ -654,6 +678,132 @@ public static class W {
 }
 '@
 
+# A local stand-in for open.spotify.com, and for GitHub's API when it has a yt-dlp to serve, so the checks never reach
+# the network. Embed pages for the ids in SpotifyNames hold that name; other ids get Spotify's error page.
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+
+public class FakeWeb {
+	readonly TcpListener listener = new TcpListener(IPAddress.Loopback, 0);
+	public readonly Dictionary<string, string> SpotifyNames = new Dictionary<string, string>();
+	public readonly HashSet<string> SlowIds = new HashSet<string>();
+	public readonly HashSet<string> BrokenIds = new HashSet<string>();
+	// The yt-dlp download waits for it, so a check can look at the app while yt-dlp installs
+	public readonly ManualResetEvent AssetGate = new ManualResetEvent(false);
+	public byte[] YtDlp;
+	public int Port;
+	public string Url { get { return "http://127.0.0.1:" + Port; } }
+
+	public FakeWeb() {
+		listener.Start();
+		Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+		var thread = new Thread(Accept);
+		thread.IsBackground = true;
+		thread.Start();
+	}
+
+	public void Stop() {
+		AssetGate.Set();
+		listener.Stop();
+	}
+
+	void Accept() {
+		while (true) {
+			TcpClient client;
+			try { client = listener.AcceptTcpClient(); } catch { return; }
+			ThreadPool.QueueUserWorkItem(_ => Serve(client));
+		}
+	}
+
+	void Serve(TcpClient client) {
+		try {
+			using (client)
+			using (var stream = client.GetStream()) {
+				var reader = new StreamReader(stream, Encoding.ASCII);
+				string path = reader.ReadLine().Split(' ')[1];
+				while (!string.IsNullOrEmpty(reader.ReadLine())) { }
+				int status = 200;
+				byte[] body = Answer(path, ref status);
+				byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 " + status + " Fake\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
+				stream.Write(head, 0, head.Length);
+				stream.Write(body, 0, body.Length);
+			}
+		} catch { }
+	}
+
+	byte[] Answer(string path, ref int status) {
+		const string Embed = "/embed/playlist/";
+		if (path.StartsWith(Embed)) {
+			string id = path.Substring(Embed.Length);
+			if (SlowIds.Contains(id)) Thread.Sleep(1500);
+			if (BrokenIds.Contains(id)) { status = 500; return new byte[0]; }
+			string name;
+			string data = SpotifyNames.TryGetValue(id, out name)
+				? "{\"props\":{\"pageProps\":{\"state\":{\"data\":{\"entity\":{\"name\":\"" + name + "\",\"type\":\"playlist\"}}}}}}"
+				: "{\"props\":{\"pageProps\":{\"status\":500,\"title\":\"Page not available\"}}}";
+			return Encoding.UTF8.GetBytes("<html><body><script id=\"__NEXT_DATA__\" type=\"application/json\">" + data + "</script></body></html>");
+		}
+		if (path == "/repos/yt-dlp/yt-dlp/releases/latest" && YtDlp != null) {
+			string digest;
+			using (var sha = SHA256.Create()) digest = BitConverter.ToString(sha.ComputeHash(YtDlp)).Replace("-", "").ToLowerInvariant();
+			return Encoding.UTF8.GetBytes("{\"tag_name\":\"2026.10.22\",\"assets\":[{\"name\":\"yt-dlp.exe\",\"browser_download_url\":\"" + Url +
+				"/download/yt-dlp.exe\",\"size\":" + YtDlp.Length + ",\"digest\":\"sha256:" + digest + "\"}]}");
+		}
+		if (path == "/download/yt-dlp.exe" && YtDlp != null) {
+			AssetGate.WaitOne();
+			return YtDlp;
+		}
+		status = 404;
+		return new byte[0];
+	}
+}
+'@
+
+# A yt-dlp that answers a playlist look-up by the list id, as the real one does: a name, YouTube's errors for ids
+# starting with PLmissing and PLprivate, a network error for PLbroken, and a name 1.5 s late for PLslow. Each run adds
+# its arguments, joined with |, to yt-dlp-runs.txt beside it.
+$FakeYtDlpSource = @'
+using System;
+using System.IO;
+using System.Text;
+using System.Threading;
+
+public static class FakeYtDlp {
+	public static int Main(string[] args) {
+		File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp-runs.txt"), string.Join("|", args) + "\n", new UTF8Encoding(false));
+		string url = args[args.Length - 1];
+		int list = url.IndexOf("list=");
+		string id = list < 0 ? "" : url.Substring(list + 5);
+		if (id.StartsWith("PLslow")) Thread.Sleep(1500);
+		string error = null;
+		if (id.StartsWith("PLmissing")) error = "YouTube said: The playlist does not exist.";
+		if (id.StartsWith("PLprivate")) error = "This playlist is private";
+		if (id.StartsWith("PLbroken")) error = "Unable to download API page: HTTP Error 503: Service Unavailable";
+		if (error != null) {
+			Write(Console.OpenStandardError(), "WARNING: [youtube:tab] YouTube Music is not directly supported\nERROR: [youtube:tab] " + id + ": " + error + "\n");
+			return 1;
+		}
+		// The real one escapes everything outside ASCII
+		string title = id == "PLx9k2_-Ab" ? "Caf\\u00e9 Check Mix" : "Checked " + id;
+		Write(Console.OpenStandardOutput(), "{\"_type\": \"playlist\", \"id\": \"" + id + "\", \"title\": \"" + title + "\", \"entries\": []}\n");
+		return 0;
+	}
+
+	static void Write(Stream stream, string text) {
+		byte[] bytes = Encoding.UTF8.GetBytes(text);
+		stream.Write(bytes, 0, bytes.Length);
+		stream.Flush();
+	}
+}
+'@
+
 if (Get-Process WestieLib -ErrorAction SilentlyContinue) { throw 'WestieLib is running; close it before running the checks' }
 
 # Physical pixels, not coordinates virtualized for a DPI-unaware PowerShell
@@ -669,6 +819,13 @@ $env:WESTIELIB_GITHUB_API = 'http://127.0.0.1:9'
 $LookupFailure = 'Couldn''t reach 127\.0\.0\.1: .+'
 $SettingsFile = Join-Path $DataDir 'settings.json'
 $ToolsDir = Join-Path $DataDir 'tools'
+$FakeYtDlp = Join-Path $DataDir 'fakes\yt-dlp.exe'
+New-Item -ItemType Directory -Force (Split-Path $FakeYtDlp) | Out-Null
+Add-Type -TypeDefinition $FakeYtDlpSource -OutputAssembly $FakeYtDlp -OutputType ConsoleApplication
+$FakeYtDlpRuns = Join-Path $ToolsDir 'yt-dlp-runs.txt'
+$Web = New-Object FakeWeb
+$env:WESTIELIB_SPOTIFY_URL = $Web.Url
+$Ellipsis = [char]0x2026
 $script:failures = 0
 $script:dpi = 96
 $app = $null
@@ -688,7 +845,8 @@ function Check-That([string]$what, $actual, [bool]$ok, [string]$expected) {
 # DIPs to pixels, rounding like MulDiv
 function S([int]$dips) { [int][math]::Floor($dips * $script:dpi / 96 + 0.5) }
 
-function Start-App {
+# Waits for the app's first tool run to end, unless told not to
+function Start-App([switch]$DuringToolRun) {
 	$process = Start-Process -FilePath $Exe -PassThru
 	for ($i = 0; $i -lt 50; $i++) {
 		Start-Sleep -Milliseconds 100
@@ -698,7 +856,7 @@ function Start-App {
 	if ($hwnd -eq [IntPtr]::Zero) { throw 'Main window not found' }
 	Start-Sleep -Milliseconds 400
 	$script:dpi = [W]::GetDpiForWindow($hwnd)
-	Wait-ToolsIdle $hwnd
+	if (-not $DuringToolRun) { Wait-ToolsIdle $hwnd }
 	return @{ Process = $process; Hwnd = $hwnd }
 }
 
@@ -1206,10 +1364,12 @@ function Get-LastCheckedText {
 	"Last checked $($local.Day) $($local.ToString('MMM', $Invariant))$year"
 }
 
-# Installed tools as the app would leave them: tools.json, checked at $CheckedAt, and the executables, here empty
+# Installed tools as the app would leave them: tools.json, checked at $CheckedAt, and the executables: the fake yt-dlp,
+# and empty files for ffmpeg, which nothing runs yet
 function Install-FakeTools {
 	New-Item -ItemType Directory -Force $ToolsDir | Out-Null
-	foreach ($file in 'yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
+	Copy-Item $FakeYtDlp $ToolsDir
+	foreach ($file in 'ffmpeg.exe', 'ffprobe.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
 	$json = '{"version": 1, "checkedAt": "' + $CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $Invariant) + '", "tools": {' +
 		'"yt-dlp": {"release": "2026.10.21", "digest": "sha256:0"}, "ffmpeg": {"release": "n9.0", "digest": "sha256:0"}}}'
 	[IO.File]::WriteAllText((Join-Path $ToolsDir 'tools.json'), $json)
@@ -1264,7 +1424,7 @@ function Check-SettingsTools($hwnd) {
 	Check-That '  Check for updates, GitHub unreachable' $actual ($actual -match "^$pattern$") $pattern
 	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure"
 	$kept = @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe' | ForEach-Object { (Get-Item (Join-Path $ToolsDir $_)).Length }) -join ' '
-	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" '0 0 0 False'
+	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" "$((Get-Item $FakeYtDlp).Length) 0 0 False"
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
@@ -1307,34 +1467,62 @@ function Check-BrokenSettings {
 $StateFile = Join-Path $DataDir 'state.json'
 $SpotifyId = '7mKq2pLxV9nT4cR1sY8wZa'
 $SpotifyLink = "https://open.spotify.com/playlist/$SpotifyId"
+$SpotifyName = "Late Night Caf$([char]0xE9)"
+$SlowSpotifyId = '3k9QeTqH2wVfXbN7RjL0aC'
+$MissingSpotifyId = '0aaaaaaaaaaaaaaaaaaaaa'
+$BrokenSpotifyId = '0bbbbbbbbbbbbbbbbbbbbb'
+$Web.SpotifyNames[$SpotifyId] = $SpotifyName
+$Web.SpotifyNames[$SlowSpotifyId] = 'Sunday Social'
+[void]$Web.SlowIds.Add($SlowSpotifyId)
+[void]$Web.BrokenIds.Add($BrokenSpotifyId)
 $YouTubeLink = 'https://music.youtube.com/playlist?list=PLx9k2_-Ab'
+$YouTubeName = "Caf$([char]0xE9) Check Mix"
 $NotSupported = 'Not a supported playlist link'
-# What the Add playlist dialog says under the link, and whether Add is enabled
+$WaitingForTools = "Waiting for required tools to be installed$Ellipsis"
+$Unavailable = 'This playlist doesn''t exist or is private.'
+$SpotifyFound = "$SpotifyName Spotify playlist"
+$YouTubeFound = "$YouTubeName YouTube Music playlist"
+# What the Add playlist dialog says under the link once the look-up answered, then the Add button's text and whether it
+# is enabled. Run 1 has no yt-dlp, so YouTube Music links wait for it.
 $LinkChecks = @(
-	@{ Link = ''; Line = ''; Add = 'False' },
-	@{ Link = $YouTubeLink; Line = 'YouTube Music playlist'; Add = 'True' },
-	@{ Link = "  https://www.youtube.com/playlist?si=x&list=PLx9k2_-Ab`r`n"; Line = 'YouTube Music playlist'; Add = 'True' },
-	@{ Link = 'MUSIC.youtube.com/browse/VLPLx9k2_-Ab'; Line = 'YouTube Music playlist'; Add = 'True' },
-	@{ Link = 'https://music.youtube.com/playlist?list=LM'; Line = $NotSupported; Add = 'False' },
-	@{ Link = 'https://music.youtube.com/watch?v=abc&list=PLx9k2_-Ab'; Line = $NotSupported; Add = 'False' },
-	@{ Link = "$SpotifyLink`?si=4f1c2e7a9b3d4e5f"; Line = 'Spotify playlist'; Add = 'True' },
-	@{ Link = "https://open.spotify.com/intl-nl/playlist/$SpotifyId"; Line = 'Spotify playlist'; Add = 'True' },
-	@{ Link = "spotify:playlist:$SpotifyId"; Line = 'Spotify playlist'; Add = 'True' },
-	@{ Link = "https://open.spotify.com/album/$SpotifyId"; Line = $NotSupported; Add = 'False' },
-	@{ Link = 'https://open.spotify.com/playlist/7mKq2pLx'; Line = $NotSupported; Add = 'False' },
-	@{ Link = 'hello'; Line = $NotSupported; Add = 'False' }
+	@{ Link = ''; Line = ' | Add False' },
+	@{ Link = $YouTubeLink; Line = "$WaitingForTools | Add False" },
+	@{ Link = "  https://www.youtube.com/playlist?si=x&list=PLx9k2_-Ab`r`n"; Line = "$WaitingForTools | Add False" },
+	@{ Link = 'MUSIC.youtube.com/browse/VLPLx9k2_-Ab'; Line = "$WaitingForTools | Add False" },
+	@{ Link = 'https://music.youtube.com/playlist?list=LM'; Line = "$NotSupported | Add False" },
+	@{ Link = 'https://music.youtube.com/watch?v=abc&list=PLx9k2_-Ab'; Line = "$NotSupported | Add False" },
+	@{ Link = "$SpotifyLink`?si=4f1c2e7a9b3d4e5f"; Line = "$SpotifyFound | Add True" },
+	@{ Link = "https://open.spotify.com/intl-nl/playlist/$SpotifyId"; Line = "$SpotifyFound | Add True" },
+	@{ Link = "spotify:playlist:$SpotifyId"; Line = "$SpotifyFound | Add True" },
+	@{ Link = "spotify:playlist:$MissingSpotifyId"; Line = "$Unavailable | Add False" },
+	@{ Link = "spotify:playlist:$BrokenSpotifyId"; Line = 'Couldn''t look it up: HTTP 500 from 127.0.0.1 | Add False' },
+	@{ Link = "https://open.spotify.com/album/$SpotifyId"; Line = "$NotSupported | Add False" },
+	@{ Link = 'https://open.spotify.com/playlist/7mKq2pLx'; Line = "$NotSupported | Add False" },
+	@{ Link = 'hello'; Line = "$NotSupported | Add False" }
 )
 
-function Get-LinkLine($dialog) { "$([W]::TextOf([W]::GetDlgItem($dialog, 1101))) | $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1)))" }
+# The line under the link, then the Add button's text and whether it is enabled
+function Get-LinkLine($dialog) {
+	$add = [W]::GetDlgItem($dialog, 1)
+	"$([W]::TextOf([W]::GetDlgItem($dialog, 1101))) | $([W]::TextOf($add)) $([W]::IsWindowEnabled($add))"
+}
 
 function Set-PlaylistLink($dialog, [string]$link) {
 	[W]::SetEditText([W]::GetDlgItem($dialog, 1100), $link)
 	Start-Sleep -Milliseconds 50
 }
 
+# The line once the look-up has answered; it starts 300 ms after the last change. The answer sets the line, then the
+# button, so this reads them again after a moment.
+function Wait-LinkLine($dialog) {
+	for ($i = 0; $i -lt 100 -and (Get-LinkLine $dialog) -like 'Looking up*'; $i++) { Start-Sleep -Milliseconds 100 }
+	Start-Sleep -Milliseconds 100
+	Get-LinkLine $dialog
+}
+
 # The toolbar, File > Add playlist, Ctrl+N, the left panel's button and the welcome screen's each open Add playlist,
 # centered on the window. It starts empty, with Add disabled and Sync now checked; the line under the link follows the
-# typing. Cancel writes no state.json.
+# typing and the look-ups. Cancel writes no state.json.
 function Check-AddPlaylistDialog($hwnd) {
 	$strip = Get-ToolbarStrip $hwnd
 	$toolbar = ([W]::Children($strip, 'ToolbarWindow32'))[0]
@@ -1365,10 +1553,28 @@ function Check-AddPlaylistDialog($hwnd) {
 	$offset = "$(($d.Left + $d.Right) - ($o.Left + $o.Right)) $(($d.Top + $d.Bottom) - ($o.Top + $o.Bottom))"
 	Check-That '  centered on the window (offset x2)' $offset ($offset -match '^-?[01] -?[01]$') '-1 to 1 each way'
 	$syncNow = [W]::SendMessageW([W]::GetDlgItem($dialog, 1102), 0xF0, [IntPtr]::Zero, [IntPtr]::Zero)
-	Check '  focus on the link | line | Add | Sync now' "$([W]::FocusOf($dialog) -eq [W]::GetDlgItem($dialog, 1100)) | $(Get-LinkLine $dialog) | $syncNow" 'True |  | False | 1'
+	Check '  focus on the link | line | Add | Sync now' "$([W]::FocusOf($dialog) -eq [W]::GetDlgItem($dialog, 1100)) | $(Get-LinkLine $dialog) | $syncNow" 'True |  | Add False | 1'
 	foreach ($case in $LinkChecks) {
 		Set-PlaylistLink $dialog $case.Link
-		Check "  '$($case.Link.Trim())'" (Get-LinkLine $dialog) "$($case.Line) | $($case.Add)"
+		Check "  '$($case.Link.Trim())'" (Wait-LinkLine $dialog) $case.Line
+	}
+	Set-PlaylistLink $dialog "spotify:playlist:$SlowSpotifyId"
+	Check '  while Spotify answers' (Get-LinkLine $dialog) "Looking up the Spotify playlist$Ellipsis | Add False"
+	# The spinner takes a step every 100 ms, unless Windows' animations are off
+	$line = [W]::GetDlgItem($dialog, 1101)
+	$first = [W]::ChildPixels($dialog, $line, (S 16))
+	Start-Sleep -Milliseconds 250
+	$moved = if ([W]::ChildPixels($dialog, $line, (S 16)) -ne $first) { 'turns' } else { 'stands still' }
+	Check '  its spinner' $moved $(if ([W]::ClientAreaAnimation()) { 'turns' } else { 'stands still' })
+	if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-add-playlist-looking.png") }
+	Check '  then' (Wait-LinkLine $dialog) 'Sunday Social Spotify playlist | Add True'
+	$logo = [W]::ChildPixels($dialog, $line, (S 16))
+	Start-Sleep -Milliseconds 250
+	Check '  and its logo stands still' $(if ([W]::ChildPixels($dialog, $line, (S 16)) -eq $logo) { 'still' } else { 'moves' }) 'still'
+	Set-PlaylistLink $dialog $YouTubeLink
+	if ($Screenshot) {
+		Start-Sleep -Milliseconds 300
+		Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-add-playlist-waiting.png")
 	}
 	# Shared links are the longest: a Spotify link with its ?si= part, and a YouTube Music list id of 34 characters
 	$edit = [W]::GetDlgItem($dialog, 1100)
@@ -1381,7 +1587,7 @@ function Check-AddPlaylistDialog($hwnd) {
 		Check-That "  fits without scrolling: $($link.Substring(8, 20))..." "$width of $room" ($width -le $room) "at most $room"
 	}
 	Set-PlaylistLink $dialog "$SpotifyLink`?si=4f1c2e7a9b3d4e5f"
-	Check '  a new playlist again, for the screenshot' (Get-LinkLine $dialog) 'Spotify playlist | True'
+	Check '  a new playlist again, for the screenshot' (Wait-LinkLine $dialog) "$SpotifyFound | Add True"
 	if ($Screenshot) {
 		Start-Sleep -Milliseconds 300
 		Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-add-playlist.png")
@@ -1405,7 +1611,7 @@ function Add-Playlist($hwnd, [string]$link) {
 	Send-Command $hwnd '&Add playlist...'
 	$dialog = Wait-OwnedWindow $hwnd
 	Set-PlaylistLink $dialog $link
-	$line = Get-LinkLine $dialog
+	$line = Wait-LinkLine $dialog
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
 	$line
@@ -1475,12 +1681,13 @@ function Write-ManyPlaylists([int]$count) {
 	[IO.File]::WriteAllText($StateFile, '{"version": 1, "playlists": {' + ($entries -join ', ') + '}}')
 }
 
-# Adding playlists stores them in state.json, under their key with the canonical link and no name. The welcome screen
-# gives way to the tracks panel, and Sync all enables. A link to a playlist already in the list can't be added again.
+# Adding playlists stores them in state.json, under their key with the canonical link and the name the look-up found.
+# The welcome screen gives way to the tracks panel, and Sync all enables. A link to a playlist already in the list shows
+# its name, and Add reads Already added and stays disabled.
 function Check-AddingPlaylists($hwnd) {
 	$toolbar = ([W]::Children((Get-ToolbarStrip $hwnd), 'ToolbarWindow32'))[0]
-	$spotifyKey = "spotify:$SpotifyId $SpotifyLink []"
-	Check 'Add a Spotify playlist: the line | Add' (Add-Playlist $hwnd "$SpotifyLink`?si=4f1c2e7a9b3d4e5f") 'Spotify playlist | True'
+	$spotifyKey = "spotify:$SpotifyId $SpotifyLink [$SpotifyName]"
+	Check 'Add a Spotify playlist: the line | Add' (Add-Playlist $hwnd "$SpotifyLink`?si=4f1c2e7a9b3d4e5f") "$SpotifyFound | Add True"
 	Check '  state.json' (Get-SavedPlaylists) "$spotifyKey True"
 	Check '  no state.json.bak for the first save' (Test-Path "$StateFile.bak") 'False'
 	Check '  screens' (Get-PlaylistScreens $hwnd) $WithPlaylists
@@ -1494,7 +1701,12 @@ function Check-AddingPlaylists($hwnd) {
 	Send-Command $hwnd '&Add playlist...'
 	$dialog = Wait-OwnedWindow $hwnd
 	Set-PlaylistLink $dialog "spotify:playlist:$SpotifyId"
-	Check 'The same playlist again: line | Add' (Get-LinkLine $dialog) "Spotify playlist $([char]0x00B7) already added | False"
+	Check 'The same playlist again: line | Add' (Get-LinkLine $dialog) "$SpotifyFound | Already added False"
+	$add = [W]::GetDlgItem($dialog, 1)
+	$c = New-Object W+RECT
+	[void][W]::GetClientRect($add, [ref]$c)
+	$width = [W]::TextWidth('Already added', $script:dpi)
+	Check-That '  Already added fits its button, with room' "$width of $($c.Right)" ($width + (S 12) -le $c.Right) "at most $($c.Right - (S 12))"
 	# IDOK can come without the button, which is disabled
 	[void][W]::PostMessageW($dialog, 0x111, [IntPtr]1, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
@@ -1502,10 +1714,39 @@ function Check-AddingPlaylists($hwnd) {
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
 
-	Check 'Add a YouTube Music playlist' (Add-Playlist $hwnd $YouTubeLink) 'YouTube Music playlist | True'
-	$youTubeKey = "ytm:PLx9k2_-Ab $YouTubeLink []"
+	Check 'Add a YouTube Music playlist' (Add-Playlist $hwnd $YouTubeLink) "$YouTubeFound | Add True"
+	$youTubeKey = "ytm:PLx9k2_-Ab $YouTubeLink [$YouTubeName]"
 	Check '  state.json' (Get-SavedPlaylists) "$spotifyKey True / $youTubeKey True"
 	Check '  state.json.bak keeps the version before' (Get-SavedPlaylists "$StateFile.bak") "$spotifyKey True"
+}
+
+# With yt-dlp installed, a YouTube Music link is looked up: the answer names the playlist, or says it is missing,
+# private or out of reach. The look-up waits 300 ms after the last change, so quick changes run yt-dlp once, with the
+# arguments the app gives it.
+function Check-YouTubeLookups($hwnd) {
+	Send-Command $hwnd '&Add playlist...'
+	$dialog = Wait-OwnedWindow $hwnd
+	Set-PlaylistLink $dialog $YouTubeLink
+	Check 'yt-dlp installed: a YouTube Music link' (Wait-LinkLine $dialog) "$YouTubeFound | Add True"
+	$cases = @(
+		@{ Id = 'PLmissing1'; Line = "$Unavailable | Add False" },
+		@{ Id = 'PLprivate1'; Line = "$Unavailable | Add False" },
+		@{ Id = 'PLbroken1'; Line = 'Couldn''t look it up: Unable to download API page: HTTP Error 503: Service Unavailable | Add False' }
+	)
+	foreach ($case in $cases) {
+		Set-PlaylistLink $dialog "https://music.youtube.com/playlist?list=$($case.Id)"
+		Check "  $($case.Id)" (Wait-LinkLine $dialog) $case.Line
+	}
+	Set-PlaylistLink $dialog 'https://music.youtube.com/playlist?list=PLslow1'
+	Check '  while yt-dlp looks it up' (Get-LinkLine $dialog) "Looking up the YouTube Music playlist$Ellipsis | Add False"
+	Check '  then' (Wait-LinkLine $dialog) 'Checked PLslow1 YouTube Music playlist | Add True'
+	$runs = @(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count
+	foreach ($id in 'PLquick1', 'PLquick2', 'PLquick3') { [W]::SetEditText([W]::GetDlgItem($dialog, 1100), "https://music.youtube.com/playlist?list=$id") }
+	Check '  three quick changes' (Wait-LinkLine $dialog) 'Checked PLquick3 YouTube Music playlist | Add True'
+	$new = @(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Select-Object -Skip $runs)
+	Check '  run yt-dlp once, with these arguments' ($new -join ' / ') '--ignore-config|--flat-playlist|--dump-single-json|--playlist-items|0|https://music.youtube.com/playlist?list=PLquick3'
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
 }
 
 # Starts the app with a state.json that isn't JSON: it shows the error, naming the file, instead of its window, exits
@@ -1774,6 +2015,7 @@ try {
 	$toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
 	Check '  toolbar buttons: Sync all still waits for a playlist' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v (disabled), Cancel (disabled), -, Settings'
 	Check-SettingsTools $h
+	Check-YouTubeLookups $h
 	Check 'Restored bounds' (Get-Bounds $h) "100,100 $(S 1200)x$(S 750)"
 	Check-Widths 'Restored widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 	Check-Bars '  toolbar strip | status bar' $h
@@ -1836,8 +2078,11 @@ try {
 	Check-PlaylistRows 'Two rows:' $h 2
 	Send-Command $h '&Add playlist...'
 	$dialog = Wait-OwnedWindow $h
+	$runs = @(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count
 	Set-PlaylistLink $dialog $YouTubeLink
-	Check '  a kept playlist is already added' (Get-LinkLine $dialog) "YouTube Music playlist $([char]0x00B7) already added | False"
+	Check '  a kept playlist is already added, with its name' (Get-LinkLine $dialog) "$YouTubeFound | Already added False"
+	Start-Sleep -Milliseconds 500
+	Check '  which needs no look-up' (@(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count - $runs) 0
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
 	if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-playlists.png") }
@@ -1856,6 +2101,12 @@ try {
 	Start-Sleep -Milliseconds 800
 	Check-PlaylistRows 'Many rows:' $h $many
 	Check-PlaylistScrolling $h $many
+	Send-Command $h '&Add playlist...'
+	$dialog = Wait-OwnedWindow $h
+	Set-PlaylistLink $dialog 'https://music.youtube.com/playlist?list=PLcheck2'
+	Check 'A kept playlist stored without a name is looked up' (Wait-LinkLine $dialog) 'Checked PLcheck2 YouTube Music playlist | Already added False'
+	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	Wait-Closed $dialog
 	if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-many.png") }
 	$left = New-Object W+RECT
 	$left.Right = S 150
@@ -1868,7 +2119,32 @@ try {
 	Check-BrokenState
 	Remove-Item $StateFile, "$StateFile.bak"
 
-	"--- Run 10: moved to a monitor with another DPI"
+	"--- Run 10: yt-dlp installs while Add playlist waits for it"
+	Remove-Item $ToolsDir -Recurse -Force
+	$Web.YtDlp = [IO.File]::ReadAllBytes($FakeYtDlp)
+	$env:WESTIELIB_GITHUB_API = $Web.Url
+	try {
+		$app = Start-App -DuringToolRun
+		$h = $app.Hwnd
+		Send-Command $h '&Add playlist...'
+		$dialog = Wait-OwnedWindow $h
+		Set-PlaylistLink $dialog $YouTubeLink
+		Check 'yt-dlp downloading: the line waits' (Get-LinkLine $dialog) "$WaitingForTools | Add False"
+		[void]$Web.AssetGate.Set()
+		for ($i = 0; $i -lt 100 -and (Get-LinkLine $dialog) -match '^(Waiting|Looking up)'; $i++) { Start-Sleep -Milliseconds 100 }
+		Start-Sleep -Milliseconds 100
+		Check '  installed: the look-up starts by itself' (Get-LinkLine $dialog) "$YouTubeFound | Add True"
+		[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+		Wait-Closed $dialog
+		Wait-ToolsIdle $h
+		Check '  yt-dlp installed' (Get-Item (Join-Path $ToolsDir 'yt-dlp.exe')).Length (Get-Item $FakeYtDlp).Length
+		Stop-App $app
+	} finally {
+		$env:WESTIELIB_GITHUB_API = 'http://127.0.0.1:9'
+		$Web.YtDlp = $null
+	}
+
+	"--- Run 11: moved to a monitor with another DPI"
 	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
 	$app = Start-App
 	$h = $app.Hwnd
@@ -1885,7 +2161,7 @@ try {
 		Check-Scaled $h
 		Stop-App $app
 
-		"--- Run 11: restored onto that monitor"
+		"--- Run 12: restored onto that monitor"
 		$app = Start-App
 		$h = $app.Hwnd
 		"DPI $script:dpi"
@@ -1894,6 +2170,7 @@ try {
 	}
 } finally {
 	if ($app -and -not $app.Process.HasExited) { $app.Process.Kill() }
+	$Web.Stop()
 	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
 	if ($userState) {
 		New-Item $KeyPath -Force | Out-Null

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <format>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -17,7 +18,7 @@ constexpr int FullPercent = 100;
 
 }
 
-ToolInstaller::ToolInstaller(const ToolServices& services, std::filesystem::path folder) : services_(services), folder_(std::move(folder)) {}
+ToolInstaller::ToolInstaller(const ToolServices& services, ToolFolder& folder) : services_(services), folder_(folder) {}
 
 InstalledTool ToolInstaller::install(ToolPackage package, const ToolDownload& download, const Progress& report, const std::stop_token& stop) {
     const ReleaseAsset& asset = download.asset;
@@ -37,15 +38,21 @@ InstalledTool ToolInstaller::install(ToolPackage package, const ToolDownload& do
     if (digest != asset.digest) {
         throw std::runtime_error(std::format("{} doesn't match its digest", asset.name));
     }
+    std::filesystem::path unpacked = staging / L"unpacked";
     if (download.archive) {
-        std::filesystem::path unpacked = staging / L"unpacked";
         services_.files.create_folders(unpacked);
         services_.archives.extract(file, tool_package_files(package), unpacked, stop);
-        for (std::wstring_view name : tool_package_files(package)) {
-            services_.files.move_replacing(unpacked / name, folder_ / name);
+    }
+    {
+        // A running tool's file can't be replaced, so this waits for its runs to end, and none starts meanwhile
+        std::unique_lock replacing = folder_.lock_for_replace(package);
+        if (download.archive) {
+            for (std::wstring_view name : tool_package_files(package)) {
+                services_.files.move_replacing(unpacked / name, folder_.path() / name);
+            }
+        } else {
+            services_.files.move_replacing(file, folder_.program(package));
         }
-    } else {
-        services_.files.move_replacing(file, folder_ / tool_package_files(package).front());
     }
     services_.files.remove_tree(staging);
     return {.release = download.release, .digest = std::move(digest)};
@@ -69,7 +76,7 @@ void ToolInstaller::fetch(const ReleaseAsset& asset, const std::filesystem::path
 }
 
 std::filesystem::path ToolInstaller::staging_folder() const {
-    return folder_ / L".staging";
+    return folder_.path() / L".staging";
 }
 
 }

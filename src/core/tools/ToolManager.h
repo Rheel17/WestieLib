@@ -1,6 +1,5 @@
 #pragma once
 
-#include <filesystem>
 #include <stop_token>
 #include <string>
 #include <thread>
@@ -8,6 +7,7 @@
 #include "core/events/EventSink.h"
 #include "core/github/GitHubReleases.h"
 #include "core/tools/InstalledTools.h"
+#include "core/tools/ToolFolder.h"
 #include "core/tools/ToolInstaller.h"
 #include "core/tools/ToolPackage.h"
 #include "core/tools/ToolServices.h"
@@ -19,7 +19,7 @@ namespace westie::core {
 
 class ToolManager {
 public:
-    ToolManager(ToolServices services, std::string github_api_url, std::filesystem::path folder, EventSink& events);
+    ToolManager(ToolServices services, std::string github_api_url, ToolFolder& folder, EventSink& events);
 
     void run(bool update_installed);
     void stop() noexcept;
@@ -32,7 +32,7 @@ private:
     ToolStatus installed_status(ToolPackage package, const InstalledTools& installed) const;
 
     platform::FileOps& files_;
-    std::filesystem::path folder_;
+    ToolFolder& folder_;
     ToolsStore store_;
     GitHubReleases releases_;
     ToolInstaller installer_;

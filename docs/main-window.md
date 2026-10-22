@@ -31,9 +31,10 @@ saved `Placement` and asks it for the current one.
 1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/settings/`) with the defaults and loads the `Settings`;
    a `settings.json` that doesn't read ends the app there. Then it makes the `StateStore` (`src/core/state/`), which
    loads `state.json`; one that doesn't read ends the app too. The files live in `%LOCALAPPDATA%\WestieLib`, or in
-   the folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue` and the
-   `ToolManager`, so both outlive the window. `MainWindow` gets the settings store, the loaded settings, the state
-   store, the queue and the tool manager, and makes itself the queue's target.
+   the folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue`, the
+   `ToolFolder`, the `ToolManager`, `YtDlp` and the `PlaylistLookup`, so they outlive the window. `MainWindow` gets the
+   settings store, the loaded settings, the state store, the queue, the tool manager and the look-up, and makes itself
+   the queue's target.
 2. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
 3. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
    `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
@@ -42,12 +43,13 @@ saved `Placement` and asks it for the current one.
    `WM_PAINT`, so the first paint already shows the run. `WindowPlacement::show_command` turns `SW_SHOWNORMAL` /
    `SW_SHOWDEFAULT` into `SW_SHOWMAXIMIZED` when the saved window was maximized; any other show command, say from a
    shortcut, wins.
-5. `WM_DESTROY` → `ToolManager::stop()` and `CoreEventQueue::set_target(nullptr)` → `save_state()` →
-   `WelcomePanel::commit_library_folder()` → `PostQuitMessage(0)`. The worker winds down while the window goes, and
-   `main.cpp` joins it after the window is gone; what it still reports stays in the queue. The commit is for
-   a folder still being typed, since a close doesn't take the focus from the field first. `WindowPlacement::current`
-   reads `GetWindowPlacement` and also counts a window minimized with `WPF_RESTORETOMAXIMIZED` as maximized. A window
-   torn down by an exception saves nothing, because `~Window` detaches before destroying.
+5. `WM_DESTROY` → `ToolManager::stop()`, `PlaylistLookup::stop()` and `CoreEventQueue::set_target(nullptr)` →
+   `save_state()` → `WelcomePanel::commit_library_folder()` → `PostQuitMessage(0)`. The workers wind down while the
+   window goes, and `main.cpp` joins them after the window is gone; what they still report stays in the queue. The
+   commit is for a folder still being typed, since a close doesn't take the focus from the field first.
+   `WindowPlacement::current` reads `GetWindowPlacement` and also counts a window minimized with
+   `WPF_RESTORETOMAXIMIZED` as maximized. A window torn down by an exception saves nothing, because `~Window` detaches
+   before destroying.
 
 ## Toolbar and status bar
 
@@ -73,11 +75,13 @@ saved `Placement` and asks it for the current one.
 - `CoreEventQueue` (`src/ui/events/`) is the core's `EventSink`. Any thread can `emit`; when the queue was empty it
   posts `CoreEventsMessage` to the window, and `MainWindow::on_core_events` takes every queued event and `std::visit`s
   each one onto an `apply_event` overload. Then `show_tools` updates the status bar, the commands and an open
-  Settings dialog.
+  Settings or Add playlist dialog.
 - `ToolBoard` (`src/ui/tools/`) is the UI's view of the tools: a `ToolStatus` per download, whether a run is going
   (`ToolsRunChanged`) and when the releases were last checked (`ToolsChecked`). Commands don't depend on it, except
   `Check for updates`, which waits for a run to end: work that needs a missing tool waits for it in the sync instead
   (`plan/arch.md`, ToolManager). `ToolMark` turns a status, or the board, into Ready, Working or Attention.
+  `available(package)` says whether a tool can run: its installed release is known, which stays so through a failed or
+  running update.
   `ToolStatusText.cpp` has all the wording, and `RelativeDayText.cpp` the `today 14:03` / `yesterday` / `12 Oct`
   style the playlist rows will share.
 - `Check for updates` calls `ToolManager::run(true)`. The run itself reports that it started, so the command grays
@@ -114,16 +118,37 @@ saved `Placement` and asks it for the current one.
 ## Adding a playlist
 
 - `Add playlist` (toolbar, File menu, Ctrl+N, the left panel's button, the welcome button) runs `add_playlist`, which
-  shows `AddPlaylistDialog` (`src/ui/dialogs/`). The dialog gets a predicate that says whether a link's playlist is
-  in the state already.
+  shows `AddPlaylistDialog` (`src/ui/dialogs/`). The dialog gets `added_playlist_name`, which gives the name a link's
+  playlist has in the state, or nothing when it isn't there, and the `core::PlaylistLookup` and the `ToolBoard`.
+  `MainWindow` keeps the dialog in `add_playlist_dialog_` while it's open, so `PlaylistLookedUp` events
+  (`show_lookup`) and tool changes (`show_tools`) reach it.
 - On every `EN_CHANGE` the dialog runs `check_playlist_link` (`PlaylistLinkCheck.cpp`): empty, not supported, already
-  added, or new, with the parsed `core::PlaylistLink` (`core::parse_playlist_link`, `src/core/playlists/`).
-  `link_check_text` has the wording, `playlist_type_text` (`src/ui/PlaylistTypeText.cpp`) the source's name and
-  `source_logo_icon` (`src/ui/SourceLogo.cpp`) its logo. The line under the link is an `SS_OWNERDRAW` static that the
-  dialog paints in `WM_DRAWITEM`, loading the logo at the static's DPI; its window text is the line's text, for
-  screen readers and the UI checks. `Add` is enabled only for a new playlist.
-- On `Add` the dialog returns an `AddPlaylistRequest`. `core::add_playlist` stores it through `StateStore::update`,
-  which saves `state.json` (keeping `state.json.bak`). `Sync now` has no effect until syncing exists.
+  added (with the stored name), or new, with the parsed `core::PlaylistLink` (`core::parse_playlist_link`,
+  `src/core/playlists/`).
+- `LinkLookup` (`LinkLookup.cpp`) holds the look-up's state for the dialog's link: none, waiting for tools, looking up,
+  found (with the name), unavailable, or failed (with the reason).
+  - `set_link` stops the look-up before it and decides at once: an already added playlist with a stored name is found
+    without a look-up, a YouTube Music link waits while the board says yt-dlp isn't available, and anything else is
+    due. A link to the same playlist keeps the state, unless the look-up failed.
+  - A due look-up starts when the dialog's 300 ms `WM_TIMER` fires (`start`); every change restarts the timer.
+  - `tools_changed` starts a waiting look-up once yt-dlp is available, and `apply` takes the answer for the current
+    link only. A `ToolMissing` answer waits again.
+- `link_line` (`LinkLine.cpp`) has the wording: the icon (source logo, ⧗ `IDI_TOOL_WAIT` or ⚠) or the spinner, the
+  text, whether it's gray, and the source's name that follows a found name in gray. `add_button_text` says `Add` or
+  `Already added`.
+- While the line shows the spinner, the dialog runs a `framework::Animation` on a second `WM_TIMER`, every 16 ms, and
+  repaints the line at each tick. `paint_spinner` turns the arc by the animation's progress through a one-second turn.
+  `playlist_type_text` (`src/ui/PlaylistTypeText.cpp`) gives the source's name and `source_logo_icon`
+  (`src/ui/SourceLogo.cpp`) its logo.
+- The line under the link is an `SS_OWNERDRAW` static that `paint_link_line` (`LinkLinePainter.cpp`) draws in
+  `WM_DRAWITEM`, loading the icon at the static's DPI, or drawing the spinner at that size. It draws into a memory bitmap
+  and copies that in one `BitBlt`, so the text doesn't blink as the spinner turns. A found name gives way to the
+  source's name, which stays whole.
+  The static's window text is the line's text with the source's name after a space, for screen readers and the UI
+  checks. `Add` is enabled only for a new playlist that was found.
+- On `Add` the dialog returns an `AddPlaylistRequest` with the found name. `core::add_playlist` stores it through
+  `StateStore::update`, which saves `state.json` (keeping `state.json.bak`). Closing the dialog stops the look-up.
+  `Sync now` has no effect until syncing exists.
 - `show_playlists` then brings the window up to date with the state: the left panel gets the rows, the inspector's
   placeholder hides, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
   follow (`has_playlists` enables Sync all). The welcome screen may have had the keyboard focus, so it goes to the

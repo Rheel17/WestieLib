@@ -16,10 +16,10 @@
 
 namespace westie::core {
 
-ToolManager::ToolManager(ToolServices services, std::string github_api_url, std::filesystem::path folder, EventSink& events) :
+ToolManager::ToolManager(ToolServices services, std::string github_api_url, ToolFolder& folder, EventSink& events) :
         files_(services.files),
-        folder_(std::move(folder)),
-        store_(services.files, folder_ / L"tools.json"),
+        folder_(folder),
+        store_(services.files, folder.path() / L"tools.json"),
         releases_(services.http, std::move(github_api_url)),
         installer_(services, folder_),
         events_(events) {}
@@ -111,7 +111,7 @@ void ToolManager::report_failure(const char* error) {
 ToolStatus ToolManager::installed_status(ToolPackage package, const InstalledTools& installed) const {
     auto tool = installed.tools.find(package);
     bool present = tool != installed.tools.end()
-                   && std::ranges::all_of(tool_package_files(package), [this](std::wstring_view file) { return files_.is_file(folder_ / file); });
+                   && std::ranges::all_of(tool_package_files(package), [this](std::wstring_view file) { return files_.is_file(folder_.path() / file); });
     if (!present) {
         return {.package = package, .state = ToolState::Missing};
     }

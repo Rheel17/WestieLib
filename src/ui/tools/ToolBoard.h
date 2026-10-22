@@ -22,6 +22,7 @@ public:
     std::span<const core::ToolStatus> statuses() const noexcept;
     std::optional<std::chrono::system_clock::time_point> checked_at() const noexcept;
     bool running() const noexcept;
+    bool available(core::ToolPackage package) const noexcept;
     ToolMark mark() const noexcept;
 
 private:
