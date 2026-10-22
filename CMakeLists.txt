@@ -65,6 +65,7 @@ add_executable(WestieLib WIN32
 	src/ui/FatalError.cpp
 	src/ui/PlaylistTypeText.cpp
 	src/ui/RelativeDayText.cpp
+	src/ui/RowLook.cpp
 	src/ui/SourceLogo.cpp
 	src/ui/TrackCountText.cpp
 	src/ui/commands/CommandMenu.cpp
@@ -87,10 +88,12 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
 	src/ui/framework/Edit.cpp
+	src/ui/framework/FocusMemory.cpp
 	src/ui/framework/FontSet.cpp
 	src/ui/framework/GdiPlusSession.cpp
 	src/ui/framework/IconImageList.cpp
 	src/ui/framework/IconResource.cpp
+	src/ui/framework/ItemTracker.cpp
 	src/ui/framework/Label.cpp
 	src/ui/framework/MenuBarPainter.cpp
 	src/ui/framework/MessageFont.cpp
@@ -105,6 +108,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/StatusBar.cpp
 	src/ui/framework/Toolbar.cpp
 	src/ui/framework/Tooltip.cpp
+	src/ui/framework/VerticalScroll.cpp
 	src/ui/framework/Window.cpp
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp

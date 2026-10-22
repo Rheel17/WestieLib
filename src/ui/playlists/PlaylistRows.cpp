@@ -27,7 +27,7 @@ std::vector<PlaylistRow> playlist_rows(const core::State& state) {
         const core::Playlist& playlist = entry->second;
         // Until its first fetch a playlist has no name
         std::wstring name = playlist.name.empty() ? playlist_type_text(*type) : platform::win32::to_utf16(playlist.name);
-        rows.push_back({.type = *type, .name = std::move(name)});
+        rows.push_back({.key = entry->first, .type = *type, .name = std::move(name)});
     }
     return rows;
 }

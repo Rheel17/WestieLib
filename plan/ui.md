@@ -204,8 +204,28 @@ with `0/0`, and `○ Never synced ↻`.
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
 so their left edge is where the All tracks name starts.
 
-A click scopes the main panel to that playlist. The context menu offers Sync, Open in browser, Copy URL and
-Remove playlist….
+**Selection.** Exactly one item is selected: All tracks or one playlist. The rows react to the mouse as in Explorer's
+navigation pane:
+
+| Look     | When                                                         | Fill      | Frame     |
+|----------|--------------------------------------------------------------|-----------|-----------|
+| hover    | the mouse is over a row that isn't selected                  | `#E5F3FF` | `#E5F3FF` |
+| pressed  | the left button went down on the row and the mouse is still over it | `#CCE8FF` | `#99D1FF` |
+| selected | the row is selected, hovered or not                          | `#CCE8FF` | `#99D1FF` |
+
+- The colors don't change with the keyboard focus.
+- A click on All tracks or a playlist row selects it when the button comes up over the row it went down on, which
+  scopes the main panel and the inspector to it. While the button is held, only that row reacts: moving off it drops
+  the pressed look, moving back brings it back, and releasing elsewhere selects nothing. A click between or below the
+  rows changes nothing.
+- The hover follows the rows when the list scrolls under the mouse.
+- A click also gives the playlist list the keyboard focus. Up and Down move the selection one item, Home and End to
+  All tracks and the last playlist, PgUp and PgDn by as many rows as the list shows. All tracks counts as the item
+  before the first playlist. The selected row scrolls into view.
+- Adding a playlist selects it. When the selected playlist goes away, All tracks is selected.
+- Every start begins on All tracks; the selection isn't saved.
+
+The context menu offers Sync, Open in browser, Copy URL and Remove playlist….
 
 ## Main panel
 
@@ -536,7 +556,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
-| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
@@ -552,6 +572,7 @@ The UI uses the Windows 10 palette:
 | window | `#FFFFFF` |
 | face | `#F0F0F0` |
 | selection | `#CCE8FF`, border `#99D1FF` |
+| hover | `#E5F3FF` |
 | pressed button | `#CCE4F7`, border `#005499` |
 | accent | `#0078D7` |
 | gray text | `#6D6D6D` |

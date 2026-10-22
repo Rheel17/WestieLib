@@ -48,7 +48,13 @@ MainWindow::MainWindow(
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
         fonts_(framework::Dpi::of(hwnd())),
         toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
-        playlists_(hwnd(), [this](CommandId command) { run_command(command); }),
+        playlists_(
+                hwnd(),
+                {
+                    .on_command = [this](CommandId command) { run_command(command); },
+                    .on_select = [this](std::optional<std::string> key) { select_playlist(std::move(key)); },
+                }
+        ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
         tracks_(hwnd()),
         welcome_(
@@ -92,6 +98,8 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     case WM_DRAWITEM:       return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
     case WM_GETMINMAXINFO:  on_get_min_max_info(*reinterpret_cast<MINMAXINFO*>(lparam)); return 0;
     case WM_SIZE:           layout_panels(); return 0;
+    case WM_ACTIVATE:       on_activate(LOWORD(wparam)); return Window::handle_message(message, wparam, lparam);
+    case WM_SETFOCUS:       focus_.restore(hwnd()); return 0;
     case WM_DPICHANGED:     on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
     case WM_SETTINGCHANGE:  on_setting_change(wparam); return Window::handle_message(message, wparam, lparam);
     case WM_NCPAINT:
@@ -161,12 +169,23 @@ void MainWindow::add_playlist() {
     add_playlist_dialog_.reset();
     // Nothing syncs yet, so Sync now has no effect
     if (request && core::add_playlist(state_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
+        selected_playlist_ = request->link.key();
         show_playlists();
     }
 }
 
+void MainWindow::select_playlist(std::optional<std::string> key) {
+    selected_playlist_ = std::move(key);
+    playlists_.show_selection(selected_playlist_);
+    update_commands();
+}
+
 void MainWindow::show_playlists() {
+    if (selected_playlist_ && !state_.state().playlists.contains(*selected_playlist_)) {
+        selected_playlist_.reset();
+    }
     playlists_.set_playlists(playlist_rows(state_.state()));
+    playlists_.show_selection(selected_playlist_);
     inspector_.show_placeholder(!has_playlists());
     layout_panels();
     // A hidden window would keep the keyboard focus from going anywhere
@@ -207,7 +226,12 @@ void MainWindow::layout_panels() {
 }
 
 CommandState MainWindow::command_state() const {
-    return {.tools_busy = tool_board_.running(), .has_playlists = has_playlists(), .log_visible = panels_.log_visible};
+    return {
+        .tools_busy = tool_board_.running(),
+        .has_playlists = has_playlists(),
+        .playlist_selected = selected_playlist_.has_value(),
+        .log_visible = panels_.log_visible,
+    };
 }
 
 void MainWindow::update_commands() {
@@ -297,6 +321,13 @@ void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
     // Only menus and accelerators send WM_COMMAND without a control
     if (lparam == 0) {
         run_command(static_cast<CommandId>(LOWORD(wparam)));
+    }
+}
+
+void MainWindow::on_activate(WORD state) {
+    // Coming back, the window gets the focus itself, and WM_SETFOCUS hands it on to the child that had it
+    if (state == WA_INACTIVE) {
+        focus_.save(hwnd());
     }
 }
 

@@ -69,7 +69,8 @@ int PlaylistRowPainter::text_left() const noexcept {
     return HairlinePixels + dpi_.scale(SidePaddingDips) + dpi_.scale(LogoBoxDips) + dpi_.scale(LogoGapDips);
 }
 
-void PlaylistRowPainter::paint(HDC dc, const framework::Rect& bounds, const PlaylistRow& row) const {
+void PlaylistRowPainter::paint(HDC dc, const framework::Rect& bounds, const PlaylistRow& row, RowLook look) const {
+    paint_row_look(dc, bounds, look);
     SetBkMode(dc, TRANSPARENT);
     framework::Rect content{
             bounds.left + HairlinePixels + dpi_.scale(SidePaddingDips), bounds.top + HairlinePixels + dpi_.scale(TopPaddingDips),

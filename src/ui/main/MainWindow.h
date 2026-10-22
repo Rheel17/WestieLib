@@ -23,6 +23,7 @@
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/events/CoreEventQueue.h"
 #include "ui/framework/Dpi.h"
+#include "ui/framework/FocusMemory.h"
 #include "ui/framework/FontSet.h"
 #include "ui/framework/MenuBarPainter.h"
 #include "ui/framework/Splitter.h"
@@ -63,6 +64,7 @@ private:
     bool has_playlists() const;
     std::optional<std::string> added_playlist_name(const core::PlaylistLink& link) const;
     void add_playlist();
+    void select_playlist(std::optional<std::string> key);
     void show_playlists();
     void save_state() const;
     MainLayout current_layout() const;
@@ -79,6 +81,7 @@ private:
     void apply_event(const core::ToolsChecked& event);
     void apply_event(const core::PlaylistLookedUp& event);
     void on_command(WPARAM wparam, LPARAM lparam);
+    void on_activate(WORD state);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
     LRESULT on_draw_item(const DRAWITEMSTRUCT& item) const;
     void on_playlists_splitter_drag(int left);
@@ -112,6 +115,9 @@ private:
     LogPanel log_;
     MainStatusBar status_bar_;
     PanelState panels_;
+    framework::FocusMemory focus_;
+    // A playlist's key, or nothing while All tracks is selected
+    std::optional<std::string> selected_playlist_;
     // Only while they're open, so tool and look-up events can reach them
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;

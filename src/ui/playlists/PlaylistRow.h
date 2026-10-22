@@ -8,6 +8,7 @@
 namespace westie::ui {
 
 struct PlaylistRow {
+    std::string key{};
     core::SourceType type = core::SourceType::YouTubeMusic;
     std::wstring name{};
     TrackCounts counts{};

@@ -69,6 +69,7 @@ public static class W {
 	[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint attach, uint to, bool on);
 	[DllImport("user32.dll")] public static extern bool GetKeyboardState(byte[] state);
 	[DllImport("user32.dll")] public static extern bool SetKeyboardState(byte[] state);
+	[DllImport("user32.dll")] public static extern int GetScrollPos(IntPtr h, int bar);
 
 	// Presses Ctrl+key (or Ctrl+Alt+key) in the app without real input, so nothing can reach the user's other windows.
 	// While the threads are attached they share their key state, so the app's TranslateAccelerator sees Ctrl held.
@@ -359,6 +360,19 @@ public static class W {
 			}
 		}
 		return pixels.ToString();
+	}
+
+	// The colors at points (x, y pairs) of a child's client area in a PrintWindow capture, as RRGGBB
+	public static string[] PixelsIn(IntPtr window, IntPtr child, int[] points) {
+		int dx, dy;
+		var colors = new List<string>();
+		using (var bitmap = Capture(window, child, out dx, out dy)) {
+			for (int i = 0; i + 1 < points.Length; i += 2) {
+				var p = bitmap.GetPixel(points[i] + dx, points[i + 1] + dy);
+				colors.Add(String.Format("{0:x2}{1:x2}{2:x2}", p.R, p.G, p.B));
+			}
+		}
+		return colors.ToArray();
 	}
 
 	[DllImport("user32.dll")] static extern bool SystemParametersInfoW(uint action, uint param, out bool value, uint winIni);
@@ -1105,6 +1119,7 @@ function Check-PlaylistPanel([string]$what, $hwnd) {
 	$row = ([W]::Children($panel, 'WestieLib.AllTracksRow'))[0]
 	$rowHeight = 2 + (S 5) + (S 18) + (S 16) + (S 6)
 	Check "$what All tracks row" "$([W]::TextOf($row)) $(Format-Rect ([W]::RectIn($row, $panel)))" "All tracks $(S 3),$(S 4) $($pw - 2 * (S 3))x$rowHeight"
+	Check "$what  selected" (Get-Selection $hwnd 0) 'All tracks'
 	# Where the row's name starts: its inset, border, padding, glyph and gap
 	$text = (S 3) + 1 + (S 7) + (S 16) + (S 6)
 	$empty = ([W]::Children($panel, 'WestieLib.Label'))[0]
@@ -1647,6 +1662,146 @@ function Check-PlaylistRows([string]$what, $hwnd, [int]$count) {
 	Check "$what list | button" $actual "0,$listTop $(Get-ClientWidth $panel) | $text,$(Get-ListButtonTop $count)"
 }
 
+function Get-AllTracksRow($hwnd) { ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.AllTracksRow'))[0] }
+
+# Where row $index (from 1) starts in the list, as it is scrolled now
+function Get-PlaylistRowTop($hwnd, [int]$index) {
+	(S 1) + ($index - 1) * ((Get-PlaylistRowHeight) + (S 1)) - [W]::GetScrollPos((Get-PlaylistList $hwnd), 1)
+}
+
+# What paints the selection box, sampled just inside each box's top-left corner: All tracks, and the rows from 1 of the
+# $count in the list that are in view
+function Get-Selection($hwnd, [int]$count) {
+	$list = Get-PlaylistList $hwnd
+	$height = Get-ClientHeight $list
+	$selected = @()
+	if (([W]::PixelsIn($hwnd, (Get-AllTracksRow $hwnd), @((S 4), (S 4))))[0] -eq 'cce8ff') { $selected += 'All tracks' }
+	$rows = @(if ($count -gt 0) { 1..$count | Where-Object { $y = (Get-PlaylistRowTop $hwnd $_) + 3; $y -ge 0 -and $y -lt $height } })
+	$points = @($rows | ForEach-Object { (S 3) + 3; (Get-PlaylistRowTop $hwnd $_) + 3 })
+	if ($rows.Count -gt 0) {
+		$colors = [W]::PixelsIn($hwnd, $list, [int[]]$points)
+		for ($i = 0; $i -lt $rows.Count; $i++) { if ($colors[$i] -eq 'cce8ff') { $selected += "row $($rows[$i])" } }
+	}
+	if ($selected.Count -eq 0) { 'none' } else { $selected -join ', ' }
+}
+
+# Whether the commands that need a selected playlist are enabled
+function Get-PlaylistCommands($hwnd) {
+	Update-MenuStates $hwnd
+	$menu = [W]::GetMenu($hwnd)
+	$states = '&Remove playlist...', 'Sync &selected playlist' | ForEach-Object { ([W]::GetMenuState($menu, [W]::CommandOf($menu, $_), 0) -band 0x1) -eq 0 }
+	"Remove $($states[0]), Sync selected $($states[1])"
+}
+
+function Send-Click($window, [int]$x, [int]$y) {
+	[void][W]::SendMessageW($window, 0x201, [IntPtr]1, (LParam $x $y))
+	[void][W]::SendMessageW($window, 0x202, [IntPtr]0, (LParam $x $y))
+}
+
+function Click-PlaylistRow($hwnd, [int]$index) {
+	Send-Click (Get-PlaylistList $hwnd) (S 20) ((Get-PlaylistRowTop $hwnd $index) + [int]((Get-PlaylistRowHeight) / 2))
+}
+
+function Click-AllTracks($hwnd) { Send-Click (Get-AllTracksRow $hwnd) (S 20) (S 10) }
+
+function Press-ListKey($hwnd, [int]$key) { [void][W]::SendMessageW((Get-PlaylistList $hwnd), 0x100, [IntPtr]$key, [IntPtr]1) }
+
+# All tracks is selected at the start. A click on a row selects it, gives the list the focus and enables the playlist
+# commands; a click between the rows changes nothing. The keys move the selection, with All tracks before the first
+# row. Ends with row 1 selected, for the screenshot.
+function Check-Selection($hwnd) {
+	$list = Get-PlaylistList $hwnd
+	Check 'Selection at the start | commands' "$(Get-Selection $hwnd 2) | $(Get-PlaylistCommands $hwnd)" 'All tracks | Remove False, Sync selected False'
+	Click-PlaylistRow $hwnd 2
+	Check '  click row 2' "$(Get-Selection $hwnd 2) | $(Get-PlaylistCommands $hwnd)" 'row 2 | Remove True, Sync selected True'
+	Check '  the list has the focus' ([W]::FocusOf($hwnd) -eq $list) 'True'
+	Send-Click $list (S 20) ((Get-ListButtonTop 2) - (S 4))
+	Check '  a click under the rows' (Get-Selection $hwnd 2) 'row 2'
+	Click-AllTracks $hwnd
+	Check '  click All tracks' "$(Get-Selection $hwnd 2) | $(Get-PlaylistCommands $hwnd)" 'All tracks | Remove False, Sync selected False'
+	Check '  the list keeps the focus' ([W]::FocusOf($hwnd) -eq $list) 'True'
+	$keys = @(
+		@{ Name = 'Down'; Key = 0x28; Selection = 'row 1' },
+		@{ Name = 'Up'; Key = 0x26; Selection = 'All tracks' },
+		@{ Name = 'Up again'; Key = 0x26; Selection = 'All tracks' },
+		@{ Name = 'End'; Key = 0x23; Selection = 'row 2' },
+		@{ Name = 'Down again'; Key = 0x28; Selection = 'row 2' },
+		@{ Name = 'Home'; Key = 0x24; Selection = 'All tracks' },
+		@{ Name = 'Page Down'; Key = 0x22; Selection = 'row 2' },
+		@{ Name = 'Page Up'; Key = 0x21; Selection = 'All tracks' },
+		@{ Name = 'Down'; Key = 0x28; Selection = 'row 1' }
+	)
+	foreach ($key in $keys) {
+		Press-ListKey $hwnd $key.Key
+		Check "  $($key.Name)" (Get-Selection $hwnd 2) $key.Selection
+	}
+}
+
+# How All tracks and each of the $count rows look, from the same pixels as Get-Selection: blue (selected or pressed),
+# hot, or - (neither)
+function Get-RowLooks($hwnd, [int]$count) {
+	$names = @{ 'cce8ff' = 'blue'; 'e5f3ff' = 'hot'; 'ffffff' = '-' }
+	$points = @(1..$count | ForEach-Object { (S 3) + 3; (Get-PlaylistRowTop $hwnd $_) + 3 })
+	$colors = @([W]::PixelsIn($hwnd, (Get-AllTracksRow $hwnd), @((S 4), (S 4)))) + @([W]::PixelsIn($hwnd, (Get-PlaylistList $hwnd), [int[]]$points))
+	($colors | ForEach-Object { if ($names.ContainsKey($_)) { $names[$_] } else { $_ } }) -join ' | '
+}
+
+function Send-Mouse($window, [int]$message, [int]$buttons, [int]$x, [int]$y) {
+	[void][W]::SendMessageW($window, $message, [IntPtr]$buttons, (LParam $x $y))
+}
+
+# Rows hover and press as in Explorer's navigation pane, with two rows and row 1 selected: a press shows on the pressed
+# row only while the mouse is over it, and selects only when the button comes up there; a lost capture cancels the
+# press. Ends with row 1 selected and nothing hot.
+function Check-RowMouse($hwnd) {
+	$list = Get-PlaylistList $hwnd
+	$allTracks = Get-AllTracksRow $hwnd
+	$x = S 20
+	$row = { param([int]$index) (Get-PlaylistRowTop $hwnd $index) + [int]((Get-PlaylistRowHeight) / 2) }
+	$below = (Get-ListButtonTop 2) - (S 4)
+	# A hover only lasts while the real cursor is there, which a check can't move without touching the user's mouse. So
+	# these only show that every hover asks for WM_MOUSELEAVE, which Windows sends at once while the cursor is elsewhere,
+	# also after a click.
+	$steps = @(
+		@{ Name = 'Clicked earlier, cursor elsewhere: no hover'; Do = { }; Looks = '- | blue | -' },
+		@{ Name = 'Hover row 2, cursor elsewhere: gone'; Do = { Send-Mouse $list 0x200 0 $x (& $row 2); Start-Sleep -Milliseconds 100 }; Looks = '- | blue | -' },
+		@{ Name = 'Hover All tracks, cursor elsewhere: gone'; Do = { Send-Mouse $allTracks 0x200 0 $x (S 10); Start-Sleep -Milliseconds 100 }; Looks = '- | blue | -' },
+		@{ Name = 'Press row 2'; Do = { Send-Mouse $list 0x201 1 $x (& $row 2) }; Looks = '- | blue | blue' },
+		@{ Name = '  move onto row 1'; Do = { Send-Mouse $list 0x200 1 $x (& $row 1) }; Looks = '- | blue | -' },
+		@{ Name = '  back onto row 2'; Do = { Send-Mouse $list 0x200 1 $x (& $row 2) }; Looks = '- | blue | blue' },
+		@{ Name = '  under the rows'; Do = { Send-Mouse $list 0x200 1 $x $below }; Looks = '- | blue | -' },
+		@{ Name = '  release there: no selection'; Do = { Send-Mouse $list 0x202 0 $x $below }; Looks = '- | blue | -' },
+		@{ Name = 'Press All tracks, release above it'; Do = { Send-Mouse $allTracks 0x201 1 $x (S 10); Send-Mouse $allTracks 0x202 0 $x -5 }; Looks = '- | blue | -' },
+		@{ Name = 'Press row 2, lose the capture, release'; Do = { Send-Mouse $list 0x201 1 $x (& $row 2); Send-Mouse $list 0x1F 0 0 0; Send-Mouse $list 0x202 0 $x (& $row 2) }; Looks = '- | blue | -' },
+		@{ Name = 'Press and release row 2'; Do = { Send-Mouse $list 0x201 1 $x (& $row 2); Send-Mouse $list 0x202 0 $x (& $row 2) }; Looks = '- | - | blue' },
+		@{ Name = 'Press and release row 1'; Do = { Send-Mouse $list 0x201 1 $x (& $row 1); Send-Mouse $list 0x202 0 $x (& $row 1) }; Looks = '- | blue | -' }
+	)
+	foreach ($step in $steps) {
+		& $step.Do
+		Check $step.Name (Get-RowLooks $hwnd 2) $step.Looks
+	}
+}
+
+# Keys bring the selected row into view: End scrolls the last row's gap to the list's bottom, and Down from All tracks
+# brings the first row back to the top. Page Down moves by the rows that fit.
+function Check-SelectionScrolling($hwnd, [int]$count) {
+	$list = Get-PlaylistList $hwnd
+	Press-ListKey $hwnd 0x23
+	$bottom = (Get-PlaylistRowTop $hwnd $count) + (Get-PlaylistRowHeight) + (S 1)
+	Check 'Many playlists: End | last row bottom' "$(Get-Selection $hwnd $count) | $bottom" "row $count | $(Get-ClientHeight $list)"
+	Press-ListKey $hwnd 0x24
+	Check '  Home leaves the list where it is' "$(Get-Selection $hwnd $count) | $([W]::GetScrollPos($list, 1) -gt 0)" 'All tracks | True'
+	Press-ListKey $hwnd 0x28
+	Check '  Down' "$(Get-Selection $hwnd $count) | $([W]::GetScrollPos($list, 1))" 'row 1 | 0'
+	$page = [math]::Floor((Get-ClientHeight $list) / ((Get-PlaylistRowHeight) + (S 1)))
+	Press-ListKey $hwnd 0x22
+	Check '  Page Down' (Get-Selection $hwnd $count) "row $(1 + $page)"
+	Press-ListKey $hwnd 0x24
+	Press-ListKey $hwnd 0x28
+	Press-ListKey $hwnd 0x26
+	Check '  Home, Down, Up' "$(Get-Selection $hwnd $count) | $([W]::GetScrollPos($list, 1))" 'All tracks | 0'
+}
+
 # More playlists than fit: the list gets a scroll bar. Scrolled to the bottom, the button ends the list with its
 # padding under it; the wheel and the top of the scroll bar bring the rows back.
 function Check-PlaylistScrolling($hwnd, [int]$count) {
@@ -1692,10 +1847,11 @@ function Check-AddingPlaylists($hwnd) {
 	Check '  no state.json.bak for the first save' (Test-Path "$StateFile.bak") 'False'
 	Check '  screens' (Get-PlaylistScreens $hwnd) $WithPlaylists
 	Check-PlaylistRows '  one row:' $hwnd 1
+	Check '  selected' (Get-Selection $hwnd 1) 'row 1'
 	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
 	$menu = [W]::GetMenu($hwnd)
 	Update-MenuStates $hwnd
-	Check '  grayed menu items' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &selected playlist, &Cancel, ' +
+	Check '  grayed menu items' ([W]::ItemsWithState($menu, 0x1)) ('&Cancel, ' +
 		'&Confirm match, C&hoose video..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
 
 	Send-Command $hwnd '&Add playlist...'
@@ -1718,6 +1874,7 @@ function Check-AddingPlaylists($hwnd) {
 	$youTubeKey = "ytm:PLx9k2_-Ab $YouTubeLink [$YouTubeName]"
 	Check '  state.json' (Get-SavedPlaylists) "$spotifyKey True / $youTubeKey True"
 	Check '  state.json.bak keeps the version before' (Get-SavedPlaylists "$StateFile.bak") "$spotifyKey True"
+	Check '  the new playlist is selected' (Get-Selection $hwnd 2) 'row 2'
 }
 
 # With yt-dlp installed, a YouTube Music link is looked up: the answer names the playlist, or says it is missing,
@@ -2076,6 +2233,8 @@ try {
 	$h = $app.Hwnd
 	Check 'Screens' (Get-PlaylistScreens $h) $WithPlaylists
 	Check-PlaylistRows 'Two rows:' $h 2
+	Check-Selection $h
+	Check-RowMouse $h
 	Send-Command $h '&Add playlist...'
 	$dialog = Wait-OwnedWindow $h
 	$runs = @(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count
@@ -2101,6 +2260,7 @@ try {
 	Start-Sleep -Milliseconds 800
 	Check-PlaylistRows 'Many rows:' $h $many
 	Check-PlaylistScrolling $h $many
+	Check-SelectionScrolling $h $many
 	Send-Command $h '&Add playlist...'
 	$dialog = Wait-OwnedWindow $h
 	Set-PlaylistLink $dialog 'https://music.youtube.com/playlist?list=PLcheck2'

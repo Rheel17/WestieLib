@@ -115,6 +115,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   from another process without a message. So does the Add playlist dialog's detection line, which paints itself
   (`Get-LinkLine`). The playlist rows have no text of their own, so the checks place them by the Add playlist button
   under them (`Check-PlaylistRows`), and the screenshots show them.
+- The selection shows only as paint. `Get-Selection` samples a pixel just inside the top-left corner of All tracks and
+  of each row in view (`PixelsIn`, from one `PrintWindow` capture), and lists the ones in the selection color.
+  `Get-PlaylistRowTop` places a row from its height, the gaps and the list's `GetScrollPos`. `Get-PlaylistCommands`
+  reads whether the commands that need a selected playlist are enabled. `Get-RowLooks` reads the same pixels as
+  `blue` (selected or pressed), `hot` or `-`, and `Check-RowMouse` sends mouse messages one at a time (`Send-Mouse`)
+  to walk through press, dragging off and back, and a lost capture (`WM_CANCELMODE`, whose default handling releases
+  it). A sent `WM_MOUSEMOVE` can't show a hover: the row asks for `WM_MOUSELEAVE`, which Windows sends at once because
+  the real cursor is elsewhere. The checks only confirm that, and a real hover needs a try by hand.
+- `Click-PlaylistRow` and `Click-AllTracks` send `WM_LBUTTONDOWN` and `WM_LBUTTONUP` (`Send-Click`), and
+  `Press-ListKey` sends `WM_KEYDOWN` to the list, which acts on it whether or not it has the focus. `FocusOf` tells
+  which window has the focus on the app's thread (`GetGUIThreadInfo`).
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
   the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area

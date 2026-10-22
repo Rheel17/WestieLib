@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include "core/sources/SourceType.h"
+#include "ui/RowLook.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/FontSet.h"
 #include "ui/framework/IconResource.h"
@@ -19,7 +20,7 @@ public:
 
     int height() const noexcept;
     int text_left() const noexcept;
-    void paint(HDC dc, const framework::Rect& bounds, const PlaylistRow& row) const;
+    void paint(HDC dc, const framework::Rect& bounds, const PlaylistRow& row, RowLook look) const;
 
 private:
     const framework::IconResource& logo(core::SourceType type) const noexcept;

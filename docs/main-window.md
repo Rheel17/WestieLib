@@ -99,9 +99,26 @@ saved `Placement` and asks it for the current one.
 - `PlaylistList` is a window that paints the playlist rows and holds the `No playlists yet.` label (only while there
   are no rows) and the `Add playlist` button after the last row. It scrolls itself: `layout` works out the content's
   height, sets the scroll bar (`SetScrollInfo`; showing or hiding the bar sends `WM_SIZE`, which lays out again), and
-  places the label and the button at their offset less the scroll position. `WM_VSCROLL` and `WM_MOUSEWHEEL` (in
-  `SPI_GETWHEELSCROLLLINES` lines of 16 DIPs, small touchpad deltas added up to a notch) scroll it. The button's click
-  goes to the callback `MainWindow` gives the panel, which is `run_command`, as for the toolbar.
+  places the label and the button at their offset less the scroll position. A `framework::VerticalScroll` keeps the
+  position and turns `WM_VSCROLL` and `WM_MOUSEWHEEL` into it. The button's click goes to `PlaylistEvents::on_command`,
+  which `MainWindow` sets to `run_command`, as for the toolbar.
+- **Selection.** `MainWindow::selected_playlist_` is the one copy of the selection: a playlist's key, or nothing for
+  All tracks. The left panel only reports what the user picks and paints what it's told:
+  - A click on a row or a key (`WM_KEYDOWN`: Up, Down, Home, End, PgUp, PgDn, with All tracks as the item before the
+    first row) calls `PlaylistEvents::on_select`. A click is a press and a release over the same row; the list takes
+    the focus on the press. A click on `AllTracksRow` selects nothing, and `PlaylistPanel` gives the list the focus, so
+    the keys work from there too.
+  - Both windows hot-track and press their rows through a `framework::ItemTracker` (the All tracks row is its one
+    item, the list's rows are hit-tested against their rects), and paint each row's `RowLook` (`row_look`,
+    `paint_row_look` in `src/ui/RowLook.cpp`): hover, pressed or selected. The list also asks where the cursor is after
+    it scrolls (`follow_cursor`), because rows that move under a still mouse get no `WM_MOUSEMOVE`.
+  - `MainWindow::select_playlist` stores the key, hands it back through `PlaylistPanel::show_selection`, which tells the
+    All tracks row whether it's selected and the list which key is, and updates the commands (`playlist_selected`).
+    The list keeps the key, not an index, and scrolls the selected row into view with its gaps (`VerticalScroll::reveal`).
+  - `show_playlists` drops a selection whose playlist is gone, and `add_playlist` selects the playlist it added. The
+    selection isn't saved, so every start begins on All tracks.
+- `MainWindow` keeps a `framework::FocusMemory`: on `WM_ACTIVATE` with `WA_INACTIVE` it notes which child had the
+  focus, and on `WM_SETFOCUS`, which `DefWindowProc` sends the window when it's active again, it hands the focus back.
 - `PlaylistRowPainter` draws one row into a given rect, with the logo, the waiting and sync glyphs at 14 DIPs and the
   fonts it got, and knows the row's height. The list makes a new one on every `apply_dpi`. The names, the label and
   the button all start at `text_left()`, which adds up the same DIPs as `AllTracksRow::text_left()`, so everything
@@ -109,8 +126,8 @@ saved `Placement` and asks it for the current one.
 - `playlist_rows` (`PlaylistRows.cpp`) turns the state into `PlaylistRow`s, in the order the playlists were added,
   with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name. `MainWindow::show_playlists`
   hands them to the panel.
-- `AllTracksRow` is a window that paints the row: selection box, glyph, name in semibold, and the counts. It stays
-  selected until there are playlists to select instead.
+- `AllTracksRow` is a window that paints the row: its look (hover, pressed or selected), glyph, name in semibold, and
+  the counts.
 - `InspectorPanel` (`src/ui/inspector/`) centers its first-run placeholder inside its padding on every `WM_SIZE`.
 - `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
   the constructor shows zeros.

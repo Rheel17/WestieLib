@@ -3,8 +3,12 @@
 #include <algorithm>
 #include <utility>
 
+#include <windows.h>
+#include <windowsx.h>
+
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
+#include "ui/RowLook.h"
 #include "ui/framework/BufferedPaint.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Size.h"
@@ -22,14 +26,12 @@ constexpr int EmptyTextBottomDips = 2;
 constexpr int EmptyTextLineDips = 16;
 constexpr int ButtonTopDips = 8;
 constexpr int BottomPaddingDips = 11;
-constexpr int ScrollLineDips = 16;
-constexpr UINT DefaultWheelScrollLines = 3;
 
 }
 
-PlaylistList::PlaylistList(HWND parent, std::function<void(CommandId)> on_command) :
+PlaylistList::PlaylistList(HWND parent, PlaylistEvents events) :
         Window(window_class(), {.title = L"Playlist list", .style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, .parent = parent}),
-        on_command_(std::move(on_command)),
+        events_(std::move(events)),
         empty_text_(hwnd(), L"No playlists yet.", {.color = framework::TextColor::Gray}),
         add_button_(hwnd(), {.text = L"Add playlist", .command = std::to_underlying(CommandId::AddPlaylist), .icon = IDI_PLUS}) {}
 
@@ -44,18 +46,34 @@ void PlaylistList::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts
 void PlaylistList::set_rows(std::vector<PlaylistRow> rows) {
     rows_ = std::move(rows);
     layout();
+    follow_cursor();
+}
+
+void PlaylistList::set_selection(const std::optional<std::string>& key) {
+    if (key == selected_) {
+        return;
+    }
+    selected_ = key;
+    reveal_selection();
+    platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
 LRESULT PlaylistList::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE:       layout(); return 0;
+    case WM_SIZE:           layout(); return 0;
     // The paint fills the background, so the rows aren't erased first and don't blink
-    case WM_ERASEBKGND: return TRUE;
-    case WM_PAINT:      paint(); return 0;
-    case WM_VSCROLL:    on_vertical_scroll(LOWORD(wparam)); return 0;
-    case WM_MOUSEWHEEL: on_mouse_wheel(GET_WHEEL_DELTA_WPARAM(wparam)); return 0;
-    case WM_COMMAND:    on_command(wparam); return 0;
-    default:            return Window::handle_message(message, wparam, lparam);
+    case WM_ERASEBKGND:     return TRUE;
+    case WM_PAINT:          paint(); return 0;
+    case WM_MOUSEMOVE:      repaint_if(mouse_.move(hwnd(), row_at(point_of(lparam)))); return 0;
+    case WM_MOUSELEAVE:     repaint_if(mouse_.leave()); return 0;
+    case WM_LBUTTONDOWN:    on_left_button_down(point_of(lparam)); return 0;
+    case WM_LBUTTONUP:      on_left_button_up(point_of(lparam)); return 0;
+    case WM_CAPTURECHANGED: repaint_if(mouse_.cancel()); return 0;
+    case WM_KEYDOWN:        on_key_down(wparam); return 0;
+    case WM_VSCROLL:        scrolled(scroll_.on_scroll(hwnd(), LOWORD(wparam))); return 0;
+    case WM_MOUSEWHEEL:     scrolled(scroll_.on_wheel(hwnd(), GET_WHEEL_DELTA_WPARAM(wparam))); return 0;
+    case WM_COMMAND:        on_command(wparam); return 0;
+    default:                return Window::handle_message(message, wparam, lparam);
     }
 }
 
@@ -72,7 +90,7 @@ framework::Rect PlaylistList::client() const {
 
 framework::Rect PlaylistList::row_bounds(std::size_t index) const {
     framework::Dpi dpi = framework::Dpi::of(hwnd());
-    int top = dpi.scale(RowGapDips) + static_cast<int>(index) * (painter_->height() + dpi.scale(RowGapDips)) - scroll_;
+    int top = dpi.scale(RowGapDips) + static_cast<int>(index) * (painter_->height() + dpi.scale(RowGapDips)) - scroll_.position();
     return {dpi.scale(RowInsetDips), top, client().right - dpi.scale(RowInsetDips), top + painter_->height()};
 }
 
@@ -80,7 +98,7 @@ int PlaylistList::rows_bottom() const {
     if (rows_.empty()) {
         return 0;
     }
-    return row_bounds(rows_.size() - 1).bottom + framework::Dpi::of(hwnd()).scale(RowGapDips) + scroll_;
+    return row_bounds(rows_.size() - 1).bottom + framework::Dpi::of(hwnd()).scale(RowGapDips) + scroll_.position();
 }
 
 int PlaylistList::content_height() const {
@@ -89,30 +107,45 @@ int PlaylistList::content_height() const {
     return above_button + dpi.scale(ButtonTopDips) + add_button_.size().height + dpi.scale(BottomPaddingDips);
 }
 
+std::optional<std::size_t> PlaylistList::selected_index() const {
+    if (!selected_) {
+        return std::nullopt;
+    }
+    auto row = std::ranges::find(rows_, *selected_, &PlaylistRow::key);
+    if (row == rows_.end()) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(row - rows_.begin());
+}
+
+POINT PlaylistList::point_of(LPARAM lparam) {
+    return {GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+}
+
+std::optional<std::size_t> PlaylistList::row_at(POINT point) const {
+    for (std::size_t index = 0; index < rows_.size(); ++index) {
+        RECT bounds = row_bounds(index).to_rect();
+        if (PtInRect(&bounds, point)) {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
 void PlaylistList::layout() {
     if (!painter_) {
         return;
     }
-
-    // Showing or hiding the scroll bar sends WM_SIZE, which lays out again before this goes on with the new width
-    int page = client().height();
-    scroll_ = std::clamp(scroll_, 0, std::max(0, content_height() - page));
-    SCROLLINFO info{};
-    info.cbSize = sizeof(info);
-    info.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
-    info.nMax = content_height() - 1;
-    info.nPage = static_cast<UINT>(page);
-    info.nPos = scroll_;
-    SetScrollInfo(hwnd(), SB_VERT, &info, TRUE);
+    scroll_.update(hwnd(), content_height());
 
     framework::Dpi dpi = framework::Dpi::of(hwnd());
     framework::Rect area = client();
     // The empty list's text and the button line up with the playlist names, and so with All tracks above
     int text_left = dpi.scale(RowInsetDips) + painter_->text_left();
-    int empty_top = dpi.scale(EmptyTextTopDips) - scroll_;
+    int empty_top = dpi.scale(EmptyTextTopDips) - scroll_.position();
     framework::Rect empty{text_left, empty_top, area.right - dpi.scale(EmptyTextRightDips), empty_top + empty_text_height_};
 
-    int button_top = (rows_.empty() ? empty.bottom + dpi.scale(EmptyTextBottomDips) : rows_bottom() - scroll_) + dpi.scale(ButtonTopDips);
+    int button_top = (rows_.empty() ? empty.bottom + dpi.scale(EmptyTextBottomDips) : rows_bottom() - scroll_.position()) + dpi.scale(ButtonTopDips);
     framework::Size button = add_button_.size();
 
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
@@ -122,11 +155,38 @@ void PlaylistList::layout() {
     positions.apply();
 }
 
-void PlaylistList::scroll_to(int position) {
-    int clamped = std::clamp(position, 0, std::max(0, content_height() - client().height()));
-    if (clamped != scroll_) {
-        scroll_ = clamped;
+void PlaylistList::reveal_selection() {
+    std::optional<std::size_t> index = selected_index();
+    if (!index || !painter_) {
+        return;
+    }
+    // The gaps around the row come along, so its frame doesn't touch the edge
+    int gap = framework::Dpi::of(hwnd()).scale(RowGapDips);
+    framework::Rect bounds = row_bounds(*index);
+    scrolled(scroll_.reveal(hwnd(), bounds.top - gap + scroll_.position(), bounds.bottom + gap + scroll_.position()));
+}
+
+void PlaylistList::scrolled(bool moved) {
+    if (moved) {
         layout();
+        follow_cursor();
+    }
+}
+
+void PlaylistList::follow_cursor() {
+    // The rows move under a mouse that stands still, which sends no WM_MOUSEMOVE
+    POINT point;
+    if (!GetCursorPos(&point)) {
+        return;
+    }
+    bool over = WindowFromPoint(point) == hwnd();
+    platform::win32::check(ScreenToClient(hwnd(), &point), "ScreenToClient");
+    repaint_if(mouse_.move(hwnd(), over ? row_at(point) : std::nullopt));
+}
+
+void PlaylistList::repaint_if(bool changed) const {
+    if (changed) {
+        platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
     }
 }
 
@@ -138,51 +198,54 @@ void PlaylistList::paint() const {
     if (!painter_) {
         return;
     }
+    std::optional<std::size_t> selected = selected_index();
     for (std::size_t index = 0; index < rows_.size(); ++index) {
         framework::Rect bounds = row_bounds(index);
         if (bounds.bottom > area.top && bounds.top < area.bottom) {
-            painter_->paint(paint.dc(), bounds, rows_[index]);
+            painter_->paint(paint.dc(), bounds, rows_[index], row_look(index == selected, index == mouse_.hot(), index == mouse_.pressed()));
         }
     }
 }
 
-void PlaylistList::on_vertical_scroll(WORD request) {
-    SCROLLINFO info{};
-    info.cbSize = sizeof(info);
-    info.fMask = SIF_ALL;
-    platform::win32::check(GetScrollInfo(hwnd(), SB_VERT, &info), "GetScrollInfo");
-    int line = framework::Dpi::of(hwnd()).scale(ScrollLineDips);
-    int page = static_cast<int>(info.nPage);
+void PlaylistList::on_left_button_down(POINT point) {
+    SetFocus(hwnd());
+    repaint_if(mouse_.press(hwnd(), row_at(point)));
+}
 
-    switch (request) {
-    case SB_LINEUP:        scroll_to(scroll_ - line); return;
-    case SB_LINEDOWN:      scroll_to(scroll_ + line); return;
-    case SB_PAGEUP:        scroll_to(scroll_ - page); return;
-    case SB_PAGEDOWN:      scroll_to(scroll_ + page); return;
-    case SB_THUMBTRACK:
-    case SB_THUMBPOSITION: scroll_to(info.nTrackPos); return;
-    case SB_TOP:           scroll_to(0); return;
-    case SB_BOTTOM:        scroll_to(info.nMax); return;
-    default:               return;
+void PlaylistList::on_left_button_up(POINT point) {
+    std::optional<std::size_t> clicked = mouse_.release(hwnd(), row_at(point));
+    repaint_if(true);
+    if (clicked) {
+        events_.on_select(rows_[*clicked].key);
     }
 }
 
-void PlaylistList::on_mouse_wheel(short delta) {
-    UINT lines = DefaultWheelScrollLines;
-    SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0);
-    int page = client().height();
-    int distance = lines == WHEEL_PAGESCROLL ? page : static_cast<int>(lines) * framework::Dpi::of(hwnd()).scale(ScrollLineDips);
+void PlaylistList::on_key_down(WPARAM key) {
+    // All tracks comes before the first playlist
+    int last = static_cast<int>(rows_.size());
+    std::optional<std::size_t> selected = selected_index();
+    int current = selected ? static_cast<int>(*selected) + 1 : 0;
+    int page = std::max(1, client().height() / (painter_->height() + framework::Dpi::of(hwnd()).scale(RowGapDips)));
 
-    // A touchpad sends small deltas, which add up to a notch
-    wheel_remainder_ += delta;
-    int notches = wheel_remainder_ / WHEEL_DELTA;
-    wheel_remainder_ %= WHEEL_DELTA;
-    scroll_to(scroll_ - notches * distance);
+    int target = current;
+    switch (key) {
+    case VK_UP:    target = current - 1; break;
+    case VK_DOWN:  target = current + 1; break;
+    case VK_PRIOR: target = current - page; break;
+    case VK_NEXT:  target = current + page; break;
+    case VK_HOME:  target = 0; break;
+    case VK_END:   target = last; break;
+    default:       return;
+    }
+    target = std::clamp(target, 0, last);
+    if (target != current) {
+        events_.on_select(target == 0 ? std::nullopt : std::optional(rows_[static_cast<std::size_t>(target - 1)].key));
+    }
 }
 
 void PlaylistList::on_command(WPARAM wparam) const {
     if (HIWORD(wparam) == BN_CLICKED) {
-        on_command_(static_cast<CommandId>(LOWORD(wparam)));
+        events_.on_command(static_cast<CommandId>(LOWORD(wparam)));
     }
 }
 

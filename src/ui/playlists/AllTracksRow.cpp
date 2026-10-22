@@ -3,9 +3,14 @@
 #include <algorithm>
 #include <format>
 #include <string>
+#include <utility>
+
+#include <windows.h>
+#include <windowsx.h>
 
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
+#include "ui/RowLook.h"
 #include "ui/TrackCountText.h"
 #include "ui/framework/BufferedPaint.h"
 #include "ui/framework/WindowClass.h"
@@ -23,15 +28,14 @@ constexpr int NameLineDips = 18;
 constexpr int CountsLineDips = 16;
 // A hairline stays one pixel at every scale
 constexpr int HairlinePixels = 1;
-constexpr COLORREF SelectionColor = RGB(0xCC, 0xE8, 0xFF);
-constexpr COLORREF SelectionBorderColor = RGB(0x99, 0xD1, 0xFF);
 constexpr UINT LineFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS;
 constexpr wchar_t Name[] = L"All tracks";
 
 }
 
-AllTracksRow::AllTracksRow(HWND parent) :
+AllTracksRow::AllTracksRow(HWND parent, std::function<void()> on_click) :
         Window(window_class(), {.title = Name, .style = WS_CHILD | WS_VISIBLE, .parent = parent}),
+        on_click_(std::move(on_click)),
         glyph_(IDI_LIBRARY, framework::Dpi::of(hwnd()).scale(GlyphDips)) {}
 
 int AllTracksRow::height() const noexcept {
@@ -58,16 +62,50 @@ void AllTracksRow::set_counts(const TrackCounts& counts) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, TRUE), "InvalidateRect");
 }
 
+void AllTracksRow::set_selected(bool selected) {
+    if (selected != selected_) {
+        selected_ = selected;
+        platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
+    }
+}
+
 LRESULT AllTracksRow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_PAINT: paint(); return 0;
-    default:       return Window::handle_message(message, wparam, lparam);
+    case WM_MOUSEMOVE:      repaint_if(mouse_.move(hwnd(), item_at(lparam))); return 0;
+    case WM_MOUSELEAVE:     repaint_if(mouse_.leave()); return 0;
+    case WM_LBUTTONDOWN:    repaint_if(mouse_.press(hwnd(), item_at(lparam))); return 0;
+    case WM_LBUTTONUP:      on_left_button_up(lparam); return 0;
+    case WM_CAPTURECHANGED: repaint_if(mouse_.cancel()); return 0;
+    case WM_PAINT:          paint(); return 0;
+    default:                return Window::handle_message(message, wparam, lparam);
     }
 }
 
 const framework::WindowClass& AllTracksRow::window_class() {
     static framework::WindowClass window_class({.name = L"WestieLib.AllTracksRow", .style = CS_HREDRAW | CS_VREDRAW});
     return window_class;
+}
+
+std::optional<std::size_t> AllTracksRow::item_at(LPARAM lparam) const {
+    RECT client;
+    platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
+    POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+    // The whole row is the one item
+    return PtInRect(&client, point) ? std::optional<std::size_t>(0) : std::nullopt;
+}
+
+void AllTracksRow::repaint_if(bool changed) const {
+    if (changed) {
+        platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
+    }
+}
+
+void AllTracksRow::on_left_button_up(LPARAM lparam) {
+    std::optional<std::size_t> clicked = mouse_.release(hwnd(), item_at(lparam));
+    repaint_if(true);
+    if (clicked) {
+        on_click_();
+    }
 }
 
 void AllTracksRow::paint() const {
@@ -77,12 +115,8 @@ void AllTracksRow::paint() const {
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
     framework::Dpi dpi = framework::Dpi::of(hwnd());
 
-    // Selected, since nothing else can be selected yet
-    auto brush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
-    SetDCBrushColor(dc, SelectionColor);
-    FillRect(dc, &client, brush);
-    SetDCBrushColor(dc, SelectionBorderColor);
-    FrameRect(dc, &client, brush);
+    FillRect(dc, &client, GetSysColorBrush(COLOR_WINDOW));
+    paint_row_look(dc, framework::Rect::from_rect(client), row_look(selected_, mouse_.hot().has_value(), mouse_.pressed().has_value()));
 
     int left = HairlinePixels + dpi.scale(SidePaddingDips);
     int right = client.right - HairlinePixels - dpi.scale(SidePaddingDips);

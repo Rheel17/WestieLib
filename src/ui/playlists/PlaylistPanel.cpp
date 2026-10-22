@@ -21,8 +21,8 @@ constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
 
 }
 
-PlaylistPanel::PlaylistPanel(HWND parent, std::function<void(CommandId)> on_command) :
-        Panel(parent, L"Playlists"), all_tracks_(hwnd()), list_(hwnd(), std::move(on_command)) {}
+PlaylistPanel::PlaylistPanel(HWND parent, PlaylistEvents events) :
+        Panel(parent, L"Playlists"), events_(std::move(events)), all_tracks_(hwnd(), [this] { select_all_tracks(); }), list_(hwnd(), events_) {}
 
 void PlaylistPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
     all_tracks_.apply_dpi(dpi, fonts);
@@ -40,6 +40,11 @@ void PlaylistPanel::set_playlists(std::vector<PlaylistRow> rows) {
     list_.set_rows(std::move(rows));
 }
 
+void PlaylistPanel::show_selection(const std::optional<std::string>& key) {
+    all_tracks_.set_selected(!key);
+    list_.set_selection(key);
+}
+
 LRESULT PlaylistPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE:       layout(); return 0;
@@ -48,6 +53,12 @@ LRESULT PlaylistPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam
     case WM_PAINT:      paint(); return 0;
     default:            return Panel::handle_message(message, wparam, lparam);
     }
+}
+
+void PlaylistPanel::select_all_tracks() const {
+    // The list takes the keys for All tracks too
+    SetFocus(list_.hwnd());
+    events_.on_select(std::nullopt);
 }
 
 void PlaylistPanel::layout() {
