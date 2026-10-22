@@ -1,6 +1,5 @@
 #include "ui/inspector/InspectorPanel.h"
 
-#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -20,15 +19,10 @@ constexpr int BottomPaddingDips = 10;
 
 InspectorPanel::InspectorPanel(HWND parent, const std::function<void(CommandId)>& on_command) :
         Panel(parent, L"Inspector", WS_VSCROLL),
-        placeholder_(
-                hwnd(), L"Add a playlist to see\nits tracks here.",
-                {.color = framework::TextColor::Gray, .alignment = framework::LabelAlignment::Center, .wrap = true}
-        ),
         library_(hwnd(), on_command),
         playlist_(hwnd(), on_command) {}
 
 void InspectorPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
-    placeholder_.set_font(fonts.regular().handle());
     library_.apply_dpi(dpi, fonts);
     playlist_.apply_dpi(dpi, fonts);
     layout();
@@ -98,13 +92,6 @@ void InspectorPanel::layout() {
 
     framework::Rect area = padded_area();
     framework::DeferredPositions positions;
-    if (content_ == Content::FirstRun) {
-        int height = std::min(placeholder_.height_for(area.width()), area.height());
-        int top = area.top + (area.height() - height) / 2;
-        positions.place(placeholder_.hwnd(), framework::Rect{area.left, top, area.right, top + height});
-    } else {
-        positions.place(placeholder_.hwnd(), std::nullopt);
-    }
 
     int top = area.top - scroll_.position();
     framework::Rect card{area.left, top, area.right, top + card_height(area.width())};

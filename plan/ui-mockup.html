@@ -221,7 +221,6 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .mlist li span { overflow: hidden; text-overflow: ellipsis; }
 .ph { display: flex; align-items: center; gap: 7px; font-size: 15px; line-height: 20px; font-weight: 600; }
 .ps { color: var(--gray); margin: 1px 0 0 23px; }
-.insp .placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--gray); text-align: center; }
 
 /* ---------- dialogs ---------- */
 .dlg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; background: var(--face);
@@ -706,7 +705,7 @@ function firstRunMain() {
 
 // ---------- inspector ----------
 function inspector(s, cfg) {
-	if (cfg.firstRun) return `<div class="placeholder">Add a playlist to see<br>its tracks here.</div>`;
+	if (cfg.firstRun) return '';
 	const sel = (cfg.sel || []).map(title => find(s, title));
 	if (sel.length === 1) return trackInspector(s, sel[0], cfg);
 	if (sel.length > 1) return multiInspector(sel);

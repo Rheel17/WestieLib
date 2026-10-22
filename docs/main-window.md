@@ -128,9 +128,9 @@ saved `Placement` and asks it for the current one.
   hands them to the panel.
 - `AllTracksRow` is a window that paints the row: its look (hover, pressed or selected), glyph, name in semibold, and
   the counts.
-- `InspectorPanel` (`src/ui/inspector/`) shows one of three things inside its padding: the first-run placeholder,
-  centered, or a card at the top. `MainWindow::show_inspector` picks one from the state and the selection: no
-  playlists, a selected playlist (`playlist_row`), or else All tracks. It runs whenever one of those changes, and when
+- `InspectorPanel` (`src/ui/inspector/`) shows a card at the top of its padding, or nothing on the first run.
+  `MainWindow::show_inspector` picks from the state and the selection: no playlists, a selected playlist
+  (`playlist_row`), or else All tracks. It runs whenever one of those changes, and when
   the library folder or the track counts (`track_counts_`) change. `update_commands` hands the inspector the
   `CommandState`, so the cards' buttons follow the same rules as the menus.
   - `LibraryCard` and `PlaylistCard` are panels of `Label`s, `Button`s and small windows that paint themselves:

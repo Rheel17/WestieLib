@@ -22,15 +22,14 @@ function Add-Playlist($hwnd, [string]$link) {
 	$line
 }
 
-# Welcome screen and tracks panel visible; the left panel's "No playlists yet." and the inspector's placeholder visible
+# Welcome screen and tracks panel visible; the left panel's "No playlists yet." visible; whether the inspector shows a card
 function Get-PlaylistScreens($hwnd) {
 	$empty = ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.Label'))[0]
-	$placeholder = Get-InspectorPlaceholder $hwnd
 	"welcome $([W]::IsWindowVisible((Get-Panel $hwnd 'Welcome'))), tracks $([W]::IsWindowVisible((Get-Panel $hwnd 'Tracks'))), " +
-		"no playlists $([W]::IsWindowVisible($empty)), placeholder $([W]::IsWindowVisible($placeholder))"
+		"no playlists $([W]::IsWindowVisible($empty)), card $($null -ne (Get-InspectorCard $hwnd))"
 }
 
-$WithPlaylists = 'welcome False, tracks True, no playlists False, placeholder False'
+$WithPlaylists = 'welcome False, tracks True, no playlists False, card True'
 
 # The list starts under the rule, as wide as the panel, and its button follows the rows, lined up with the names
 function Check-PlaylistRows([string]$what, $hwnd, [int]$count) {
@@ -364,7 +363,7 @@ function Check-RemovePlaylists($hwnd) {
 	[void][W]::PostMessageW($dialog, 0x466, [IntPtr]1, [IntPtr]::Zero)
 	Wait-Closed $dialog
 	Check 'Remove the last, from the card: state.json' "[$(Get-SavedPlaylists)]" '[]'
-	Check '  screens' (Get-PlaylistScreens $hwnd) 'welcome True, tracks False, no playlists True, placeholder True'
+	Check '  screens' (Get-PlaylistScreens $hwnd) 'welcome True, tracks False, no playlists True, card False'
 }
 
 "--- Run 1: adding playlists"
@@ -373,7 +372,7 @@ Set-SavedWindow @{}
 Install-FakeTools
 $app = Start-App
 $h = $app.Hwnd
-Check 'No playlists yet: screens' (Get-PlaylistScreens $h) 'welcome True, tracks False, no playlists True, placeholder True'
+Check 'No playlists yet: screens' (Get-PlaylistScreens $h) 'welcome True, tracks False, no playlists True, card False'
 Check-AddingPlaylists $h
 Stop-App $app
 

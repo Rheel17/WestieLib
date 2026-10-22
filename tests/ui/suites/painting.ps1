@@ -3,8 +3,8 @@
 # touching the mouse. Dot-sourced by ui-checks.ps1.
 
 # Splitter drags don't make text blink on screen: the left panel's content stays exactly as it was while the playlists
-# splitter moves, and the inspector's placeholder and the welcome screen, which move with their panels, never lose
-# their text. The welcome drag stays short enough for its column to keep its width, so its text wraps the same.
+# splitter moves, and the welcome screen, which moves with its panel, never loses its text. The drag stays short enough
+# for the welcome column to keep its width, so its text wraps the same.
 function Check-NoBlinking($hwnd) {
 	$welcome = [W]::RectIn((Get-Panel $hwnd 'Welcome'), $hwnd)
 	$texts = @(Get-DirectChildren (Get-Panel $hwnd 'Welcome') 'WestieLib.Label' | ForEach-Object { [W]::RectIn($_, $hwnd) })
@@ -22,15 +22,6 @@ function Check-NoBlinking($hwnd) {
 	$left.Top = Get-RowTop $hwnd
 	$left.Bottom = $button.Bottom + (S 8)
 	Check 'Playlists drag: left panel never blinks' ([W]::WatchDrag($hwnd, $left, (Get-Splitter $hwnd 0), (S 300), $false)) 'blinked 0'
-
-	$inspector = [W]::RectIn((Get-RowPanels $hwnd)[2], $hwnd)
-	$placeholder = [W]::RectIn((Get-InspectorPlaceholder $hwnd), $hwnd)
-	$band = New-Object W+RECT
-	$band.Left = $inspector.Left - (S 200)
-	$band.Right = $inspector.Right
-	$band.Top = $placeholder.Top
-	$band.Bottom = $placeholder.Bottom
-	Check 'Inspector drag: placeholder never blinks' ([W]::WatchDrag($hwnd, $band, (Get-Splitter $hwnd 1), -(S 200), $true)) 'blinked 0'
 }
 
 # Counts drag steps after which some window still has an unpainted area

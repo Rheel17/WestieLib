@@ -12,7 +12,6 @@ function Check-Scaled($hwnd) {
 	Check-StatusTexts ' ' $hwnd
 	Check-Widths 'Default widths' $hwnd @((S 250), ($cw - (S 250) - (S 290) - 2 * (S 5)), (S 290))
 	Check-PlaylistPanel 'Left panel:' $hwnd
-	Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $hwnd
 	Check-Welcome 'Welcome screen' $hwnd
 }
 

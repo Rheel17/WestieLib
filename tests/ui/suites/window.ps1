@@ -73,7 +73,7 @@ $cw = Get-ClientWidth $h
 $g = S 5
 Check-Widths 'Initial widths' $h @((S 250), ($cw - (S 250) - (S 290) - 2 * $g), (S 290))
 Check-PlaylistPanel 'Left panel:' $h
-Check-InspectorPlaceholder 'Inspector placeholder | sides | center offset x2' $h
+Check 'Inspector shows nothing' (@([W]::Children((Get-Panel $h 'Inspector'), $null) | Where-Object { [W]::IsWindowVisible($_) }).Count) 0
 Check-Welcome 'Welcome screen' $h
 Move-Splitter $h 0 0
 Move-Splitter $h 0 (S 400)
@@ -84,7 +84,6 @@ Move-Splitter $h 0 -100
 Check-Widths 'Playlists far left: stops at 250' $h @((S 250), ($cw - (S 250) - (S 290) - 2 * $g), (S 290))
 Move-Splitter $h 1 ($cw - $g - (S 500))
 Check-Widths 'Inspector splitter for a 500 inspector' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
-Check-InspectorPlaceholder '  placeholder | sides | center offset x2' $h
 Move-Splitter $h 1 -1000
 Check-Widths 'Inspector far left: tracks stops at 400' $h @((S 250), (S 400), ($cw - (S 250) - (S 400) - 2 * $g)) 1
 Move-Splitter $h 1 ($cw - $g - (S 500))
@@ -122,7 +121,6 @@ Check 'Ctrl+L hides the log' (Get-LogVisibility $h) 'False False'
 Check-Widths '  panels reach the status bar' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 [W]::PostCtrlKey($h, 0x4C)
 Check-Log '  and shows it again' $h (S 200)
-Check-InspectorPlaceholder '  placeholder | sides | center offset x2' $h
 "File > Exit"
 Stop-App $app -ExitCommand
 $saved = Get-ItemProperty $KeyPath

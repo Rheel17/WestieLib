@@ -514,26 +514,9 @@ function Write-ManyPlaylists([int]$count) {
 	[IO.File]::WriteAllText($StateFile, '{"version": 1, "playlists": {' + ($entries -join ', ') + '}}')
 }
 
-# The inspector's own label; the cards in it have labels of their own
-function Get-InspectorPlaceholder($hwnd) { (Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Label')[0] }
-
 # The inspector's visible card
 function Get-InspectorCard($hwnd) {
 	@(Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Panel' | Where-Object { [W]::IsWindowVisible($_) })[0]
-}
-
-# The inspector's placeholder fills the panel's width inside the padding, its center within a pixel of the padded
-# area's
-function Check-InspectorPlaceholder([string]$what, $hwnd) {
-	$panel = (Get-RowPanels $hwnd)[2]
-	$label = Get-InspectorPlaceholder $hwnd
-	$r = [W]::RectIn($label, $panel)
-	$sides = "$($r.Left) $((Get-ClientWidth $panel) - $r.Right)"
-	# Twice the offset, so it stays whole
-	$offset = ($r.Top + $r.Bottom) - ((S 12) + (Get-ClientHeight $panel) - (S 10))
-	$text = [W]::TextOf($label) -replace "`n", ' / '
-	$ok = $text -eq 'Add a playlist to see / its tracks here.' -and $sides -eq "$(S 12) $(S 12)" -and [math]::Abs($offset) -le 2
-	Check-That $what "$text | $sides | $offset" $ok "the text | $(S 12) $(S 12) | -2 to 2"
 }
 
 function LParam([int]$x, [int]$y) { [IntPtr]([int64]($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)) }

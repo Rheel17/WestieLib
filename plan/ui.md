@@ -383,7 +383,7 @@ menu is the Track menu.
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
-**No playlists yet** (first run): `Add a playlist to see its tracks here.`, in gray and centered, broken after "see".
+**No playlists yet** (first run): empty.
 
 **Nothing selected**:
 

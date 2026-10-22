@@ -158,10 +158,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `Click-PlaylistRow` and `Click-AllTracks` send `WM_LBUTTONDOWN` and `WM_LBUTTONUP` (`Send-Click`), and
   `Press-ListKey` sends `WM_KEYDOWN` to the list, which acts on it whether or not it has the focus. `FocusOf` tells
   which window has the focus on the app's thread (`GetGUIThreadInfo`).
-- The inspector shows one card at a time, a panel named `Library card` or `Playlist card` (`Get-InspectorCard`).
-  `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right within a row, and
-  `Get-CardLayout` gives where the card, its title, its values and its buttons sit. The inspector's placeholder is
-  its own direct `Label` child (`Get-InspectorPlaceholder`), because the cards hold labels too.
+- The inspector shows one card at a time, a panel named `Library card` or `Playlist card` (`Get-InspectorCard`), or
+  none on the first run. `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right
+  within a row, and `Get-CardLayout` gives where the card, its title, its values and its buttons sit.
 - A context menu runs a modal loop, so post `WM_CONTEXTMENU` (`lparam` -1 for the keyboard's), then find the popup as
   the process's visible `#32768` window (`Wait-PopupMenu`). `MN_GETHMENU` gives its menu, which `Get-PopupItems`
   reads. The loop takes keys posted to any window of the app's thread: Esc closes it (`Close-PopupMenu`), an access

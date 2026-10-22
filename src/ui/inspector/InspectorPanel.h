@@ -10,7 +10,6 @@
 #include "ui/commands/CommandState.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/FontSet.h"
-#include "ui/framework/Label.h"
 #include "ui/framework/Panel.h"
 #include "ui/framework/VerticalScroll.h"
 #include "ui/inspector/LibraryCard.h"
@@ -41,7 +40,6 @@ private:
     void layout();
     void scrolled(bool moved);
 
-    framework::Label placeholder_;
     LibraryCard library_;
     PlaylistCard playlist_;
     framework::VerticalScroll scroll_;
