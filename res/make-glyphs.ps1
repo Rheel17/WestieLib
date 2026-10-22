@@ -1,6 +1,7 @@
 # Renders glyphs from the icon table in plan/ui-mockup.html (the `name: SVG('...')` entries) into
 # res/glyphs/<name>.ico. Glyphs marked Disabled below also get <name>-disabled.ico: grayscale at 45% opacity, like
 # the mockup's disabled toolbar buttons. Glyphs marked Small also get the sizes of a 12 px glyph, as in the status bar.
+# The progress ring, which the mockup draws with ring(percent), becomes ring-00.ico to ring-24.ico, one per step.
 #
 #   powershell -ExecutionPolicy Bypass -File res/make-glyphs.ps1
 #
@@ -30,6 +31,30 @@ $Glyphs = [ordered]@{
 # 100% to 300% display scaling of a 16 px glyph, and of a 12 px one
 $Sizes = 16, 20, 24, 28, 32, 40, 48
 $SmallSizes = 12, 15, 18, 21, 24, 30, 36
+
+# The mockup's ring(): a gray track and a blue arc from 12 o'clock, clockwise
+$RingSteps = 24
+$RingRadius = 5.6
+$RingWidth = 2.4
+$RingTrack = '#d6d6d6'
+$RingArc = '#0078d7'
+$Invariant = [Globalization.CultureInfo]::InvariantCulture
+
+function Get-RingMarkup([int]$step) {
+	$circle = "<circle cx=`"8`" cy=`"8`" r=`"$RingRadius`" fill=`"none`" stroke-width=`"$RingWidth`""
+	$body = "$circle stroke=`"$RingTrack`"/>"
+	if ($step -eq $RingSteps) {
+		$body += "$circle stroke=`"$RingArc`"/>"
+	} elseif ($step -gt 0) {
+		$angle = 2 * [math]::PI * $step / $RingSteps
+		$x = (8 + $RingRadius * [math]::Sin($angle)).ToString('0.####', $Invariant)
+		$y = (8 - $RingRadius * [math]::Cos($angle)).ToString('0.####', $Invariant)
+		$large = if ($step * 2 -gt $RingSteps) { 1 } else { 0 }
+		$top = (8 - $RingRadius).ToString('0.####', $Invariant)
+		$body += "<path d=`"M8 $top A$RingRadius $RingRadius 0 $large 1 $x $y`" fill=`"none`" stroke=`"$RingArc`" stroke-width=`"$RingWidth`"/>"
+	}
+	[pscustomobject]@{ Body = $body; ViewBox = [double[]](0, 0, 16, 16) }
+}
 $DisabledOpacity = 0.45
 $InheritedAttributes = 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'
 
@@ -131,9 +156,14 @@ function ConvertTo-Disabled([byte[]]$pixels) {
 $html = [System.IO.File]::ReadAllText((Resolve-Path $Mockup))
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
-foreach ($name in $Glyphs.Keys) {
-	$options = $Glyphs[$name]
-	$glyph = Get-GlyphMarkup $html $name
+$work = @($Glyphs.Keys | ForEach-Object { [pscustomobject]@{ Name = $_; Glyph = (Get-GlyphMarkup $html $_); Options = $Glyphs[$_] } })
+# The track table shows the ring at 16 px, and the status bar at 12 px
+$work += @(0..$RingSteps | ForEach-Object { [pscustomobject]@{ Name = 'ring-{0:D2}' -f $_; Glyph = (Get-RingMarkup $_); Options = @{ Small = $true } } })
+
+foreach ($item in $work) {
+	$name = $item.Name
+	$options = $item.Options
+	$glyph = $item.Glyph
 	$glyphSizes = if ($options.Small) { $Sizes + $SmallSizes | Sort-Object -Unique } else { $Sizes }
 	$frames = @()
 	$disabledFrames = @()

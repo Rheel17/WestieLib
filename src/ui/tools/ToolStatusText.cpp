@@ -13,8 +13,19 @@ namespace {
 
 constexpr int FullPercent = 100;
 
+constexpr const wchar_t* CheckingText = L"checking";
+constexpr const wchar_t* CheckingForUpdatesText = L"checking for updates";
+
 bool is_installing(const core::ToolStatus& status) {
     return status.state == core::ToolState::Downloading || status.state == core::ToolState::Installing;
+}
+
+std::wstring install_text(bool update, core::ToolPackage package) {
+    return std::format(L"{} {}", update ? L"updating" : L"installing", tool_name_text(package));
+}
+
+std::wstring download_text(bool update, core::ToolPackage package, int percent) {
+    return std::format(L"{} {}%", install_text(update, package), percent);
 }
 
 }
@@ -54,25 +65,34 @@ std::wstring tools_tooltip_text(const ToolBoard& board) {
     return text;
 }
 
-std::optional<ToolProgress> tools_progress(const ToolBoard& board) {
+std::optional<ToolWork> tools_work(const ToolBoard& board) {
     if (!board.running()) {
         return std::nullopt;
     }
 
     auto statuses = board.statuses();
     if (auto installing = std::ranges::find_if(statuses, is_installing); installing != statuses.end()) {
-        std::wstring work = installing->release.empty() ? L"Installing tools…" : L"Updating tools…";
-        std::wstring name = tool_name_text(installing->package);
-        if (installing->state == core::ToolState::Downloading) {
-            return ToolProgress{.text = std::format(L"{} {} {}%", work, name, installing->percent), .percent = installing->percent};
+        bool update = !installing->release.empty();
+        if (installing->state != core::ToolState::Downloading) {
+            return ToolWork{.text = install_text(update, installing->package), .percent = FullPercent};
         }
-        return ToolProgress{.text = std::format(L"{} {}", work, name), .percent = FullPercent};
+        return ToolWork{.text = download_text(update, installing->package, installing->percent), .percent = installing->percent};
     }
     if (auto checking = std::ranges::find(statuses, core::ToolState::Checking, &core::ToolStatus::state); checking != statuses.end()) {
         // A missing tool's release is looked up to install it, not to update it
-        return ToolProgress{.text = checking->release.empty() ? L"Installing tools…" : L"Checking for tool updates…"};
+        return ToolWork{.text = checking->release.empty() ? install_text(false, checking->package) : CheckingForUpdatesText};
     }
-    return std::nullopt;
+    // Between the steps of a run, as when it looks at what is installed
+    return ToolWork{.text = CheckingText};
+}
+
+std::vector<std::wstring> every_tools_work_text() {
+    std::vector<std::wstring> texts{CheckingText, CheckingForUpdatesText};
+    for (core::ToolPackage package : core::AllToolPackages) {
+        texts.push_back(download_text(false, package, FullPercent));
+        texts.push_back(download_text(true, package, FullPercent));
+    }
+    return texts;
 }
 
 std::wstring last_checked_text(const ToolBoard& board, std::chrono::system_clock::time_point now) {

@@ -44,7 +44,9 @@ file names such as `Win32Error.cpp`.
 - `res/glyphs/*.ico` are the UI's glyphs, rendered by `res/make-glyphs.ps1` from the icon table in
   `plan/ui-mockup.html`. WPF draws each glyph's SVG markup at 16–48 px (100–300% scaling), and glyphs marked `Small`
   also at 12–36 px, for the status bar's 12 px icons. Glyphs marked `Disabled` also get a `-disabled` copy (grayscale
-  at 45% opacity) for disabled toolbar buttons. The files are
+  at 45% opacity) for disabled toolbar buttons. The progress ring, which the mockup draws with `ring(percent)`, is
+  built in the script as `ring-00.ico` to `ring-24.ico`, one per step of 24, in both sizes. The `.rc` names them
+  `IDI_RING_0` to `(IDI_RING_0 + 24)`; windres takes the sum. The files are
   committed. To add a glyph, add its name to the table and run the script, then add an `ICON` line to the `.rc` and
   an `IDI_` macro. CMake globs `res/glyphs` for the `.rc`'s dependencies.
 - `make-icon.ps1` and `make-glyphs.ps1` share the ICO writer in `res/IconFile.ps1`.

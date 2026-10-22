@@ -12,6 +12,8 @@
 #define IDI_LIBRARY          10
 #define IDI_SYNCED           11
 #define IDI_WARN             12
+// The progress ring's 25 steps, empty to full, are IDI_RING_0 to IDI_RING_0 + 24
+#define IDI_RING_0           20
 
 #define IDD_SETTINGS              100
 #define IDC_LIBRARY_FOLDER        1000

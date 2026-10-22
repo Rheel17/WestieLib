@@ -24,8 +24,14 @@ enum class TextEllipsis { End, Path };
 struct PartFormat {
     TextAlignment alignment = TextAlignment::Left;
     TextEllipsis ellipsis = TextEllipsis::End;
+};
+
+struct PartContent {
+    std::wstring text{};
     // Drawn after the text; the owner keeps it alive
     const IconResource* icon = nullptr;
+    // After the icon; the one that ends in an ellipsis when the part is too narrow
+    std::wstring trailing{};
 };
 
 struct PartWidth {
@@ -47,9 +53,10 @@ public:
     void set_parts(StatusParts parts);
     void set_spacing(int padding, int gap);
     void set_text(int part, std::wstring text, const PartFormat& format = {});
+    void set_content(int part, PartContent content, const PartFormat& format = {});
     void set_tip(int part, std::wstring text);
     void embed(int part, HWND window, std::optional<Size> size);
-    int part_width_for(std::wstring_view text) const;
+    int part_width_for(const PartContent& content) const;
     void draw(const DRAWITEMSTRUCT& item) const;
 
 protected:
@@ -57,7 +64,7 @@ protected:
 
 private:
     struct PartText {
-        std::wstring text{};
+        PartContent content{};
         PartFormat format{};
     };
 

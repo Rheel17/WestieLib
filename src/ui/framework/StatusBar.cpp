@@ -55,10 +55,14 @@ void StatusBar::set_spacing(int padding, int gap) {
 }
 
 void StatusBar::set_text(int part, std::wstring text, const PartFormat& format) {
+    set_content(part, {.text = std::move(text)}, format);
+}
+
+void StatusBar::set_content(int part, PartContent content, const PartFormat& format) {
     if (std::cmp_greater_equal(part, texts_.size())) {
         texts_.resize(part + 1);
     }
-    texts_[part] = {.text = std::move(text), .format = format};
+    texts_[part] = {.content = std::move(content), .format = format};
 
     // The native part text sits 3 px from the edge with no way to pad it, so the parent's WM_DRAWITEM draws it. The
     // last part would draw its own separator at the window's edge.
@@ -79,7 +83,7 @@ void StatusBar::embed(int part, HWND window, std::optional<Size> size) {
     place_embedded();
 }
 
-int StatusBar::part_width_for(std::wstring_view text) const {
+int StatusBar::part_width_for(const PartContent& content) const {
     platform::win32::UniqueMemoryDc dc(platform::win32::check(CreateCompatibleDC(nullptr), "CreateCompatibleDC"));
     if (auto font = reinterpret_cast<HFONT>(SendMessageW(hwnd(), WM_GETFONT, 0, 0))) {
         SelectObject(dc.get(), font);
@@ -87,7 +91,14 @@ int StatusBar::part_width_for(std::wstring_view text) const {
     // A part's rect starts this far after the edge before it: horizontal border, vertical border, gap between parts
     std::array<int, 3> borders{};
     platform::win32::check(SendMessageW(hwnd(), SB_GETBORDERS, 0, reinterpret_cast<LPARAM>(borders.data())), "SB_GETBORDERS");
-    return borders[2] + 2 * padding_ + measure(dc.get(), text);
+    int width = borders[2] + 2 * padding_ + measure(dc.get(), content.text);
+    if (content.icon) {
+        width += gap_ + content.icon->size();
+    }
+    if (!content.trailing.empty()) {
+        width += gap_ + measure(dc.get(), content.trailing);
+    }
+    return width;
 }
 
 void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
@@ -107,18 +118,27 @@ void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
     // The bar's rect is also what part_width_for measures against.
     Rect padded = padded_rect(static_cast<int>(item.itemID));
     RECT bounds{padded.left, item.rcItem.top, padded.right, item.rcItem.bottom};
-    const IconResource* icon = part.format.icon;
-    if (icon) {
-        // The icon follows the text, so the text gets what's left after it, and no more than it needs
-        int text_right = std::max<int>(bounds.left, bounds.right - gap_ - icon->size());
-        bounds.right = std::min<int>(text_right, bounds.left + measure(item.hDC, part.text));
-    }
-
+    const PartContent& content = part.content;
     UINT ellipsis = part.format.ellipsis == TextEllipsis::Path ? DT_PATH_ELLIPSIS : DT_END_ELLIPSIS;
     UINT alignment = part.format.alignment == TextAlignment::Center ? DT_CENTER : DT_LEFT;
-    DrawTextW(item.hDC, part.text.c_str(), static_cast<int>(part.text.size()), &bounds, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | ellipsis | alignment);
-    if (icon) {
-        icon->draw(item.hDC, bounds.right + gap_, (item.rcItem.top + item.rcItem.bottom - icon->size()) / 2);
+    auto draw_text = [&](const std::wstring& text, RECT area) {
+        DrawTextW(item.hDC, text.c_str(), static_cast<int>(text.size()), &area, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | ellipsis | alignment);
+    };
+
+    // With something after it, the text gets no more than it needs, and leaves the icon room when the part is narrow
+    RECT text_bounds = bounds;
+    int icon_width = content.icon ? gap_ + content.icon->size() : 0;
+    if (content.icon || !content.trailing.empty()) {
+        text_bounds.right = std::min<int>(bounds.left + measure(item.hDC, content.text), std::max<int>(bounds.left, bounds.right - icon_width));
+    }
+    draw_text(content.text, text_bounds);
+    int right = text_bounds.right;
+    if (content.icon) {
+        content.icon->draw(item.hDC, right + gap_, (item.rcItem.top + item.rcItem.bottom - content.icon->size()) / 2);
+        right += icon_width;
+    }
+    if (!content.trailing.empty()) {
+        draw_text(content.trailing, {right + gap_, bounds.top, bounds.right, bounds.bottom});
     }
 }
 

@@ -333,13 +333,12 @@ The inspector scrolls vertically when its content is taller than the panel.
 | Run     | `Ready · last sync today 14:05`, or `Syncing 6 of 25` with an embedded progress bar |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
-| Progress | while tools are checked, installed or updated (see below) |
-| Tools   | `Tools ✓`, `Tools ⟳` or `Tools ⚠`: the word, 7 px, and a 12 px icon (see below) |
+| Tools   | `Tools ✓` or `Tools ⚠`, or while the tools are at work, `Tools ◔ installing ffmpeg 35%` with the progress ring: the word, 7 px, a 12 px icon, and then 7 px and what is going on (see below) |
 | Version | `v1.2.0` |
 
 ```
-│ Ready      │ 0 tracks    │ C:\path            │                          │ Tools ⚠      │  v0.1.0 │
-│ Ready      │ 0 tracks    │ C:\path            │    │ Installing tools… ffmpeg 45% ▓▓▓░ │ Tools ⟳      │  v0.1.0 │
+│ Ready      │ 0 tracks    │ C:\path            │               │ Tools ✓                       │  v0.1.0 │
+│ Ready      │ 0 tracks    │ C:\path            │               │ Tools ◔ installing ffmpeg 35% │  v0.1.0 │
 ```
 
 - The status bar is the native one, 23 px tall, or taller when the system font needs it. It ends in a size grip.
@@ -351,39 +350,35 @@ The inspector scrolls vertically when its content is taller than the panel.
   | Tracks   | 10%     | 100 px  | `12,345 tracks`                                              |
   | Library  | 36%     | 150 px  | a drive and a folder or two; the middle of a path gives way  |
   | (gap)    | the rest | 0      |                                                              |
-  | Progress | its content | its content | see below                                      |
-  | Tools    | 8%      | 100 px  | `Tools ⚠`                                                    |
+  | Tools    | –       | its widest text | `Tools ◔ updating yt-dlp 100%`, so the part never changes width   |
   | Version  | –       | 80 px   | `v1.2.0`                                                     |
 
-  So at 1280 px (the mockup) Run, Tracks, Library and Tools are 278, 126, 455 and 101 px, with a 224 px gap; at the
-  1100 px minimum they're 250, 108, 390 and 100 px; maximized on a 1920 px screen, 418, 190, 685 and 152 px.
+  Tools is measured in the status bar's font against every text it can show, with the percentage at `100%`: about
+  200 px at 100% scaling. So at 1280 px (the mockup) Run, Tracks and Library are 278, 126 and 455 px, with a gap of
+  about 125 px; at the 1100 px minimum they're 250, 108 and 390 px; maximized on a 1920 px screen, 418, 190 and 685 px.
 - Run, Tracks and Library sit on the left. Tools and Version sit against the right edge, Version last, with its text
   centered between its separator and the grip, or the window edge when maximized. No separator follows it. The gap
-  between Library and the right-hand parts stays empty.
-- Progress sits right before Tools and is only there while tools are at work. It is as wide as its content: the
-  text, 7 px, and a 60 × 16 px progress bar. It takes its width from the gap first, and from the Library part when
-  the gap is too small.
+  between Library and the right-hand parts stays empty. When the window is too narrow for all of them, Library gives
+  way.
+- Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit. The library folder
+  loses its middle instead (`C:\Users\...\WestieLib`), so its last folder stays readable.
 
 **Tools.** The part shows the first that applies:
 
-| Text      | Icon                 | Shown when                                     |
-|-----------|----------------------|------------------------------------------------|
-| `Tools ⟳` | blue sync arrows     | tools are being checked, installed or updated  |
-| `Tools ⚠` | amber warning        | a tool is missing, or its last install failed  |
-| `Tools ✓` | green check          | every tool is installed                        |
+| Text                              | Icon                           | Shown when                                    |
+|-----------------------------------|--------------------------------|-----------------------------------------------|
+| `Tools ◔ installing ffmpeg 35%`   | progress ring, filled to 35%   | a missing tool downloads, from 0% while it connects |
+| `Tools ◔ updating yt-dlp 12%`     | progress ring, filled to 12%   | a newer release of an installed tool downloads |
+| `Tools ● installing ffmpeg`       | full progress ring             | the download is checked, unpacked and put in place (`updating yt-dlp` for an update) |
+| `Tools ○ installing ffmpeg`       | empty progress ring            | the release of a missing tool is looked up    |
+| `Tools ○ checking for updates`    | empty progress ring            | the releases of installed tools are looked up |
+| `Tools ○ checking`                | empty progress ring            | a run is between those steps, as when it starts |
+| `Tools ⚠`                         | amber warning                  | a tool is missing, or its last install failed |
+| `Tools ✓`                         | green check                    | every tool is installed                       |
 
-Its tooltip has a line per tool: `yt-dlp 2026.10.21`, `ffmpeg n9.0`, `yt-dlp: not installed`, or
-`ffmpeg: <error>` after a failed install or update.
-
-**Progress.** It names the work and the tool at hand:
-
-- `Installing tools… ffmpeg 45%` while a missing tool downloads, or `Updating tools… yt-dlp 12%` for one that is
-  installed. The bar shows the download's percentage, from 0% while it connects.
-- `Installing tools… ffmpeg`, with a full bar, while the download is checked, unpacked and put in place.
-- While the releases are looked up, without the bar: `Installing tools…` for a missing tool, else `Checking for tool
-  updates…`.
-- Texts keep 8 px from the edges of their part, and end in an ellipsis when they don't fit. The library folder
-  loses its middle instead (`C:\Users\...\WestieLib`), so its last folder stays readable.
+The progress ring is the track table's (see Track table): a gray circle with a blue arc that fills clockwise from 12
+o'clock, in 24 steps. Its tooltip has a line per tool: `yt-dlp 2026.10.21`, `ffmpeg n9.0`, `yt-dlp: not installed`,
+or `ffmpeg: <error>` after a failed install or update.
 
 ## Dialogs
 

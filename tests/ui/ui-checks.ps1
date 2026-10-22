@@ -883,30 +883,40 @@ function Check-Scaled($hwnd) {
 	Check-Welcome 'Welcome screen' $hwnd
 }
 
-# Status bar parts from the left; Progress has no width while no tools are at work
-$ToolsPart = 5
-$VersionPart = 6
+# Status bar parts from the left; 3 is the gap
+$ToolsPart = 4
+$VersionPart = 5
 
 # A part's share of the bar's width, or its minimum in DIPs
 function Get-PartWidth([int]$barWidth, [int]$minimum, [int]$percent) { [math]::Max((S $minimum), [math]::Floor($barWidth * $percent / 100)) }
 
-# Run, Tracks and Library from the left, then the empty Progress, Tools, and Version running to the right edge, each at
-# its share of the bar or its minimum; Library gives way when they don't fit. Version's rect stops where the size grip
-# starts, or at the edge when the window is maximized and shows no grip. Separators follow every part but Version, the
-# empty part's on top of the slack's.
+# The Tools part is as wide as the widest thing it can say: the word, the icon, and what the tools are doing, with the
+# padding and the gap the bar keeps between a part's edge and its rect
+$ToolsWorkTexts = 'checking', 'checking for updates', 'installing yt-dlp 100%', 'updating yt-dlp 100%', 'installing ffmpeg 100%', 'updating ffmpeg 100%'
+function Get-ToolsWidth($status) {
+	$result = 0L
+	$borders = [W]::SendForBuffer($status, 0x407, [IntPtr]::Zero, 12, [ref]$result)
+	$word = [W]::TextWidth('Tools', $script:dpi) + (S 7) + (S 12)
+	$widest = ($ToolsWorkTexts | ForEach-Object { $word + (S 7) + [W]::TextWidth($_, $script:dpi) } | Measure-Object -Maximum).Maximum
+	[BitConverter]::ToInt32($borders, 8) + 2 * (S 8) + $widest
+}
+
+# Run, Tracks and Library from the left, each at its share of the bar or its minimum, then the gap, Tools, and Version
+# running to the right edge; Library gives way when they don't fit. Version's rect stops where the size grip starts, or
+# at the edge when the window is maximized and shows no grip. Separators follow every part but Version.
 function Check-StatusParts([string]$what, $hwnd) {
 	$status = Get-StatusBar $hwnd
 	$cw = Get-ClientWidth $hwnd
 	$left = @((Get-PartWidth $cw 250 22), (Get-PartWidth $cw 100 10), (Get-PartWidth $cw 150 36))
-	$tools = Get-PartWidth $cw 100 8
+	$tools = Get-ToolsWidth $status
 	$missing = ($left | Measure-Object -Sum).Sum - ($cw - $tools - (S 80))
 	if ($missing -gt 0) { $left[2] = [math]::Max(0, $left[2] - $missing) }
 	$edges = @()
 	$right = 0
 	foreach ($width in $left) { $right += $width; $edges += $right }
 	$edges += [math]::Max($right, $cw - $tools - (S 80))
-	$parts = $edges + @($edges[-1], ($edges[-1] + $tools))
 	$edges += $edges[-1] + $tools
+	$parts = $edges
 	$grip = $cw - [W]::StatusPartRect($status, $VersionPart).Right
 	$fits = if ([W]::IsZoomed($hwnd)) { $grip -eq 0 } else { $grip -gt 0 -and $grip -le (S 20) }
 	Check $what "$([W]::StatusParts($status)) | stops at grip: $fits" "$($parts -join ' ') -1 | stops at grip: True"

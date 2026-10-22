@@ -55,14 +55,17 @@ saved `Placement` and asks it for the current one.
   gives it, which is `run_command`. `update(CommandState)` enables the buttons and keeps the state for the dropdown.
 - `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths (the `*WidthDips` shares and minimums,
   from `plan/ui.md`), its spacing, and the part texts:
-  Run, Tracks and Library from the left, an empty part, then Progress, Tools and Version against the right edge, with
-  Version's text centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows
-  the folder in effect, with a path ellipsis, and is the part that gives way when Progress needs the room. The texts
-  are owner-drawn, so `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
-- `MainStatusBar::set_tools` takes the `ToolBoard`. Tools gets the word, an icon for the board's `ToolMark` and the
-  tooltip. Progress gets the text from `tools_progress`, a width measured from that text, and the embedded
-  `ProgressBar` when the work has a percentage. Without work, Progress is 0 wide and its separator lies on the empty
-  part's. It starts at Working, since `main.cpp` starts a run right away.
+  Run, Tracks and Library from the left, an empty part, then Tools and Version against the right edge, with Version's
+  text centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows the
+  folder in effect, with a path ellipsis, and is the part that gives way when Tools needs the room. The texts are
+  owner-drawn, so `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
+- `MainStatusBar::set_tools` takes the `ToolBoard`. The Tools part reads `Tools` and an icon: the board's `ToolMark`
+  icon (✓ or ⚠) while idle. While a run goes, `tools_work` gives it the progress ring, filled to the work's
+  percentage, and what is going on after the ring (`installing ffmpeg 35%`). The tooltip lists the releases either
+  way. It starts at Working, since `main.cpp` starts a run right away.
+- The Tools part is as wide as the widest of `every_tools_work_text`, measured in the bar's font with the percentage
+  at `100%` (`measure_tools`, again after each new font), so it never changes width. The ring's 25 steps are icon
+  resources from `IDI_RING_0`, loaded at 12 DIPs.
 
 ## Core events and tools
 
