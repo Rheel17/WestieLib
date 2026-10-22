@@ -257,7 +257,7 @@ the table itself, through `BufferedPaint`.
   Match and File are in the table but hidden: the header menu that shows them comes later.
 - `MainWindow::show_scope` hands the panel the selected playlist's name, or nothing for All tracks, then shows the
   inspector. `select_playlist` and `show_playlists` call it; `result_line_text` (`ResultLineText.cpp`) adds the
-  `· in …` part.
+  `in …` part.
 
 ## Layout
 

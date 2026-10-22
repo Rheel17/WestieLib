@@ -649,7 +649,7 @@ function mainPanel(s, cfg) {
 	const search = q ? `<span>${esc(cfg.search)}</span><span class="caret" style="margin-left:-3px"></span>` : `<span class="cue">Search title, artist, album</span>`;
 	const tabs = TABS.filter(([k]) => (k !== 'removed' && k !== 'kept') || c[k] > 0 || k === tab)
 		.map(([k, label]) => `<span class="stab${k === tab ? ' on' : ''}">${label} ${c[k]}</span>`).join('<span class="stsep"></span>');
-	const scopeName = cfg.scope === 'all' ? '' : ` · in ${esc(s.pl[cfg.scope].name)}`;
+	const scopeName = cfg.scope === 'all' ? '' : ` in ${esc(s.pl[cfg.scope].name)}`;
 
 	// # exists only in a playlist, where it is the entry's position in that playlist (gaps stay when filtered).
 	const cols = [

@@ -17,7 +17,7 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 ├────────────────────────┬────────────────────────────────────────┬────────────────┤
 │ ▤ All tracks           │ [🔍 Search title, artist, album ] Source [All ▾] Clear│ filter bar
 │   412 · 398 synced     │ All 412│Synced 398│Waiting 6│Needs review 3│Failed 1… │ status filter
-├────────────────────────┤ Showing 214 of 412 · in WCS                     │                │
+├────────────────────────┤ Showing 214 of 412 in WCS                       │                │
 │ ▶ WCS                  ├────────────────────────────────────────┤ [ cover art ]  │
 │   214 tracks           │ # Status  Title    Artists  Album    … │ Title          │
 │   ███████████░ 198/214 │ 1 ✓       …        …        Freudian   │ Artists        │
@@ -316,8 +316,8 @@ the source into account, so each button shows how many rows it would list:
 
 ### Result line
 
-`Showing 8 of 100 · in WCS` gives the rows shown, out of all tracks in the library, followed by the scope. In
-the All tracks scope, the `· in …` part is left out. It is gray, with 3 px above it, 9 px at the sides and 5 px
+`Showing 8 of 100 in WCS` gives the rows shown, out of all tracks in the library, followed by the scope. In
+the All tracks scope, the `in …` part is left out. It is gray, with 3 px above it, 9 px at the sides and 5 px
 under it. A 1 px rule (`#E5E5E5`) separates it from the table.
 
 ### Track table

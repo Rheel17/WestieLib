@@ -1,8 +1,6 @@
 # The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns.
 # Dot-sourced by ui-checks.ps1.
 
-$MiddleDot = [char]0xB7
-
 function Get-TrackPanel($hwnd) { Get-Panel $hwnd 'Tracks' }
 
 function Get-FilterBar($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'WestieLib.Panel')[0] }
@@ -180,11 +178,11 @@ function Check-Columns($hwnd) {
 	Click-PlaylistRow $hwnd 1
 	$playlistColumns = "# $(S 34) ^ | $($AllTracksColumns -replace ' \^', '')"
 	Check '  playlist 1 selected' (Get-Columns $hwnd) $playlistColumns
-	Check '  result line' ([W]::TextOf((Get-ResultLine $hwnd))) "Showing 0 of 0 $MiddleDot in Spotify playlist"
+	Check '  result line' ([W]::TextOf((Get-ResultLine $hwnd))) 'Showing 0 of 0 in Spotify playlist'
 	Click-Header $hwnd 3
 	Click-PlaylistRow $hwnd 2
 	Check '  playlist 2 starts at its default sort' (Get-Columns $hwnd) $playlistColumns
-	Check '  result line' ([W]::TextOf((Get-ResultLine $hwnd))) "Showing 0 of 0 $MiddleDot in YouTube Music playlist"
+	Check '  result line' ([W]::TextOf((Get-ResultLine $hwnd))) 'Showing 0 of 0 in YouTube Music playlist'
 	Click-AllTracks $hwnd
 	Check '  back to All tracks' (Get-Columns $hwnd) $AllTracksColumns
 	Check '  result line' ([W]::TextOf((Get-ResultLine $hwnd))) 'Showing 0 of 0'
