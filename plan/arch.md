@@ -301,6 +301,7 @@ The cover art comes from the first of:
 | `ProcessRunner`  | `CreateProcessW` with stdout/stderr pipes, line splitting, UTF-8 decoding, exit code. Every child joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; cancelling a run terminates the job. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. |
 | `FileOps`        | Atomic replace via `ReplaceFileW` (with backup), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
+| `ArchiveExtractor` | miniz (`MinizArchiveExtractor`). Extracts the named files from a zip into a folder. miniz opens files by narrow name, so it gets a `FILE*` from `_wfopen`, and writes go through `CreateFileW`. A stop request ends it with `Cancelled`. |
 | `TextNormalizer` | `NormalizeString` (NFKD), combining marks dropped, case folded.                      |
 
 Strings inside the core are UTF-8 `std::string`; paths are `std::filesystem::path`. Conversion to UTF-16 happens
@@ -353,7 +354,7 @@ ToolManager installs and updates the external tools in `tools\` from their GitHu
 comes from BtbN, the upstream that repository forks. Its `latest` release is rebuilt daily too, which is why the
 branch, and not the digest, decides an update.
 
-So far the app knows yt-dlp and ffmpeg, and downloads yt-dlp; ffmpeg and then deno follow.
+So far the app downloads yt-dlp and ffmpeg; deno follows.
 
 Flow per tool:
 
@@ -365,7 +366,9 @@ Flow per tool:
 3. `ToolInstaller` downloads the asset into `tools\.staging\<tool>\download`. The asset's name comes from the network,
    so it never names a file.
 4. Verify its SHA-256 against the `digest` GitHub reports for the asset. An asset without one is refused.
-5. Extract zip archives with miniz.
+5. Extract zip archives (`ArchiveExtractor`) into `tools\.staging\<tool>\unpacked\`. Only the tool's own files come
+   out, found by file name wherever they are in the zip (ffmpeg's are under `<build>\bin\`); ffplay and the docs stay
+   in.
 6. Move the new files into `tools\` (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`) while no tool process is running,
    then update `tools.json`.
 

@@ -14,6 +14,7 @@
 #include "platform/win32/ComApartment.h"
 #include "platform/win32/Environment.h"
 #include "platform/win32/KnownFolder.h"
+#include "platform/win32/MinizArchiveExtractor.h"
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32FileOps.h"
 #include "platform/win32/WinHttpClient.h"
@@ -50,6 +51,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         westie::platform::win32::Win32FileOps files;
         westie::platform::win32::WinHttpClient http(L"WestieLib/" WESTIELIB_VERSION_STRING);
         westie::platform::win32::BCryptHasher hasher;
+        westie::platform::win32::MinizArchiveExtractor archives;
         std::filesystem::path data = data_folder();
         westie::core::SettingsStore settings_store(
                 files, data / L"settings.json", {.library_path = westie::platform::win32::known_folder(FOLDERID_Music) / L"WestieLib"}
@@ -59,7 +61,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
 
         // The window goes before the tool manager, whose worker may still report into the queue while it stops
         westie::ui::CoreEventQueue events;
-        westie::core::ToolManager tools({.files = files, .http = http, .hasher = hasher}, github_api_url(), data / L"tools", events);
+        westie::core::ToolManager tools({.files = files, .http = http, .hasher = hasher, .archives = archives}, github_api_url(), data / L"tools", events);
 
         westie::ui::framework::init_common_controls();
         westie::ui::MainWindow window(settings_store, settings, events, tools);

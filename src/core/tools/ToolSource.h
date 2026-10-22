@@ -12,9 +12,11 @@ namespace westie::core {
 struct ToolDownload {
     std::string release{};
     ReleaseAsset asset{};
+    // A zip that holds the tool's files, rather than the one file itself
+    bool archive = false;
 };
 
-std::optional<std::string_view> tool_repository(ToolPackage package) noexcept;
+std::string_view tool_repository(ToolPackage package) noexcept;
 std::optional<ToolDownload> choose_download(ToolPackage package, const Release& release);
 
 }

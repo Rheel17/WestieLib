@@ -21,7 +21,7 @@ ToolManager::ToolManager(ToolServices services, std::string github_api_url, std:
         folder_(std::move(folder)),
         store_(services.files, folder_ / L"tools.json"),
         releases_(services.http, std::move(github_api_url)),
-        installer_(services.files, services.http, services.hasher, folder_),
+        installer_(services, folder_),
         events_(events) {}
 
 void ToolManager::run(bool update_installed) {
@@ -60,7 +60,7 @@ void ToolManager::update_tools(const std::stop_token& stop, bool update_installe
     }
     for (ToolPackage package : AllToolPackages) {
         ToolStatus status = installed_status(package, installed);
-        if ((status.state == ToolState::Installed && !update_installed) || !tool_repository(package)) {
+        if (status.state == ToolState::Installed && !update_installed) {
             continue;
         }
         try {
@@ -82,7 +82,7 @@ void ToolManager::update_tools(const std::stop_token& stop, bool update_installe
 
 void ToolManager::update_tool(ToolPackage package, const std::string& current, InstalledTools& installed, const std::stop_token& stop) {
     events_.emit(ToolStatus{.package = package, .state = ToolState::Checking, .release = current});
-    std::string_view repository = *tool_repository(package);
+    std::string_view repository = tool_repository(package);
     Release release = releases_.latest(repository, stop);
     installed.checked_at = std::chrono::system_clock::now();
 

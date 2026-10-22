@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdio>
 #include <memory>
 #include <type_traits>
 
@@ -27,6 +28,11 @@ inline void release_com(IUnknown* object) noexcept {
 template<typename Interface>
 using UniqueComPtr = UniqueHandle<Interface*, release_com>;
 
+// The standard library's functions can't be template arguments
+inline void close_c_file(std::FILE* file) noexcept {
+    std::fclose(file);
+}
+
 inline void close_algorithm_provider(BCRYPT_ALG_HANDLE algorithm) noexcept {
     BCryptCloseAlgorithmProvider(algorithm, 0);
 }
@@ -43,6 +49,7 @@ using UniqueCoTaskString = UniqueHandle<PWSTR, CoTaskMemFree>;
 using UniqueTheme = UniqueHandle<HTHEME, CloseThemeData>;
 using UniqueFile = UniqueHandle<HANDLE, CloseHandle>;
 using UniqueLocalString = UniqueHandle<PWSTR, LocalFree>;
+using UniqueCFile = UniqueHandle<std::FILE*, close_c_file>;
 using UniqueInternet = UniqueHandle<HINTERNET, WinHttpCloseHandle>;
 using UniqueAlgorithmProvider = UniqueHandle<BCRYPT_ALG_HANDLE, close_algorithm_provider>;
 using UniqueHash = UniqueHandle<BCRYPT_HASH_HANDLE, BCryptDestroyHash>;

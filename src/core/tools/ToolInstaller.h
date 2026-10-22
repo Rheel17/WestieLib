@@ -4,13 +4,12 @@
 #include <functional>
 #include <stop_token>
 
+#include "core/github/Release.h"
 #include "core/tools/InstalledTools.h"
 #include "core/tools/ToolPackage.h"
+#include "core/tools/ToolServices.h"
 #include "core/tools/ToolSource.h"
 #include "core/tools/ToolStatus.h"
-#include "platform/FileOps.h"
-#include "platform/Hasher.h"
-#include "platform/HttpClient.h"
 
 namespace westie::core {
 
@@ -18,17 +17,16 @@ class ToolInstaller {
 public:
     using Progress = std::function<void(ToolState state, int percent)>;
 
-    ToolInstaller(platform::FileOps& files, platform::HttpClient& http, const platform::Hasher& hasher, std::filesystem::path folder);
+    ToolInstaller(const ToolServices& services, std::filesystem::path folder);
 
     InstalledTool install(ToolPackage package, const ToolDownload& download, const Progress& report, const std::stop_token& stop);
     void clear_staging();
 
 private:
+    void fetch(const ReleaseAsset& asset, const std::filesystem::path& file, const Progress& report, const std::stop_token& stop);
     std::filesystem::path staging_folder() const;
 
-    platform::FileOps& files_;
-    platform::HttpClient& http_;
-    const platform::Hasher& hasher_;
+    ToolServices services_;
     std::filesystem::path folder_;
 };
 

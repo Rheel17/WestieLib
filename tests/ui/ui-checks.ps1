@@ -1123,7 +1123,7 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 			$version = @([W]::Children($dialog, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like 'WestieLib *' })
 			Check '  the version' ($version -join ', ') "WestieLib $((Get-Item $Exe).VersionInfo.ProductVersion)"
 			Check '  starts on Change, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Change$([char]0x2026) 0"
-			$pattern = "yt-dlp \|  \| Failed: $LookupFailure / ffmpeg \|  \| Not installed \| auto 1 \| Never checked \| check True"
+			$pattern = "yt-dlp \|  \| Failed: $LookupFailure / ffmpeg \|  \| Failed: $LookupFailure \| auto 1 \| Never checked \| check True"
 			$actual = Get-SettingsTools $dialog
 			Check-That '  tools, none installed' $actual ($actual -match "^$pattern$") $pattern
 			if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-settings.png") }
@@ -1240,19 +1240,20 @@ function Invoke-CheckForUpdates($dialog) {
 }
 
 # The Tools group with the tools installed and Update tools automatically off, as the run starts them. Check for
-# updates runs at once, even with the check box off; its look-up fails, which leaves yt-dlp's files as they were. The
-# check box takes effect on OK, and is saved.
+# updates runs at once, even with the check box off; its look-ups fail, which leaves the tools' files as they were.
+# The check box takes effect on OK, and is saved.
 function Check-SettingsTools($hwnd) {
 	$checked = Get-LastCheckedText
 	Send-Command $hwnd '&Settings...'
 	$dialog = Wait-OwnedWindow $hwnd
 	Check 'Settings, tools installed' (Get-SettingsTools $dialog) "yt-dlp | 2026.10.21 | Installed / ffmpeg | n9.0 | Installed | auto 0 | $checked | check True"
 	Invoke-CheckForUpdates $dialog
-	$pattern = "yt-dlp \| 2026\.10\.21 \| Failed: $LookupFailure / ffmpeg \| n9\.0 \| Installed \| auto 0 \| $checked \| check True"
+	$pattern = "yt-dlp \| 2026\.10\.21 \| Failed: $LookupFailure / ffmpeg \| n9\.0 \| Failed: $LookupFailure \| auto 0 \| $checked \| check True"
 	$actual = Get-SettingsTools $dialog
 	Check-That '  Check for updates, GitHub unreachable' $actual ($actual -match "^$pattern$") $pattern
-	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg n9\.0"
-	Check '  yt-dlp kept' "$((Get-Item (Join-Path $ToolsDir 'yt-dlp.exe')).Length) $(Test-Path (Join-Path $ToolsDir '.staging'))" '0 False'
+	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure"
+	$kept = @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe' | ForEach-Object { (Get-Item (Join-Path $ToolsDir $_)).Length }) -join ' '
+	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" '0 0 0 False'
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
@@ -1442,7 +1443,7 @@ try {
 	Update-MenuStates $h
 	Check 'Grayed while idle, no tools, nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &all, Sync &selected playlist, &Cancel, ' +
 		'&Confirm match, C&hoose video..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
-	Check-ToolsPart 'No tools, GitHub unreachable: Tools icon | tooltip' $h "amber \| yt-dlp: $LookupFailure / ffmpeg: not installed"
+	Check-ToolsPart 'No tools, GitHub unreachable: Tools icon | tooltip' $h "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure"
 	Check 'Checked items' ([W]::ItemsWithState($menu, 0x8)) ''
 	Send-Command $h '&About WestieLib'
 	$about = Wait-OwnedWindow $h

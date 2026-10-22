@@ -18,6 +18,14 @@ FetchContent_Declare(glaze
 	SYSTEM)
 FetchContent_MakeAvailable(glaze)
 
+# Zip extraction for the tools; SYSTEM keeps its headers out of the warnings
+FetchContent_Declare(miniz
+	GIT_REPOSITORY https://github.com/richgel999/miniz.git
+	GIT_TAG 3.1.2
+	GIT_SHALLOW TRUE
+	SYSTEM)
+FetchContent_MakeAvailable(miniz)
+
 add_executable(WestieLib WIN32
 	src/main.cpp
 	src/core/github/GitHubReleases.cpp
@@ -34,6 +42,7 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Environment.cpp
 	src/platform/win32/KnownFolder.cpp
 	src/platform/win32/LocalTime.cpp
+	src/platform/win32/MinizArchiveExtractor.cpp
 	src/platform/win32/PathProbe.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/Utf16.cpp
@@ -111,4 +120,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE glaze::glaze comctl32 uxtheme shell32 ole32 uuid winhttp bcrypt)
+target_link_libraries(WestieLib PRIVATE glaze::glaze miniz comctl32 uxtheme shell32 ole32 uuid winhttp bcrypt)

@@ -30,6 +30,8 @@ file names such as `Win32Error.cpp`.
   (`GIT_TAG` in `CMakeLists.txt`) into `<build>/_deps`, so the first configure of a build folder needs the network.
   It's header-only, and `SYSTEM` keeps its headers out of the warnings. To update it, change the tag; its release
   notes list breaking changes.
+- [miniz](https://github.com/richgel999/miniz) unpacks the ffmpeg zip. It comes the same way, as a static library
+  (`miniz`). Its tags before 3.1 ask for a CMake older than 3.5, which CMake 4 refuses.
 - `CMAKE_CXX_SCAN_FOR_MODULES OFF`: the project uses headers, not C++20 modules, because windows.h is macro-based.
 - `project(VERSION)` feeds `src/Version.h.in` → `<build>/generated/Version.h` (`WESTIELIB_VERSION_*` macros), which
   the resource script uses for `VERSIONINFO`.

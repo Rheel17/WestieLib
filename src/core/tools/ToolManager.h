@@ -10,19 +10,12 @@
 #include "core/tools/InstalledTools.h"
 #include "core/tools/ToolInstaller.h"
 #include "core/tools/ToolPackage.h"
+#include "core/tools/ToolServices.h"
 #include "core/tools/ToolStatus.h"
 #include "core/tools/ToolsStore.h"
 #include "platform/FileOps.h"
-#include "platform/Hasher.h"
-#include "platform/HttpClient.h"
 
 namespace westie::core {
-
-struct ToolServices {
-    platform::FileOps& files;
-    platform::HttpClient& http;
-    const platform::Hasher& hasher;
-};
 
 class ToolManager {
 public:
