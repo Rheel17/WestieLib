@@ -20,6 +20,7 @@
 #include "ui/framework/WindowClass.h"
 #include "ui/main/MainMenu.h"
 #include "ui/main/WindowState.h"
+#include "ui/playlists/PlaylistRows.h"
 
 namespace westie::ui {
 
@@ -153,7 +154,7 @@ void MainWindow::add_playlist() {
 }
 
 void MainWindow::show_playlists() {
-    playlists_.set_has_playlists(has_playlists());
+    playlists_.set_playlists(playlist_rows(state_.state()));
     inspector_.show_placeholder(!has_playlists());
     layout_panels();
     // A hidden window would keep the keyboard focus from going anywhere

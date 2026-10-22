@@ -90,10 +90,21 @@ saved `Placement` and asks it for the current one.
 
 ## Side panels
 
-- `PlaylistPanel` (`src/ui/playlists/`) stacks the `AllTracksRow`, a rule it paints itself, the `No playlists yet.`
-  label and the `Add playlist` button. The label and the button start at `AllTracksRow::text_left()`, so they line up
-  with the row's text at every scale. The button's click goes to the callback `MainWindow` gives the panel, which is
-  `run_command`, as for the toolbar.
+- `PlaylistPanel` (`src/ui/playlists/`) stacks the `AllTracksRow`, a rule it paints itself, and the `PlaylistList`
+  under it, which fills the rest of the panel. Only the list scrolls.
+- `PlaylistList` is a window that paints the playlist rows and holds the `No playlists yet.` label (only while there
+  are no rows) and the `Add playlist` button after the last row. It scrolls itself: `layout` works out the content's
+  height, sets the scroll bar (`SetScrollInfo`; showing or hiding the bar sends `WM_SIZE`, which lays out again), and
+  places the label and the button at their offset less the scroll position. `WM_VSCROLL` and `WM_MOUSEWHEEL` (in
+  `SPI_GETWHEELSCROLLLINES` lines of 16 DIPs, small touchpad deltas added up to a notch) scroll it. The button's click
+  goes to the callback `MainWindow` gives the panel, which is `run_command`, as for the toolbar.
+- `PlaylistRowPainter` draws one row into a given rect, with the logo, the waiting and sync glyphs at 14 DIPs and the
+  fonts it got, and knows the row's height. The list makes a new one on every `apply_dpi`. The names, the label and
+  the button all start at `text_left()`, which adds up the same DIPs as `AllTracksRow::text_left()`, so everything
+  lines up with All tracks at every scale. Rows have a fixed height until their counts can be non-zero.
+- `playlist_rows` (`PlaylistRows.cpp`) turns the state into `PlaylistRow`s, in the order the playlists were added,
+  with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name. `MainWindow::show_playlists`
+  hands them to the panel.
 - `AllTracksRow` is a window that paints the row: selection box, glyph, name in semibold, and the counts. It stays
   selected until there are playlists to select instead.
 - `InspectorPanel` (`src/ui/inspector/`) centers its first-run placeholder inside its padding on every `WM_SIZE`.
@@ -113,8 +124,8 @@ saved `Placement` and asks it for the current one.
   screen readers and the UI checks. `Add` is enabled only for a new playlist.
 - On `Add` the dialog returns an `AddPlaylistRequest`. `core::add_playlist` stores it through `StateStore::update`,
   which saves `state.json` (keeping `state.json.bak`). `Sync now` has no effect until syncing exists.
-- `show_playlists` then brings the window up to date with the state: the left panel's `No playlists yet.` and the
-  inspector's placeholder hide, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
+- `show_playlists` then brings the window up to date with the state: the left panel gets the rows, the inspector's
+  placeholder hides, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
   follow (`has_playlists` enables Sync all). The welcome screen may have had the keyboard focus, so it goes to the
   window. The constructor calls it too, for playlists from an earlier start.
 

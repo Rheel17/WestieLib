@@ -13,8 +13,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `-Screenshot` saves the window to a PNG via `PrintWindow(PW_RENDERFULLCONTENT)`, cropped to
   `DWMWA_EXTENDED_FRAME_BOUNDS`. Read the PNG to look at it.
 - Expected sizes are written in DIPs and scaled with the window's DPI (the `S` helper).
-- When a monitor with another DPI is attached, runs 9 and 10 cover it. Run 9 moves the window there, which sends
-  `WM_DPICHANGED`, and run 10 restores it there from the saved state. Both check everything that scales
+- When a monitor with another DPI is attached, runs 10 and 11 cover it. Run 10 moves the window there, which sends
+  `WM_DPICHANGED`, and run 11 restores it there from the saved state. Both check everything that scales
   (`Check-Scaled`).
 - Usually every monitor runs at the same scale, and those runs print `Skipped`. After a change to DPI handling (fonts,
   image lists, bar heights, anything in `apply_dpi`), ask the user to set one monitor to another scale (Settings ›
@@ -41,7 +41,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   so every release look-up fails within a couple of seconds with `Couldn't reach 127.0.0.1: …` (in Windows' language).
   `Start-App` waits for the app's first tool run to end (`Wait-ToolsIdle`: Check for updates is enabled again).
 - Runs 1 to 5 have no playlists, so they see the welcome screen. Run 6 adds playlists (`Add-Playlist`), run 7 starts
-  with them, and run 8 breaks `state.json`; then it is deleted, so the DPI runs see the welcome screen again.
+  with them, run 8 starts with more than fit (`Write-ManyPlaylists`) and scrolls them, and run 9 breaks `state.json`;
+  then it is deleted, so the DPI runs see the welcome screen again.
+- A splitter has the mouse capture during a drag, so real mouse moves reach it too. Windows also sends one when a
+  window moves under the cursor, which every drag step does when the app lies under the cursor. So a run that drags
+  sets the window to bounds of its own first, rather than keeping it maximized. It then waits for the restore
+  animation, which a blink check would otherwise count as blinking.
 - Run 1 starts without tools, so yt-dlp's install fails. Run 2 starts with fake ones (`Install-FakeTools`: a
   `tools.json` and empty executables) and `autoUpdateTools` off, so nothing is looked up until Check for updates.
 - Downloads themselves aren't in the checks. To try them by hand, point `WESTIELIB_DATA_DIR` at a scratch folder and
@@ -94,7 +99,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   the bar's separator lines the same way. `Check-That` is for checks that pass within a range.
 - A `Label`, the All tracks row and buttons keep their text as the window text, which `GetWindowTextW` (`TextOf`) reads
   from another process without a message. So does the Add playlist dialog's detection line, which paints itself
-  (`Get-LinkLine`).
+  (`Get-LinkLine`). The playlist rows have no text of their own, so the checks place them by the Add playlist button
+  under them (`Check-PlaylistRows`), and the screenshots show them.
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
   the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area

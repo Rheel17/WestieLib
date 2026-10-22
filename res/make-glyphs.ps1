@@ -19,7 +19,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore, WindowsBase
 . (Join-Path $PSScriptRoot 'IconFile.ps1')
 
-# Glyph name in the mockup, whether it needs a disabled copy, and whether it is also drawn at 12 px
+# Glyph name in the mockup, whether it needs a disabled copy, and whether it is also drawn at 12 px (Small) or at
+# 14 px, as in the playlist rows (Row)
 $Glyphs = [ordered]@{
 	plus = @{ Disabled = $true }
 	syncing = @{ Disabled = $true; Small = $true }
@@ -28,9 +29,11 @@ $Glyphs = [ordered]@{
 	lib = @{}
 	synced = @{ Small = $true }
 	warn = @{ Small = $true }
+	waiting = @{ Row = $true }
+	syncgray = @{ Row = $true }
 }
 
-# Brand logo name, its SVG file in res/, and its options as above. Row glyphs are also drawn at 14 px.
+# Brand logo name, its SVG file in res/, and its options as above
 $BrandGlyphs = [ordered]@{
 	ytm = @{ File = 'Youtube_Music_icon.svg'; Row = $true }
 	spotify = @{ File = 'Spotify_icon.svg'; Row = $true }

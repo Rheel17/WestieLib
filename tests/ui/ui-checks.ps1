@@ -1421,6 +1421,60 @@ function Get-PlaylistScreens($hwnd) {
 
 $WithPlaylists = 'welcome False, tracks True, no playlists False, placeholder False'
 
+function Get-PlaylistList($hwnd) { ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.PlaylistList'))[0] }
+
+# Border, padding, the name line, three lines under it, padding, border
+function Get-PlaylistRowHeight { 2 + (S 5) + (S 18) + 3 * (S 16) + (S 6) }
+
+# Where the Add playlist button starts in the list, scrolled to the top, under $count rows 1 apart
+function Get-ListButtonTop([int]$count) { (S 1) + $count * ((Get-PlaylistRowHeight) + (S 1)) + (S 8) }
+
+# The list starts under the rule, as wide as the panel, and its button follows the rows, lined up with the names
+function Check-PlaylistRows([string]$what, $hwnd, [int]$count) {
+	$panel = (Get-RowPanels $hwnd)[0]
+	$list = Get-PlaylistList $hwnd
+	$listTop = (S 4) + (2 + (S 5) + (S 18) + (S 16) + (S 6)) + (S 5) + 1 + (S 5)
+	$r = [W]::RectIn($list, $panel)
+	$button = [W]::RectIn(([W]::Children($list, 'Button'))[0], $list)
+	$text = (S 3) + 1 + (S 7) + (S 16) + (S 6)
+	$actual = "$($r.Left),$($r.Top) $($r.Right - $r.Left) | $($button.Left),$($button.Top)"
+	Check "$what list | button" $actual "0,$listTop $(Get-ClientWidth $panel) | $text,$(Get-ListButtonTop $count)"
+}
+
+# More playlists than fit: the list gets a scroll bar. Scrolled to the bottom, the button ends the list with its
+# padding under it; the wheel and the top of the scroll bar bring the rows back.
+function Check-PlaylistScrolling($hwnd, [int]$count) {
+	$list = Get-PlaylistList $hwnd
+	$client = New-Object W+RECT
+	$frame = New-Object W+RECT
+	[void][W]::GetClientRect($list, [ref]$client)
+	[void][W]::GetWindowRect($list, [ref]$frame)
+	$bar = ($frame.Right - $frame.Left) - $client.Right
+	Check-That 'Many playlists: a scroll bar' $bar ($bar -gt 0) 'wider than 0'
+	$button = ([W]::Children($list, 'Button'))[0]
+	[void][W]::SendMessageW($list, 0x115, [IntPtr]7, [IntPtr]::Zero)
+	Check '  SB_BOTTOM: the button, then the padding' ($client.Bottom - [W]::RectIn($button, $list).Bottom) (S 11)
+	$top = [W]::RectIn($button, $list).Top
+	[void][W]::SendMessageW($list, 0x20A, [IntPtr](120 * 65536), [IntPtr]::Zero)
+	$moved = [W]::RectIn($button, $list).Top - $top
+	Check-That '  a wheel notch up moves the rows down' $moved ($moved -gt 0) 'more than 0'
+	[void][W]::SendMessageW($list, 0x115, [IntPtr]6, [IntPtr]::Zero)
+	Check '  SB_TOP: back where it started' ([W]::RectIn($button, $list).Top) (Get-ListButtonTop $count)
+}
+
+# A state.json with $count playlists (at most 31), added a day apart: Spotify and YouTube Music in turn, every third with a name
+# too long for its row
+function Write-ManyPlaylists([int]$count) {
+	$entries = 1..$count | ForEach-Object {
+		$key = if ($_ % 2) { "spotify:P$('{0:D21}' -f $_)" } else { "ytm:PLcheck$_" }
+		$url = if ($_ % 2) { "https://open.spotify.com/playlist/$($key.Substring(8))" } else { "https://music.youtube.com/playlist?list=$($key.Substring(4))" }
+		$name = if ($_ % 3 -eq 0) { "Playlist $_ with a name too long to fit in its row" } else { '' }
+		$added = '2026-01-{0:D2}T12:00:00Z' -f $_
+		"`"$key`": {`"url`": `"$url`", `"name`": `"$name`", `"addedAt`": `"$added`"}"
+	}
+	[IO.File]::WriteAllText($StateFile, '{"version": 1, "playlists": {' + ($entries -join ', ') + '}}')
+}
+
 # Adding playlists stores them in state.json, under their key with the canonical link and no name. The welcome screen
 # gives way to the tracks panel, and Sync all enables. A link to a playlist already in the list can't be added again.
 function Check-AddingPlaylists($hwnd) {
@@ -1430,6 +1484,7 @@ function Check-AddingPlaylists($hwnd) {
 	Check '  state.json' (Get-SavedPlaylists) "$spotifyKey True"
 	Check '  no state.json.bak for the first save' (Test-Path "$StateFile.bak") 'False'
 	Check '  screens' (Get-PlaylistScreens $hwnd) $WithPlaylists
+	Check-PlaylistRows '  one row:' $hwnd 1
 	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
 	$menu = [W]::GetMenu($hwnd)
 	Update-MenuStates $hwnd
@@ -1778,6 +1833,7 @@ try {
 	$app = Start-App
 	$h = $app.Hwnd
 	Check 'Screens' (Get-PlaylistScreens $h) $WithPlaylists
+	Check-PlaylistRows 'Two rows:' $h 2
 	Send-Command $h '&Add playlist...'
 	$dialog = Wait-OwnedWindow $h
 	Set-PlaylistLink $dialog $YouTubeLink
@@ -1787,11 +1843,32 @@ try {
 	if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-playlists.png") }
 	Stop-App $app
 
-	"--- Run 8: state.json doesn't read"
+	"--- Run 8: more playlists than fit"
+	$many = 20
+	Write-ManyPlaylists $many
+	$app = Start-App
+	$h = $app.Hwnd
+	# Maximized since run 4, the window would lie under the real cursor, whose moves reach a splitter that has the
+	# capture during a drag. The inspector is still 500 wide from run 1, so the window leaves the main column room to
+	# give the drag. The screen shows the restore animation for a while, which the drag's captures would take for blinking.
+	[void][W]::ShowWindow($h, 9)
+	Set-Bounds $h 100 100 (S 1600) (S 750)
+	Start-Sleep -Milliseconds 800
+	Check-PlaylistRows 'Many rows:' $h $many
+	Check-PlaylistScrolling $h $many
+	if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-many.png") }
+	$left = New-Object W+RECT
+	$left.Right = S 150
+	$left.Top = Get-RowTop $h
+	$left.Bottom = [W]::RectIn((Get-RowPanels $h)[0], $h).Bottom
+	Check 'Playlists drag: rows never blink' ([W]::WatchDrag($h, $left, (Get-Splitter $h 0), (S 300), $false)) 'blinked 0'
+	Stop-App $app
+
+	"--- Run 9: state.json doesn't read"
 	Check-BrokenState
 	Remove-Item $StateFile, "$StateFile.bak"
 
-	"--- Run 9: moved to a monitor with another DPI"
+	"--- Run 10: moved to a monitor with another DPI"
 	Remove-Item 'HKCU:\Software\WestieLib' -Recurse -Confirm:$false -ErrorAction SilentlyContinue
 	$app = Start-App
 	$h = $app.Hwnd
@@ -1808,7 +1885,7 @@ try {
 		Check-Scaled $h
 		Stop-App $app
 
-		"--- Run 10: restored onto that monitor"
+		"--- Run 11: restored onto that monitor"
 		$app = Start-App
 		$h = $app.Hwnd
 		"DPI $script:dpi"

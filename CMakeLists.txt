@@ -102,7 +102,10 @@ add_executable(WestieLib WIN32
 	src/ui/main/WindowPlacement.cpp
 	src/ui/main/WindowState.cpp
 	src/ui/playlists/AllTracksRow.cpp
+	src/ui/playlists/PlaylistList.cpp
 	src/ui/playlists/PlaylistPanel.cpp
+	src/ui/playlists/PlaylistRowPainter.cpp
+	src/ui/playlists/PlaylistRows.cpp
 	src/ui/statusbar/MainStatusBar.cpp
 	src/ui/toolbar/MainToolbar.cpp
 	src/ui/tools/ToolBoard.cpp
