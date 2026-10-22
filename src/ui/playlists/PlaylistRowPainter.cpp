@@ -7,6 +7,7 @@
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/SourceLogo.h"
+#include "ui/SyncBar.h"
 #include "ui/TrackCountText.h"
 
 namespace westie::ui {
@@ -31,8 +32,6 @@ constexpr int SyncGapDips = 4;
 constexpr int SyncButtonDips = 20;
 // A hairline stays one pixel at every scale
 constexpr int HairlinePixels = 1;
-constexpr COLORREF BarColor = RGB(0xE6, 0xE6, 0xE6);
-constexpr COLORREF ProgressColor = RGB(0x06, 0xB0, 0x25);
 constexpr UINT LineFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS;
 constexpr std::wstring_view NeverSynced = L"Never synced";
 
@@ -40,12 +39,6 @@ int text_width(HDC dc, std::wstring_view text) {
     SIZE size{};
     platform::win32::check(GetTextExtentPoint32W(dc, text.data(), static_cast<int>(text.size()), &size), "GetTextExtentPoint32W");
     return size.cx;
-}
-
-void fill(HDC dc, const framework::Rect& rect, COLORREF color) {
-    RECT area = rect.to_rect();
-    SetDCBrushColor(dc, color);
-    FillRect(dc, &area, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
 }
 
 }
@@ -112,11 +105,7 @@ void PlaylistRowPainter::paint_bar(HDC dc, framework::Rect line, const PlaylistR
     line.take_right(dpi_.scale(BarGapDips));
 
     int bar_top = line.top + (line.height() - dpi_.scale(BarHeightDips)) / 2;
-    framework::Rect bar{line.left, bar_top, line.right, bar_top + dpi_.scale(BarHeightDips)};
-    fill(dc, bar, BarColor);
-    if (row.counts.total > 0) {
-        fill(dc, bar.take_left(bar.width() * row.counts.synced / row.counts.total), ProgressColor);
-    }
+    paint_sync_bar(dc, {line.left, bar_top, line.right, bar_top + dpi_.scale(BarHeightDips)}, row.counts);
 }
 
 void PlaylistRowPainter::paint_last_sync(HDC dc, framework::Rect line) const {

@@ -67,6 +67,7 @@ add_executable(WestieLib WIN32
 	src/ui/RelativeDayText.cpp
 	src/ui/RowLook.cpp
 	src/ui/SourceLogo.cpp
+	src/ui/SyncBar.cpp
 	src/ui/TrackCountText.cpp
 	src/ui/commands/CommandMenu.cpp
 	src/ui/commands/CommandState.cpp
@@ -95,6 +96,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/IconResource.cpp
 	src/ui/framework/ItemTracker.cpp
 	src/ui/framework/Label.cpp
+	src/ui/framework/LinkLabel.cpp
 	src/ui/framework/MenuBarPainter.cpp
 	src/ui/framework/MessageFont.cpp
 	src/ui/framework/MessageLoop.cpp
@@ -112,7 +114,13 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Window.cpp
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp
+	src/ui/inspector/CardLayout.cpp
+	src/ui/inspector/CardTitle.cpp
 	src/ui/inspector/InspectorPanel.cpp
+	src/ui/inspector/LibraryCard.cpp
+	src/ui/inspector/PlaylistCard.cpp
+	src/ui/inspector/SectionTitle.cpp
+	src/ui/inspector/SyncedValue.cpp
 	src/ui/log/LogPanel.cpp
 	src/ui/main/MainAccelerators.cpp
 	src/ui/main/MainLayout.cpp

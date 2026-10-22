@@ -1,7 +1,6 @@
 #include "ui/playlists/AllTracksRow.h"
 
 #include <algorithm>
-#include <format>
 #include <string>
 #include <utility>
 
@@ -130,7 +129,7 @@ void AllTracksRow::paint() const {
     DrawTextW(dc, Name, -1, &name_line, LineFormat);
 
     RECT counts_line{name_line.left, name_line.bottom, right, name_line.bottom + counts_line_height_};
-    std::wstring counts = std::format(L"{} · {} synced", track_count_text(counts_.total), counts_.synced);
+    std::wstring counts = synced_count_text(counts_);
     SelectObject(dc, counts_font_);
     SetTextColor(dc, GetSysColor(COLOR_GRAYTEXT));
     DrawTextW(dc, counts.c_str(), static_cast<int>(counts.size()), &counts_line, LineFormat);

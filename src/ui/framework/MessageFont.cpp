@@ -6,6 +6,7 @@ namespace westie::ui::framework {
 
 namespace {
 
+constexpr int TitleSizePercent = 125;
 constexpr int HeadingSizePercent = 150;
 
 platform::win32::UniqueFont create_font(Dpi dpi, FontStyle style) {
@@ -14,6 +15,9 @@ platform::win32::UniqueFont create_font(Dpi dpi, FontStyle style) {
     platform::win32::check(SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0, dpi.value()), "SystemParametersInfoForDpi");
     if (style != FontStyle::Regular) {
         metrics.lfMessageFont.lfWeight = FW_SEMIBOLD;
+    }
+    if (style == FontStyle::Title) {
+        metrics.lfMessageFont.lfHeight = MulDiv(metrics.lfMessageFont.lfHeight, TitleSizePercent, 100);
     }
     if (style == FontStyle::Heading) {
         metrics.lfMessageFont.lfHeight = MulDiv(metrics.lfMessageFont.lfHeight, HeadingSizePercent, 100);

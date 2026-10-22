@@ -13,13 +13,12 @@
 #include "ui/framework/IconResource.h"
 #include "ui/framework/Rect.h"
 #include "ui/framework/Size.h"
+#include "ui/framework/TextEllipsis.h"
 #include "ui/framework/Tooltip.h"
 
 namespace westie::ui::framework {
 
 enum class TextAlignment { Left, Center };
-
-enum class TextEllipsis { End, Path };
 
 struct PartFormat {
     TextAlignment alignment = TextAlignment::Left;

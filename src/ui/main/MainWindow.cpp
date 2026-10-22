@@ -62,7 +62,7 @@ MainWindow::MainWindow(
                 [this](const std::filesystem::path& folder) { change_library_folder(folder); }
         ),
         inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),
-        inspector_(hwnd()),
+        inspector_(hwnd(), [this](CommandId command) { run_command(command); }),
         log_splitter_(hwnd(), framework::SplitterAxis::Y, [this](int top) { on_log_splitter_drag(top); }),
         log_(hwnd()),
         status_bar_(hwnd()) {
@@ -135,20 +135,23 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     toolbar_.apply_dpi(dpi, fonts.regular());
     playlists_.apply_dpi(dpi, fonts);
     welcome_.apply_dpi(dpi, fonts);
-    inspector_.apply_fonts(fonts);
+    inspector_.apply_dpi(dpi, fonts);
     status_bar_.apply_dpi(dpi, fonts.regular());
     fonts_ = std::move(fonts);
 }
 
 void MainWindow::show_track_counts(const TrackCounts& counts) {
+    track_counts_ = counts;
     playlists_.set_track_counts(counts);
     status_bar_.set_track_count(counts.total);
+    show_inspector();
 }
 
 void MainWindow::change_library_folder(const std::filesystem::path& folder) {
     settings_.library_path = folder;
     settings_store_.save(settings_);
     status_bar_.set_library_folder(folder);
+    show_inspector();
 }
 
 bool MainWindow::has_playlists() const {
@@ -177,7 +180,21 @@ void MainWindow::add_playlist() {
 void MainWindow::select_playlist(std::optional<std::string> key) {
     selected_playlist_ = std::move(key);
     playlists_.show_selection(selected_playlist_);
+    show_inspector();
     update_commands();
+}
+
+void MainWindow::show_inspector() {
+    if (!has_playlists()) {
+        inspector_.show_first_run();
+        return;
+    }
+    std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(state_.state(), *selected_playlist_) : std::nullopt;
+    if (playlist) {
+        inspector_.show_playlist(*playlist);
+    } else {
+        inspector_.show_library(settings_.library_path, track_counts_);
+    }
 }
 
 void MainWindow::show_playlists() {
@@ -186,7 +203,7 @@ void MainWindow::show_playlists() {
     }
     playlists_.set_playlists(playlist_rows(state_.state()));
     playlists_.show_selection(selected_playlist_);
-    inspector_.show_placeholder(!has_playlists());
+    show_inspector();
     layout_panels();
     // A hidden window would keep the keyboard focus from going anywhere
     if (IsChild(welcome_.hwnd(), GetFocus())) {
@@ -236,6 +253,7 @@ CommandState MainWindow::command_state() const {
 
 void MainWindow::update_commands() {
     toolbar_.update(command_state());
+    inspector_.update(command_state());
 }
 
 void MainWindow::run_command(CommandId command) {
@@ -278,6 +296,7 @@ void MainWindow::show_settings() {
     if (folder_changed) {
         status_bar_.set_library_folder(settings_.library_path);
         welcome_.set_library_folder(settings_.library_path);
+        show_inspector();
     }
 }
 

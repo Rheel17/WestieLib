@@ -205,6 +205,9 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .kv .v { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kv .v .ic { vertical-align: -2px; }
 .kv .v .pbar { width: 110px; margin-right: 6px; vertical-align: 0; }
+/* The playlist card's synced bar fills its value, up to the counts */
+.kv .v.bar { display: flex; align-items: center; gap: 6px; }
+.kv .v.bar .pbar { flex: 1; width: auto; margin-right: 0; }
 .stl { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .expl { color: var(--gray); margin-top: 3px; }
 .note { margin-top: 8px; padding: 6px 8px; background: var(--info); border: 1px solid var(--info-b); }
@@ -723,7 +726,7 @@ function cover(t, size = 144) {
 		<i class="disc" style="width:${d}px;height:${d}px;background:hsl(${(h + 180) % 360} 60% 72% / .30)"></i><span class="al">${esc(t.album || t.title)}</span></div>`;
 }
 
-const kv = rows => `<div class="kv">${rows.map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('')}</div>`;
+const kv = rows => `<div class="kv">${rows.map(([k, v, cls]) => `<span class="k">${k}</span><span class="v${cls ? ` ${cls}` : ''}">${v}</span>`).join('')}</div>`;
 const section = (title, inner) => `<div class="sec"><h3>${title}</h3>${inner}</div>`;
 
 function trackInspector(s, t, cfg) {
@@ -819,7 +822,7 @@ function playlistCard(s, p) {
 	const rows = [
 		['Link', `<span class="link">${esc(p.url)}</span>`],
 		['Tracks', c.all],
-		['Synced', `<span class="pbar"><i style="width:${c.synced / c.all * 100}%"></i></span>${c.synced}/${c.all}`],
+		['Synced', `<span class="pbar"><i style="width:${c.synced / c.all * 100}%"></i></span>${c.synced}/${c.all}`, 'bar'],
 	];
 	if (c.waiting) rows.push(['Waiting', c.waiting]);
 	if (c.failed) rows.push(['Failed', `<span class="red">${c.failed}</span>`]);

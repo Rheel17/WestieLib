@@ -1,7 +1,6 @@
 #include "ui/playlists/PlaylistRows.h"
 
 #include <algorithm>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <tuple>
@@ -12,6 +11,21 @@
 
 namespace westie::ui {
 
+namespace {
+
+std::optional<PlaylistRow> row_of(const std::string& key, const core::Playlist& playlist) {
+    std::optional<core::SourceType> type = core::source_type_of_key(key);
+    // A playlist from a later version's source can't be shown
+    if (!type) {
+        return std::nullopt;
+    }
+    // Until its first fetch a playlist has no name
+    std::wstring name = playlist.name.empty() ? playlist_type_text(*type) : platform::win32::to_utf16(playlist.name);
+    return PlaylistRow{.key = key, .type = *type, .name = std::move(name), .url = platform::win32::to_utf16(playlist.url)};
+}
+
+}
+
 std::vector<PlaylistRow> playlist_rows(const core::State& state) {
     auto entries = state.playlists | std::views::transform([](const auto& entry) { return &entry; }) | std::ranges::to<std::vector>();
     // In the order they were added; the key only breaks ties
@@ -19,17 +33,19 @@ std::vector<PlaylistRow> playlist_rows(const core::State& state) {
 
     std::vector<PlaylistRow> rows;
     for (const auto* entry : entries) {
-        // A playlist from a later version's source can't be shown
-        std::optional<core::SourceType> type = core::source_type_of_key(entry->first);
-        if (!type) {
-            continue;
+        if (std::optional<PlaylistRow> row = row_of(entry->first, entry->second)) {
+            rows.push_back(std::move(*row));
         }
-        const core::Playlist& playlist = entry->second;
-        // Until its first fetch a playlist has no name
-        std::wstring name = playlist.name.empty() ? playlist_type_text(*type) : platform::win32::to_utf16(playlist.name);
-        rows.push_back({.key = entry->first, .type = *type, .name = std::move(name)});
     }
     return rows;
+}
+
+std::optional<PlaylistRow> playlist_row(const core::State& state, const std::string& key) {
+    auto playlist = state.playlists.find(key);
+    if (playlist == state.playlists.end()) {
+        return std::nullopt;
+    }
+    return row_of(playlist->first, playlist->second);
 }
 
 }

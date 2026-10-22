@@ -128,7 +128,23 @@ saved `Placement` and asks it for the current one.
   hands them to the panel.
 - `AllTracksRow` is a window that paints the row: its look (hover, pressed or selected), glyph, name in semibold, and
   the counts.
-- `InspectorPanel` (`src/ui/inspector/`) centers its first-run placeholder inside its padding on every `WM_SIZE`.
+- `InspectorPanel` (`src/ui/inspector/`) shows one of three things inside its padding: the first-run placeholder,
+  centered, or a card at the top. `MainWindow::show_inspector` picks one from the state and the selection: no
+  playlists, a selected playlist (`playlist_row`), or else All tracks. It runs whenever one of those changes, and when
+  the library folder or the track counts (`track_counts_`) change. `update_commands` hands the inspector the
+  `CommandState`, so the cards' buttons follow the same rules as the menus.
+  - `LibraryCard` and `PlaylistCard` are panels of `Label`s, `Button`s and small windows that paint themselves:
+    `CardTitle` (glyph and name in the title font), `SectionTitle` (semibold text and the rule after it),
+    `SyncedValue` (`paint_sync_bar`, from `src/ui/SyncBar.cpp`, which the playlist rows use too, then the counts), and
+    a `framework::LinkLabel`. Every window's text is what it shows, so the checks read the cards with
+    `GetWindowTextW`.
+  - `CardLayout` holds the measures from `plan/ui.md` (Inspector › Nothing selected) and stacks a card's parts from
+    the top: title, subtitle, section, key–value rows and a row of buttons that wraps. A card runs the same `arrange`
+    to place its children on `WM_SIZE` and, without `DeferredPositions`, to measure `height_for(width)`.
+  - The panel is `WS_VSCROLL` with a `framework::VerticalScroll`. Its content is the card's height plus the padding;
+    scrolling moves the card window, not its children. A new card, or new contents, starts at the top.
+  - The cards' buttons and the link send `CommandId`s (the link `OpenPlaylistPage`, which isn't in the menu bar) to
+    `run_command`. Until their features exist they do nothing.
 - `MainWindow::show_track_counts` hands `TrackCounts` to the All tracks row and the status bar. Until the core exists,
   the constructor shows zeros.
 
@@ -166,8 +182,8 @@ saved `Placement` and asks it for the current one.
 - On `Add` the dialog returns an `AddPlaylistRequest` with the found name. `core::add_playlist` stores it through
   `StateStore::update`, which saves `state.json` (keeping `state.json.bak`). Closing the dialog stops the look-up.
   `Sync now` has no effect until syncing exists.
-- `show_playlists` then brings the window up to date with the state: the left panel gets the rows, the inspector's
-  placeholder hides, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
+- `show_playlists` then brings the window up to date with the state: the left panel gets the rows, the inspector
+  shows the card for the selection, `layout_panels` swaps the welcome screen for the `TrackPanel`, and the commands
   follow (`has_playlists` enables Sync all). The welcome screen may have had the keyboard focus, so it goes to the
   window. The constructor calls it too, for playlists from an earlier start.
 

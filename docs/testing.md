@@ -126,6 +126,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `Click-PlaylistRow` and `Click-AllTracks` send `WM_LBUTTONDOWN` and `WM_LBUTTONUP` (`Send-Click`), and
   `Press-ListKey` sends `WM_KEYDOWN` to the list, which acts on it whether or not it has the focus. `FocusOf` tells
   which window has the focus on the app's thread (`GetGUIThreadInfo`).
+- The inspector shows one card at a time, a panel named `Library card` or `Playlist card` (`Get-InspectorCard`).
+  `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right within a row, and
+  `Get-CardLayout` gives where the card, its title, its values and its buttons sit. The inspector's placeholder is
+  its own direct `Label` child (`Get-InspectorPlaceholder`), because the cards hold labels too.
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
   the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area

@@ -25,6 +25,7 @@ public:
 
     void apply_dpi(Dpi dpi, const MessageFont& font);
     Size size() const noexcept;
+    void set_enabled(bool enabled);
 
 private:
     void set_icon(Dpi dpi, int spare_width);

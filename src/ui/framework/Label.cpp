@@ -75,7 +75,8 @@ const WindowClass& Label::window_class() {
 }
 
 UINT Label::format() const noexcept {
-    UINT lines = style_.wrap ? DT_WORDBREAK : DT_SINGLELINE | DT_END_ELLIPSIS;
+    UINT ellipsis = style_.ellipsis == TextEllipsis::Path ? DT_PATH_ELLIPSIS : DT_END_ELLIPSIS;
+    UINT lines = style_.wrap ? DT_WORDBREAK : DT_SINGLELINE | ellipsis;
     return DT_NOPREFIX | lines | (style_.alignment == LabelAlignment::Center ? DT_CENTER : DT_LEFT);
 }
 

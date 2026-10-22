@@ -29,6 +29,8 @@ enum class CommandId : WORD {
     RelocateLibrary,
     OpenLogFolder,
     About,
+    // Not in the menu bar: the playlist card's link
+    OpenPlaylistPage,
 };
 
 }

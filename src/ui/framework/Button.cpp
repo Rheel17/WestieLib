@@ -53,6 +53,10 @@ Size Button::size() const noexcept {
     return size_;
 }
 
+void Button::set_enabled(bool enabled) {
+    EnableWindow(hwnd(), enabled ? TRUE : FALSE);
+}
+
 void Button::set_icon(Dpi dpi, int spare_width) {
     // The button starts the icon inside its theme's content margin, then the text after the icon's right margin
     int left = spare_width / 2 - content_left_margin();

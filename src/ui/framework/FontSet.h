@@ -11,11 +11,13 @@ public:
 
     const MessageFont& regular() const noexcept;
     const MessageFont& semibold() const noexcept;
+    const MessageFont& title() const noexcept;
     const MessageFont& heading() const noexcept;
 
 private:
     MessageFont regular_;
     MessageFont semibold_;
+    MessageFont title_;
     MessageFont heading_;
 };
 

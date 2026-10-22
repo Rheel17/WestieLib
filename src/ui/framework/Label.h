@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#include "ui/framework/TextEllipsis.h"
 #include "ui/framework/Window.h"
 
 namespace westie::ui::framework {
@@ -17,6 +18,7 @@ struct LabelStyle {
     TextColor color = TextColor::Normal;
     LabelAlignment alignment = LabelAlignment::Left;
     bool wrap = false;
+    TextEllipsis ellipsis = TextEllipsis::End;
 };
 
 class Label final : public Window {

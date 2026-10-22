@@ -1635,7 +1635,7 @@ function Add-Playlist($hwnd, [string]$link) {
 # Welcome screen and tracks panel visible; the left panel's "No playlists yet." and the inspector's placeholder visible
 function Get-PlaylistScreens($hwnd) {
 	$empty = ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.Label'))[0]
-	$placeholder = ([W]::Children((Get-Panel $hwnd 'Inspector'), 'WestieLib.Label'))[0]
+	$placeholder = Get-InspectorPlaceholder $hwnd
 	"welcome $([W]::IsWindowVisible((Get-Panel $hwnd 'Welcome'))), tracks $([W]::IsWindowVisible((Get-Panel $hwnd 'Tracks'))), " +
 		"no playlists $([W]::IsWindowVisible($empty)), placeholder $([W]::IsWindowVisible($placeholder))"
 }
@@ -1947,7 +1947,7 @@ function Check-NoBlinking($hwnd) {
 	Check 'Playlists drag: left panel never blinks' ([W]::WatchDrag($hwnd, $left, (Get-Splitter $hwnd 0), (S 300), $false)) 'blinked 0'
 
 	$inspector = [W]::RectIn((Get-RowPanels $hwnd)[2], $hwnd)
-	$placeholder = [W]::RectIn(([W]::Children((Get-RowPanels $hwnd)[2], 'WestieLib.Label'))[0], $hwnd)
+	$placeholder = [W]::RectIn((Get-InspectorPlaceholder $hwnd), $hwnd)
 	$band = New-Object W+RECT
 	$band.Left = $inspector.Left - (S 200)
 	$band.Right = $inspector.Right
@@ -1956,11 +1956,71 @@ function Check-NoBlinking($hwnd) {
 	Check 'Inspector drag: placeholder never blinks' ([W]::WatchDrag($hwnd, $band, (Get-Splitter $hwnd 1), -(S 200), $true)) 'blinked 0'
 }
 
+# The inspector's own label; the cards in it have labels of their own
+function Get-InspectorPlaceholder($hwnd) { (Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Label')[0] }
+
+# The inspector's visible card
+function Get-InspectorCard($hwnd) {
+	@(Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Panel' | Where-Object { [W]::IsWindowVisible($_) })[0]
+}
+
+# A card's name, then the texts of its windows from the top, and left to right within a row
+function Get-CardTexts($hwnd) {
+	$card = Get-InspectorCard $hwnd
+	$windows = @([W]::Children($card, [NullString]::Value) | Where-Object { [W]::GetAncestor($_, 1) -eq $card } |
+		ForEach-Object { [pscustomobject]@{ Rect = [W]::RectIn($_, $card); Text = [W]::TextOf($_) } })
+	$texts = @($windows | Sort-Object { $_.Rect.Top }, { $_.Rect.Left } | ForEach-Object { $_.Text })
+	"$([W]::TextOf($card)): $($texts -join ' / ')"
+}
+
+# The card sits inside the inspector's padding. Its title starts at its left edge, the playlist's subtitle where the
+# name does, the values 74 + 8 from the left, and the buttons share a row 6 apart.
+function Get-CardLayout($hwnd) {
+	$inspector = Get-Panel $hwnd 'Inspector'
+	$card = Get-InspectorCard $hwnd
+	$r = [W]::RectIn($card, $inspector)
+	$title = [W]::RectIn(([W]::Children($card, 'WestieLib.CardTitle'))[0], $card)
+	$values = @([W]::Children($card, 'WestieLib.Label') | Where-Object { [W]::RectIn($_, $card).Left -gt 0 } | ForEach-Object { [W]::RectIn($_, $card).Left })
+	$buttons = @([W]::Children($card, 'Button') | ForEach-Object { [W]::RectIn($_, $card) })
+	$gaps = @(for ($i = 1; $i -lt $buttons.Count; $i++) { "$($buttons[$i].Top - $buttons[0].Top),$($buttons[$i].Left - $buttons[$i - 1].Right)" })
+	"$($r.Left),$($r.Top) $((Get-ClientWidth $inspector) - $r.Right) | title $($title.Left),$($title.Top) | values $(($values | Sort-Object -Unique) -join ',') | buttons $($gaps -join ' ')"
+}
+
+# All tracks shows the Library card with the folder in effect and the totals; a playlist shows its card; the keys move
+# between them. Ends on the card of row 1.
+function Check-Cards($hwnd) {
+	$folder = if (Test-Path $SettingsFile) { (Get-Content $SettingsFile -Raw | ConvertFrom-Json).libraryPath } else { $DefaultLibrary }
+	$dot = [char]0xB7
+	Click-AllTracks $hwnd
+	Check 'All tracks: inspector' (Get-CardTexts $hwnd) "Library card: All tracks / Library / Folder / $folder / Tracks / 0 tracks $dot 0 synced / Open library folder"
+	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 82) | buttons "
+	if ($Screenshot) { Save-Screenshot $hwnd ("$($Screenshot -replace '\.png$', '')-library.png") }
+	Click-PlaylistRow $hwnd 1
+	Check 'Row 1: inspector' (Get-CardTexts $hwnd) ("Playlist card: $SpotifyName / Spotify playlist / Playlist / Link / $SpotifyLink / Tracks / 0 / " +
+		"Synced / 0/0 / Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
+	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 23),$(S 82) | buttons 0,$(S 6)"
+	# The synced value spans the value column, and its bar runs up to 6 before the counts
+	$synced = ([W]::Children((Get-InspectorCard $hwnd), 'WestieLib.SyncedValue'))[0]
+	$width = Get-ClientWidth $synced
+	$end = $width - [W]::TextWidth('0/0', $script:dpi) - (S 6)
+	$y = [int]((Get-ClientHeight $synced) / 2)
+	$pixels = [W]::PixelsIn($hwnd, $synced, @(0, $y, ($end - 1), $y, $end, $y)) -join ' '
+	Check '  synced bar | value right edge' "$pixels | $($width + (S 82))" "e6e6e6 e6e6e6 ffffff | $(Get-ClientWidth (Get-InspectorCard $hwnd))"
+	$buttons = @([W]::Children((Get-InspectorCard $hwnd), 'Button') | ForEach-Object { [W]::IsWindowEnabled($_) })
+	Check '  buttons enabled' ($buttons -join ' ') 'True True'
+	Press-ListKey $hwnd 0x28
+	Check 'Down: row 2' (Get-CardTexts $hwnd) ("Playlist card: $YouTubeName / YouTube Music playlist / Playlist / Link / $YouTubeLink / Tracks / 0 / " +
+		"Synced / 0/0 / Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
+	Press-ListKey $hwnd 0x24
+	Check 'Home: All tracks' ([W]::TextOf((Get-InspectorCard $hwnd))) 'Library card'
+	Press-ListKey $hwnd 0x28
+}
+
 # The inspector's placeholder fills the panel's width inside the padding, its center within a pixel of the padded
 # area's
 function Check-InspectorPlaceholder([string]$what, $hwnd) {
 	$panel = (Get-RowPanels $hwnd)[2]
-	$label = ([W]::Children($panel, 'WestieLib.Label'))[0]
+	$label = Get-InspectorPlaceholder $hwnd
 	$r = [W]::RectIn($label, $panel)
 	$sides = "$($r.Left) $((Get-ClientWidth $panel) - $r.Right)"
 	# Twice the offset, so it stays whole
@@ -2235,6 +2295,7 @@ try {
 	Check-PlaylistRows 'Two rows:' $h 2
 	Check-Selection $h
 	Check-RowMouse $h
+	Check-Cards $h
 	Send-Command $h '&Add playlist...'
 	$dialog = Wait-OwnedWindow $h
 	$runs = @(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count
@@ -2273,6 +2334,15 @@ try {
 	$left.Top = Get-RowTop $h
 	$left.Bottom = [W]::RectIn((Get-RowPanels $h)[0], $h).Bottom
 	Check 'Playlists drag: rows never blink' ([W]::WatchDrag($h, $left, (Get-Splitter $h 0), (S 300), $false)) 'blinked 0'
+	$card = [W]::RectIn((Get-InspectorCard $h), $h)
+	$band = New-Object W+RECT
+	$band.Left = $card.Left - (S 200)
+	$band.Right = [W]::RectIn((Get-Panel $h 'Inspector'), $h).Right
+	$band.Top = $card.Top
+	$band.Bottom = $card.Bottom
+	# The main column gives the inspector only what it has above its 400
+	$room = (Get-ClientWidth (Get-RowPanels $h)[1]) - (S 400)
+	Check 'Inspector drag: Library card never blinks' ([W]::WatchDrag($h, $band, (Get-Splitter $h 1), -[math]::Min((S 200), $room), $true)) 'blinked 0'
 	Stop-App $app
 
 	"--- Run 9: state.json doesn't read"

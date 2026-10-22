@@ -65,6 +65,7 @@ private:
     std::optional<std::string> added_playlist_name(const core::PlaylistLink& link) const;
     void add_playlist();
     void select_playlist(std::optional<std::string> key);
+    void show_inspector();
     void show_playlists();
     void save_state() const;
     MainLayout current_layout() const;
@@ -116,6 +117,7 @@ private:
     MainStatusBar status_bar_;
     PanelState panels_;
     framework::FocusMemory focus_;
+    TrackCounts track_counts_;
     // A playlist's key, or nothing while All tracks is selected
     std::optional<std::string> selected_playlist_;
     // Only while they're open, so tool and look-up events can reach them

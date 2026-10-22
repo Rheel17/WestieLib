@@ -361,7 +361,41 @@ them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
   - `Sync playlist` and `Remove playlist…`.
 - In All tracks it shows the library folder, totals and `Open library folder`.
 
-The inspector scrolls vertically when its content is taller than the panel.
+```
+┌ inspector ──────────────────────┐   ┌ inspector ──────────────────────┐
+│ ▤ All tracks                    │   │ ● WCS                           │
+│                                 │   │   YouTube Music playlist        │
+│ Library ─────────────────────── │   │                                 │
+│ Folder    C:\Users\…\WestieLib  │   │ Playlist ────────────────────── │
+│ Tracks    0 tracks · 0 synced   │   │ Link      https://music.youtu…  │
+│                                 │   │ Tracks    0                     │
+│ [Open library folder]           │   │ Synced    ░░░░░░░░░░░░░░░░░ 0/0 │
+│                                 │   │ Last sync Never                 │
+│                                 │   │                                 │
+│                                 │   │ [⟳ Sync playlist] [Remove pla…] │
+└─────────────────────────────────┘   └─────────────────────────────────┘
+```
+
+The cards, from the top, in DIPs:
+
+- **Title**: a 16 px glyph (▤ for All tracks, the source's logo for a playlist), 7 px, then the name in semibold at
+  125% of the message font, on a 20 px line. A long name ends in an ellipsis.
+- **Subtitle** (playlist card only): `YouTube Music playlist` or `Spotify playlist` in gray, 1 px below, lined up with
+  the name.
+- **Section**, 14 px below: its title (`Library`, `Playlist`) in semibold, followed 8 px on by a `#DADADA` hairline to
+  the right edge, then 7 px to the rows.
+- **Rows**: a gray key in a 74 px column, 8 px, then the value; rows are 16 px lines, 4 px apart. Values end in an
+  ellipsis, except the folder, which loses its middle (`C:\Users\...\WestieLib`).
+  - Library: `Folder` is the library folder in effect, `Tracks` reads like the All tracks row (`0 tracks · 0 synced`).
+  - Playlist: `Link` is the playlist's URL as a link (`#0066CC`, underlined while the mouse is over it, the hand
+    cursor over its text); a click opens it in the browser. `Tracks` is the count, `Synced` a bar like the row's
+    that fills the value's width, 6 px, then `synced/total`. `Last sync` reads `Never` until syncing exists. The `Waiting`, `Failed`,
+    `To review` (non-zero only) and `Shared` rows come with tracks.
+- **Buttons**, 14 px below, 6 px apart, wrapping onto a new row 6 px down when they don't fit: `Open library folder`;
+  or `⟳ Sync playlist` and `Remove playlist…`. They follow the command rules (see Menu bar and toolbar).
+
+The inspector scrolls vertically when its content is taller than the panel, inside the same padding: 12 px on the
+sides and top, 10 px at the bottom.
 
 ## Log pane
 
@@ -561,7 +595,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
-| Inspector | scrollable child window with statics, `WC_LINK`, buttons, edits, `SS_ETCHEDHORZ` section rules; covers decoded with WIC into an HBITMAP |
+| Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the synced bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
 | Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS` |
 
@@ -573,6 +607,7 @@ The UI uses the Windows 10 palette:
 | face | `#F0F0F0` |
 | selection | `#CCE8FF`, border `#99D1FF` |
 | hover | `#E5F3FF` |
+| link | `#0066CC` |
 | pressed button | `#CCE4F7`, border `#005499` |
 | accent | `#0078D7` |
 | gray text | `#6D6D6D` |
