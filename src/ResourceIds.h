@@ -17,6 +17,7 @@
 #define IDI_WAITING          15
 #define IDI_SYNC_GRAY        16
 #define IDI_TOOL_WAIT        17
+#define IDI_SEARCH           18
 // The progress ring's 25 steps, empty to full, are IDI_RING_0 to IDI_RING_0 + 24
 #define IDI_RING_0           20
 #define IDD_SETTINGS              100

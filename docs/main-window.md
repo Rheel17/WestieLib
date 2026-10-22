@@ -233,6 +233,32 @@ saved `Placement` and asks it for the current one.
   the saved folder (`Settings::library_path`) to start the field and the status bar at. The field's callback,
   `change_library_folder`, saves the settings and updates the status bar.
 
+## Main panel
+
+`TrackPanel` (`src/ui/tracks/`) is the main column once there are playlists. It holds no tracks yet: every count is
+0 and the table has no rows. From the top it stacks the `FilterBar`, the `StatusFilter` strip, the result line (a
+gray `Label`) and the `TrackTable`, with the paddings from `plan/ui.md` (Main panel), and paints the hairline above
+the table itself, through `BufferedPaint`.
+
+- `FilterBar` is a panel with the search `Edit` (its cue banner, and the magnifier, an `IconView` inside the edit),
+  the `Source` label (one line tall and centered, so its text stands level with the search field's), the `ComboBox` and
+  the compact `Clear` button. The search field narrows when the panel is too
+  narrow for everything. `EN_CHANGE` and `CBN_SELCHANGE` call its change callback, and Clear empties the search, sets
+  All and calls its clear callback. A clicked Clear grays out, so the focus moves to the search field first.
+- `StatusFilter` keeps the selected `StatusTab` and the `StatusCounts`, and shows them on a `framework::TabStrip`:
+  `status_tab_text` (`StatusTabText.cpp`) gives each label, and Removed and Kept appear only with a count or while
+  they're selected. It maps the strip's index back to a tab on `TCN_SELCHANGE`, which the panel forwards.
+- The panel enables Clear while the filter bar or the tab is off its default, and Clear puts the tab back to All.
+- `TrackTable` owns the `framework::ListView`. Its column table (`TrackColumn`, title, width, alignment, shown by
+  default) is in `TrackTable.cpp`. Title is sub-item 0, because column 0 holds the item's text and can't be
+  right-aligned or removed; the column order puts Status before it. `show_scope` inserts `#` and moves it to the front
+  of the order, or deletes it, and goes back to the scope's default sort. `LVN_COLUMNCLICK` sorts by the clicked
+  column, or turns the order round when it's sorted by that column already, and moves the header's arrow. Source,
+  Match and File are in the table but hidden: the header menu that shows them comes later.
+- `MainWindow::show_scope` hands the panel the selected playlist's name, or nothing for All tracks, then shows the
+  inspector. `select_playlist` and `show_playlists` call it; `result_line_text` (`ResultLineText.cpp`) adds the
+  `· in …` part.
+
 ## Layout
 
 - `MainLayout.cpp` is pure: it takes the client rect, the DPI, the bar heights in pixels and the `PanelState`, and

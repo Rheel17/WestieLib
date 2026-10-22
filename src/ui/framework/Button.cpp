@@ -19,6 +19,7 @@ namespace {
 constexpr int MinWidthDips = 75;
 constexpr int MinHeightDips = 23;
 constexpr int SidePaddingDips = 10;
+constexpr int CompactSidePaddingDips = 9;
 constexpr int TextHeightPaddingDips = 7;
 constexpr int IconDips = 16;
 constexpr int IconGapDips = 5;
@@ -35,13 +36,16 @@ Button::Button(HWND parent, const Options& options) :
             .id = options.command,
         }),
         text_(options.text),
-        icon_resource_(options.icon) {}
+        icon_resource_(options.icon),
+        compact_(options.compact) {}
 
 void Button::apply_dpi(Dpi dpi, const MessageFont& font) {
     set_font(font.handle());
     int content = text_width(font.handle()) + (icon_resource_ != 0 ? dpi.scale(IconDips) + dpi.scale(IconGapDips) : 0);
+    int min_width = compact_ ? 0 : dpi.scale(MinWidthDips);
+    int side_padding = dpi.scale(compact_ ? CompactSidePaddingDips : SidePaddingDips);
     size_ = {
-        std::max(dpi.scale(MinWidthDips), content + 2 * dpi.scale(SidePaddingDips)),
+        std::max(min_width, content + 2 * side_padding),
         std::max(dpi.scale(MinHeightDips), font.line_height() + dpi.scale(TextHeightPaddingDips)),
     };
     if (icon_resource_ != 0) {

@@ -141,6 +141,7 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     framework::FontSet fonts(dpi);
     toolbar_.apply_dpi(dpi, fonts.regular());
     playlists_.apply_dpi(dpi, fonts);
+    tracks_.apply_dpi(dpi, fonts);
     welcome_.apply_dpi(dpi, fonts);
     inspector_.apply_dpi(dpi, fonts);
     status_bar_.apply_dpi(dpi, fonts.regular());
@@ -187,8 +188,14 @@ void MainWindow::add_playlist() {
 void MainWindow::select_playlist(std::optional<std::string> key) {
     selected_playlist_ = std::move(key);
     playlists_.show_selection(selected_playlist_);
-    show_inspector();
+    show_scope();
     update_commands();
+}
+
+void MainWindow::show_scope() {
+    std::optional<PlaylistRow> playlist = selected_row();
+    tracks_.show_scope(playlist ? std::optional(playlist->name) : std::nullopt);
+    show_inspector();
 }
 
 void MainWindow::show_inspector() {
@@ -209,7 +216,7 @@ void MainWindow::show_playlists() {
     }
     playlists_.set_playlists(playlist_rows(state_.state()));
     playlists_.show_selection(selected_playlist_);
-    show_inspector();
+    show_scope();
     layout_panels();
     // A hidden window would keep the keyboard focus from going anywhere
     if (IsChild(welcome_.hwnd(), GetFocus())) {

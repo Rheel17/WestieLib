@@ -52,17 +52,6 @@ function Get-PlaylistCommands($hwnd) {
 	"Remove $($states[0]), Sync selected $($states[1])"
 }
 
-function Send-Click($window, [int]$x, [int]$y) {
-	[void][W]::SendMessageW($window, 0x201, [IntPtr]1, (LParam $x $y))
-	[void][W]::SendMessageW($window, 0x202, [IntPtr]0, (LParam $x $y))
-}
-
-function Click-PlaylistRow($hwnd, [int]$index) {
-	Send-Click (Get-PlaylistList $hwnd) (S 20) ((Get-PlaylistRowTop $hwnd $index) + [int]((Get-PlaylistRowHeight) / 2))
-}
-
-function Click-AllTracks($hwnd) { Send-Click (Get-AllTracksRow $hwnd) (S 20) (S 10) }
-
 function Press-ListKey($hwnd, [int]$key) { [void][W]::SendMessageW((Get-PlaylistList $hwnd), 0x100, [IntPtr]$key, [IntPtr]1) }
 
 # All tracks is selected at the start. A click on a row selects it, gives the list the focus and enables the playlist

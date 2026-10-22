@@ -19,6 +19,8 @@ public:
         WORD command = 0;
         int icon = 0;
         bool default_button = false;
+        // No minimum width, and less padding
+        bool compact = false;
     };
 
     Button(HWND parent, const Options& options);
@@ -34,6 +36,7 @@ private:
 
     std::wstring text_;
     int icon_resource_ = 0;
+    bool compact_ = false;
     IconImageList icon_;
     Size size_;
 };

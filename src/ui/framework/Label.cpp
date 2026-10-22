@@ -60,6 +60,14 @@ int Label::height_for(std::wstring_view text, int width) const {
     return bounds.bottom;
 }
 
+int Label::text_width() const {
+    platform::win32::UniqueMemoryDc dc(platform::win32::check(CreateCompatibleDC(nullptr), "CreateCompatibleDC"));
+    SelectObject(dc.get(), font_);
+    SIZE extent{};
+    platform::win32::check(GetTextExtentPoint32W(dc.get(), text_.c_str(), static_cast<int>(text_.size()), &extent), "GetTextExtentPoint32W");
+    return extent.cx;
+}
+
 LRESULT Label::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_PAINT: paint(); return 0;

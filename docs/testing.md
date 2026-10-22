@@ -39,6 +39,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 | `tools` | The Tools part, the Settings dialog's Tools group, Check for updates, installing yt-dlp | `core/tools/`, `core/github/`, `ui/tools/`, `ui/dialogs/ToolListView` |
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
+| `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -116,6 +117,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `Focus` gives a window the real keyboard focus, through `AttachThreadInput` like `PostCtrlKey`. A click that follows
   then moves the focus for real, as a mouse click would.
 - `RedInk` tells whether a window's text is drawn in the error color, in a `PrintWindow` capture.
+- `EditTextTop` gives where an edit's line of text starts in its window (its client area's top plus `EM_GETRECT`'s),
+  and `TextHeight` the message font's `tmHeight`, so the `tracks` suite checks that the search text is centered.
 - A dialog that opens from a button click is modal, so post `BM_CLICK` rather than send it, then wait for the window
   it owns (`Wait-OwnedWindow`).
 - To drive the menu bar, post `WM_SYSCOMMAND` `SC_KEYMENU` (with a mnemonic in `lparam` to open that menu) and then
@@ -163,6 +166,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   the process's visible `#32768` window (`Wait-PopupMenu`). `MN_GETHMENU` gives its menu, which `Get-PopupItems`
   reads. The loop takes keys posted to any window of the app's thread: Esc closes it (`Close-PopupMenu`), an access
   key chooses.
+- Windows marshals the messages below `WM_USER` across processes itself, so `CB_GETLBTEXT` takes a local buffer
+  (`ComboItems`); a buffer in the app's process would be read as an address in the script's. Common control messages
+  (`TCM_*`, `HDM_*`, `LVM_*`, `EM_GETCUEBANNER`) need theirs in the app's process: `TabTexts`, `ListViewColumns`
+  (titles, widths and the sort arrow in display order), `CueBanner`, and `SendForRect` for the messages that fill a
+  `RECT`.
+- `CB_SETCURSEL` and `TCM_SETCURSEL` don't notify. The `tracks` suite chooses a source with `CB_SETCURSEL` and then
+  sends the parent `CBN_SELCHANGE`, as a choice by the user would, and clicks tabs and headers with mouse messages at
+  `TCM_GETITEMRECT` / `HDM_GETITEMRECT` (`Click-Tab`, `Click-Header`). `Double-Click-Header` sends the down, up,
+  `WM_LBUTTONDBLCLK`, up of two quick clicks. The table holds no rows, so the row height
+  check gives it three with `LVM_SETITEMCOUNT` and measures one.
 - A TaskDialog's buttons aren't child windows. Post it `TDM_CLICK_BUTTON` (`WM_USER + 102`) with the button's id.
 - The checks never run Open in browser, the playlist card's link, Open library folder or Copy URL: they would open a
   browser or Explorer on the user's screen, or replace what's on their clipboard. Try those by hand.

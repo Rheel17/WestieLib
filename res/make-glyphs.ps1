@@ -32,6 +32,7 @@ $Glyphs = [ordered]@{
 	waiting = @{ Row = $true }
 	toolwait = @{}
 	syncgray = @{ Row = $true }
+	search = @{}
 }
 
 # Brand logo name, its SVG file in res/, and its options as above

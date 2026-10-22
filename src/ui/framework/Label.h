@@ -30,6 +30,7 @@ public:
     void set_color(TextColor color);
     int height_for(int width) const;
     int height_for(std::wstring_view text, int width) const;
+    int text_width() const;
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

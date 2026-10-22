@@ -289,9 +289,15 @@ The library folder:
 ### Filter bar
 
 - **Search**: an edit with the cue banner "Search title, artist, album". It matches title, artists, album and
-  file name, case- and accent-insensitive through `TextNormalizer`.
-- **Source**: a drop-down list with All, YouTube Music and Spotify.
-- **Clear**: enabled when the search, the source or the status tab is not at its default.
+  file name, case- and accent-insensitive through `TextNormalizer`. A 16 px magnifier sits inside the field, 5 px
+  from its left edge, and the text starts 5 px after it.
+- **Source**: the label `Source`, its text level with the search field's, then a drop-down list with All, YouTube
+  Music and Spotify.
+- **Clear**: a compact button (no 75 px minimum, 9 px of padding at the sides), enabled when the search, the source
+  or the status tab is not at its default. It empties the search, sets the source to All and selects the All tab.
+
+The bar has 8 px of padding at the top and sides and 4 px under it, with 8 px between its parts. The search field is
+300 px wide, and narrows when the panel is too narrow for it; the drop-down is 128 px wide.
 
 ### Status filter
 
@@ -300,14 +306,19 @@ the source into account, so each button shows how many rows it would list:
 
 `All │ Synced │ Waiting │ Needs review │ Failed │ Removed │ Kept`
 
-- `Removed` and `Kept` appear only when their count is not zero.
+- Each button reads its word and its count, as in `Needs review 3`. The buttons are 22 px tall with 8 px at the
+  sides of the text. The strip has 4 px above it, 8 px at the sides and 2 px under it. The selected button has the
+  pressed button colors, a button under the mouse the hover color (border `#CCE8FF`), and a 1×14 px `#C9C9C9` line
+  separates the buttons.
+- `Removed` and `Kept` appear only when their count is not zero, or while they are selected.
 - All = Synced + Waiting + Failed + Removed + Kept.
 - Needs review is a subset of Synced.
 
 ### Result line
 
 `Showing 8 of 100 · in WCS` gives the rows shown, out of all tracks in the library, followed by the scope. In
-the All tracks scope, the `· in …` part is left out.
+the All tracks scope, the `· in …` part is left out. It is gray, with 3 px above it, 9 px at the sides and 5 px
+under it. A 1 px rule (`#E5E5E5`) separates it from the table.
 
 ### Track table
 
@@ -327,7 +338,12 @@ when you click their header. Right-click the header to show, hide or reorder col
 | Match     | off     | confidence %, `Override` or `Direct` |
 | File      | off     | file name |
 
-Default sort is Title in All tracks and # in a playlist scope. The row context menu is the Track menu.
+Rows are 22 px tall. A 1 px rule (`#E5E5E5`) runs under the column titles, across the table's width. The default widths are # 34, Status 56, Title 204, Artists 156, Album 132, Playlists 114 and
+Time 48 px; # and Time are right-aligned.
+
+Default sort is Title in All tracks and # in a playlist scope. A click on a header sorts by that column, ascending, and
+a second click reverses it, however quickly it follows; the header shows the arrow. Another scope starts at its default sort. The row context
+menu is the Track menu.
 
 ## Inspector
 
@@ -613,8 +629,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
-| Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS` and `TCS_EX_FLATSEPARATORS`; labels rewritten with counts |
-| Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
+| Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |
+| Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
 | Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the synced bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
 | Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS` |

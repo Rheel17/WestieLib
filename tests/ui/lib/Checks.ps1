@@ -490,6 +490,17 @@ function Get-Selection($hwnd, [int]$count) {
 	if ($selected.Count -eq 0) { 'none' } else { $selected -join ', ' }
 }
 
+function Send-Click($window, [int]$x, [int]$y) {
+	[void][W]::SendMessageW($window, 0x201, [IntPtr]1, (LParam $x $y))
+	[void][W]::SendMessageW($window, 0x202, [IntPtr]0, (LParam $x $y))
+}
+
+function Click-PlaylistRow($hwnd, [int]$index) {
+	Send-Click (Get-PlaylistList $hwnd) (S 20) ((Get-PlaylistRowTop $hwnd $index) + [int]((Get-PlaylistRowHeight) / 2))
+}
+
+function Click-AllTracks($hwnd) { Send-Click (Get-AllTracksRow $hwnd) (S 20) (S 10) }
+
 # A state.json with $count playlists (at most 31), added a day apart: Spotify and YouTube Music in turn, every third with a name
 # too long for its row
 function Write-ManyPlaylists([int]$count) {

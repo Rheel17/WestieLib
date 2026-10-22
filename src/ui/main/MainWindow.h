@@ -66,6 +66,7 @@ private:
     std::optional<std::string> added_playlist_name(const core::PlaylistLink& link) const;
     void add_playlist();
     void select_playlist(std::optional<std::string> key);
+    void show_scope();
     void show_inspector();
     void show_playlists();
     void save_state() const;

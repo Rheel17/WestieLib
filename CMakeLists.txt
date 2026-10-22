@@ -91,6 +91,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Animation.cpp
 	src/ui/framework/BufferedPaint.cpp
 	src/ui/framework/Button.cpp
+	src/ui/framework/ComboBox.cpp
 	src/ui/framework/CommonControls.cpp
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
@@ -100,9 +101,11 @@ add_executable(WestieLib WIN32
 	src/ui/framework/GdiPlusSession.cpp
 	src/ui/framework/IconImageList.cpp
 	src/ui/framework/IconResource.cpp
+	src/ui/framework/IconView.cpp
 	src/ui/framework/ItemTracker.cpp
 	src/ui/framework/Label.cpp
 	src/ui/framework/LinkLabel.cpp
+	src/ui/framework/ListView.cpp
 	src/ui/framework/MenuBarPainter.cpp
 	src/ui/framework/MessageFont.cpp
 	src/ui/framework/MessageLoop.cpp
@@ -114,6 +117,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Spinner.cpp
 	src/ui/framework/Splitter.cpp
 	src/ui/framework/StatusBar.cpp
+	src/ui/framework/TabStrip.cpp
 	src/ui/framework/Toolbar.cpp
 	src/ui/framework/Tooltip.cpp
 	src/ui/framework/VerticalScroll.cpp
@@ -145,7 +149,12 @@ add_executable(WestieLib WIN32
 	src/ui/tools/ToolBoard.cpp
 	src/ui/tools/ToolMark.cpp
 	src/ui/tools/ToolStatusText.cpp
+	src/ui/tracks/FilterBar.cpp
+	src/ui/tracks/ResultLineText.cpp
+	src/ui/tracks/StatusFilter.cpp
+	src/ui/tracks/StatusTabText.cpp
 	src/ui/tracks/TrackPanel.cpp
+	src/ui/tracks/TrackTable.cpp
 	src/ui/welcome/LibraryFolderCheck.cpp
 	src/ui/welcome/LibraryFolderField.cpp
 	src/ui/welcome/LibraryFolderText.cpp

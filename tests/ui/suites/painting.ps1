@@ -69,6 +69,16 @@ $left.Right = S 150
 $left.Top = Get-RowTop $h
 $left.Bottom = [W]::RectIn((Get-RowPanels $h)[0], $h).Bottom
 Check 'Playlists drag: rows never blink' ([W]::WatchDrag($h, $left, (Get-Splitter $h 0), (S 300), $false)) 'blinked 0'
+# The track panel moves with the splitter: its filter bar, tabs and result line, and the table's header. The header's
+# drag is short enough for every column to stay in view.
+$tracks = Get-Panel $h 'Tracks'
+$list = (Get-DirectChildren $tracks 'SysListView32')[0]
+$header = [W]::RectIn([W]::SendMessageW($list, 0x101F, [IntPtr]::Zero, [IntPtr]::Zero), $h)
+$top = [W]::RectIn($tracks, $h)
+$top.Bottom = $header.Top - (S 4)
+Check 'Playlists drag: filter bar and tabs never blink' ([W]::WatchDrag($h, $top, (Get-Splitter $h 0), (S 200), $true)) 'blinked 0'
+$header.Right = [W]::RectIn($tracks, $h).Right
+Check 'Playlists drag: table header never blinks' ([W]::WatchDrag($h, $header, (Get-Splitter $h 0), (S 100), $true)) 'blinked 0'
 $card = [W]::RectIn((Get-InspectorCard $h), $h)
 $band = New-Object W+RECT
 $band.Left = $card.Left - (S 200)

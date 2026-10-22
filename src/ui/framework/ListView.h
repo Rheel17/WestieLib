@@ -1,0 +1,59 @@
+#pragma once
+
+#include <optional>
+#include <span>
+#include <vector>
+
+#include <windows.h>
+#include <commctrl.h>
+
+#include "platform/win32/UniqueHandle.h"
+#include "ui/framework/Control.h"
+#include "ui/framework/Dpi.h"
+#include "ui/framework/MessageFont.h"
+
+namespace westie::ui::framework {
+
+enum class SortDirection { Ascending, Descending };
+
+struct ListColumn {
+    const wchar_t* title = nullptr;
+    int width = 0;
+    // Stays with the column wherever it moves; the list asks for cell texts by it
+    int subitem = 0;
+    bool right_aligned = false;
+};
+
+struct ListSortArrow {
+    int index = 0;
+    SortDirection direction = SortDirection::Ascending;
+};
+
+class ListView final : public Control {
+public:
+    explicit ListView(HWND parent);
+
+    void apply_dpi(Dpi dpi, const MessageFont& font, int row_height_dips);
+    int column_count() const;
+    void insert_column(int index, const ListColumn& column);
+    void delete_column(int index);
+    int column_subitem(int index) const;
+    std::optional<int> column_index(int subitem) const;
+    std::vector<int> column_order() const;
+    void set_column_order(std::span<const int> order);
+    void set_sort_arrow(std::optional<ListSortArrow> arrow);
+    void set_item_count(int count);
+
+protected:
+    LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
+
+private:
+    HWND header() const;
+    LRESULT on_header_draw(const NMCUSTOMDRAW& draw, LRESULT result) const;
+    void click_column(int index) const;
+
+    Dpi dpi_;
+    platform::win32::UniqueImageList row_height_;
+};
+
+}

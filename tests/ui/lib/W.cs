@@ -104,6 +104,12 @@ public static class W {
 	// Sends a message whose lparam is a struct that points at a text buffer, both in the window's process. `build` fills
 	// the struct, given the buffer's address; the text comes back from the buffer.
 	static string SendForText(IntPtr h, uint msg, IntPtr w, int structSize, Func<long, byte[]> build) {
+		byte[] answer;
+		return SendForText(h, msg, w, structSize, build, out answer);
+	}
+
+	// The same, also returning the struct as the window left it
+	static string SendForText(IntPtr h, uint msg, IntPtr w, int structSize, Func<long, byte[]> build, out byte[] answer) {
 		const int TextOffset = 256, TextBytes = 2048;
 		int pid;
 		GetWindowThreadProcessId(h, out pid);
@@ -114,6 +120,8 @@ public static class W {
 			IntPtr done;
 			WriteProcessMemory(process, remote, request, (IntPtr)structSize, out done);
 			SendMessageW(h, msg, w, remote);
+			answer = new byte[structSize];
+			ReadProcessMemory(process, remote, answer, (IntPtr)structSize, out done);
 			var text = new byte[TextBytes];
 			ReadProcessMemory(process, (IntPtr)((long)remote + TextOffset), text, (IntPtr)TextBytes, out done);
 			return Utf16(text);
@@ -170,6 +178,85 @@ public static class W {
 		return String.Join(" | ", cells);
 	}
 
+	// A list view's columns in display order, each as its title and width, then " ^" or " v" for the sort arrow,
+	// joined with " | ". HDITEMW on x64: mask at 0, cxy at 4, pszText at 8, cchTextMax at 24, fmt at 28, 72 bytes.
+	public static string ListViewColumns(IntPtr list) {
+		var header = SendMessageW(list, 0x101F, IntPtr.Zero, IntPtr.Zero);
+		int count = (int)SendMessageW(header, 0x1200, IntPtr.Zero, IntPtr.Zero);
+		long result;
+		var order = SendForBuffer(list, 0x103B, (IntPtr)count, count * 4, out result);
+		var columns = new List<string>();
+		for (int i = 0; i < count; i++) {
+			byte[] item;
+			var title = SendForText(header, 0x120B, (IntPtr)BitConverter.ToInt32(order, i * 4), 72, text => {
+				var request = new byte[72];
+				// HDI_WIDTH | HDI_TEXT | HDI_FORMAT
+				BitConverter.GetBytes(0x7).CopyTo(request, 0);
+				BitConverter.GetBytes(text).CopyTo(request, 8);
+				BitConverter.GetBytes(1024).CopyTo(request, 24);
+				return request;
+			}, out item);
+			int format = BitConverter.ToInt32(item, 28);
+			string arrow = (format & 0x400) != 0 ? " ^" : (format & 0x200) != 0 ? " v" : "";
+			columns.Add(title + " " + BitConverter.ToInt32(item, 4) + arrow);
+		}
+		return String.Join(" | ", columns);
+	}
+
+	// A tab control's tab texts, joined with " | ". TCITEMW on x64: mask at 0, pszText at 16, cchTextMax at 24, 40 bytes.
+	public static string TabTexts(IntPtr tabs) {
+		int count = (int)SendMessageW(tabs, 0x1304, IntPtr.Zero, IntPtr.Zero);
+		var texts = new List<string>();
+		for (int i = 0; i < count; i++) {
+			texts.Add(SendForText(tabs, 0x133C, (IntPtr)i, 40, text => {
+				var request = new byte[40];
+				BitConverter.GetBytes(0x1).CopyTo(request, 0);
+				BitConverter.GetBytes(text).CopyTo(request, 16);
+				BitConverter.GetBytes(1024).CopyTo(request, 24);
+				return request;
+			}));
+		}
+		return String.Join(" | ", texts);
+	}
+
+	// EM_GETCUEBANNER takes its buffer in wparam and its size in lparam
+	public static string CueBanner(IntPtr edit) {
+		const int Chars = 256;
+		int pid;
+		GetWindowThreadProcessId(edit, out pid);
+		IntPtr process = OpenProcess(0x38, false, pid);
+		IntPtr remote = VirtualAllocEx(process, IntPtr.Zero, (IntPtr)(Chars * 2), 0x3000, 0x04);
+		try {
+			SendMessageW(edit, 0x1502, remote, (IntPtr)Chars);
+			var buffer = new byte[Chars * 2];
+			IntPtr read;
+			ReadProcessMemory(process, remote, buffer, (IntPtr)buffer.Length, out read);
+			return Utf16(buffer);
+		} finally {
+			VirtualFreeEx(process, remote, IntPtr.Zero, 0x8000);
+			CloseHandle(process);
+		}
+	}
+
+	// Sends a message that fills a RECT in lparam
+	public static RECT SendForRect(IntPtr h, uint msg, IntPtr w) {
+		long result;
+		var bytes = SendForBuffer(h, msg, w, 16, out result);
+		return new RECT { Left = BitConverter.ToInt32(bytes, 0), Top = BitConverter.ToInt32(bytes, 4), Right = BitConverter.ToInt32(bytes, 8), Bottom = BitConverter.ToInt32(bytes, 12) };
+	}
+
+	// A combo box's items, joined with " | ". Windows marshals CB_GETLBTEXT, as it does every message below WM_USER.
+	public static string ComboItems(IntPtr combo) {
+		int count = (int)SendMessageW(combo, 0x146, IntPtr.Zero, IntPtr.Zero);
+		var items = new List<string>();
+		for (int i = 0; i < count; i++) {
+			var text = new StringBuilder(256);
+			SendText(combo, 0x148, (IntPtr)i, text);
+			items.Add(text.ToString());
+		}
+		return String.Join(" | ", items);
+	}
+
 	// Button texts, with " v" for a dropdown and " (disabled)"; separators show as "-"
 	public static string ToolbarButtons(IntPtr toolbar) {
 		var parts = new List<string>();
@@ -210,8 +297,8 @@ public static class W {
 	[DllImport("gdi32.dll")] public static extern bool DeleteDC(IntPtr dc);
 	[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern bool GetTextExtentPoint32W(IntPtr dc, string text, int length, out SIZE size);
 
-	// The width of text in the message font at a DPI, the font the app gives its controls
-	public static int TextWidth(string text, uint dpi) {
+	// The size of text in the message font at a DPI, the font the app gives its controls
+	static SIZE TextExtent(string text, uint dpi) {
 		var metrics = new NONCLIENTMETRICSW();
 		metrics.Size = Marshal.SizeOf(metrics);
 		SystemParametersInfoForDpi(0x29, (uint)metrics.Size, ref metrics, 0, dpi);
@@ -220,12 +307,17 @@ public static class W {
 			SelectObject(dc, font);
 			SIZE size;
 			GetTextExtentPoint32W(dc, text, text.Length, out size);
-			return size.Cx;
+			return size;
 		} finally {
 			DeleteDC(dc);
 			DeleteObject(font);
 		}
 	}
+
+	public static int TextWidth(string text, uint dpi) { return TextExtent(text, dpi).Cx; }
+
+	// The message font's line height (tmHeight)
+	public static int TextHeight(uint dpi) { return TextExtent("A", dpi).Cy; }
 
 	// "<text> +<width beyond the text>" for each plain button; separators and dropdowns are left out
 	public static string ToolbarExtraWidths(IntPtr toolbar, uint dpi) {
@@ -328,6 +420,20 @@ public static class W {
 			}
 			return new[] { first - area.Left, area.Right - 1 - last };
 		}
+	}
+
+	[DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr h, ref POINT p);
+	[DllImport("user32.dll", EntryPoint = "SendMessageW")] static extern IntPtr SendRect(IntPtr h, uint msg, IntPtr w, ref RECT r);
+
+	// Where an edit's text starts, from the top of its window: its client area's top, then its formatting rectangle's
+	// (EM_GETRECT, which Windows marshals, as every message below WM_USER)
+	public static int EditTextTop(IntPtr edit) {
+		RECT window, format = new RECT();
+		GetWindowRect(edit, out window);
+		var client = new POINT();
+		ClientToScreen(edit, ref client);
+		SendRect(edit, 0xB2, IntPtr.Zero, ref format);
+		return client.Y - window.Top + format.Top;
 	}
 
 	// The pixels of a child's first columns in a PrintWindow capture, as a string to compare
