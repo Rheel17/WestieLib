@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -10,7 +11,9 @@
 #include "ui/framework/Dpi.h"
 #include "ui/framework/IconResource.h"
 #include "ui/framework/MessageFont.h"
+#include "ui/framework/ProgressBar.h"
 #include "ui/framework/StatusBar.h"
+#include "ui/sync/SyncBoard.h"
 #include "ui/tools/ToolBoard.h"
 #include "ui/tools/ToolMark.h"
 #include "ui/tools/ToolStatusText.h"
@@ -27,21 +30,26 @@ public:
     void set_track_count(int count);
     void set_library_folder(const std::filesystem::path& folder);
     void set_tools(const ToolBoard& board);
+    void set_run(const SyncBoard& board, std::optional<std::chrono::system_clock::time_point> last_sync);
     void draw(const DRAWITEMSTRUCT& item) const;
 
 private:
     void load_icons();
     void measure_tools();
     void show_tools();
+    void show_run_bar();
     void set_parts();
     const framework::IconResource* tool_icon() const noexcept;
     const framework::IconResource& ring(int percent) const noexcept;
 
     framework::StatusBar status_bar_;
+    framework::ProgressBar run_bar_;
     framework::Dpi dpi_;
     framework::IconResource ready_icon_;
     framework::IconResource attention_icon_;
+    framework::IconResource tool_wait_icon_;
     std::vector<framework::IconResource> rings_;
+    bool run_bar_shown_ = false;
     ToolMark tool_mark_ = ToolMark::Working;
     std::wstring tools_tip_;
     std::optional<ToolWork> work_;

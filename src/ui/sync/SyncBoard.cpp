@@ -7,6 +7,7 @@ namespace westie::ui {
 void SyncBoard::apply(const core::SyncQueued& queued) {
     running_ = true;
     queue_.insert(queue_.end(), queued.playlists.begin(), queued.playlists.end());
+    total_ += static_cast<int>(queued.playlists.size());
 }
 
 void SyncBoard::apply(const core::PlaylistFetching& fetching) {
@@ -20,6 +21,7 @@ void SyncBoard::finish_playlist(const std::string& playlist) {
         current_.reset();
         waiting_for_.clear();
     }
+    ++finished_;
 }
 
 void SyncBoard::finish() {
@@ -27,6 +29,8 @@ void SyncBoard::finish() {
     queue_.clear();
     current_.reset();
     waiting_for_.clear();
+    finished_ = 0;
+    total_ = 0;
 }
 
 bool SyncBoard::running() const noexcept {
@@ -43,6 +47,14 @@ const std::optional<std::string>& SyncBoard::current() const noexcept {
 
 std::span<const core::ToolPackage> SyncBoard::waiting_for() const noexcept {
     return waiting_for_;
+}
+
+int SyncBoard::finished() const noexcept {
+    return finished_;
+}
+
+int SyncBoard::total() const noexcept {
+    return total_;
 }
 
 }

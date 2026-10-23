@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -14,6 +15,26 @@ namespace westie::ui {
 
 namespace {
 
+std::set<std::string> listed_tracks(const core::State& state, const core::Playlist& playlist) {
+    std::set<std::string> tracks;
+    for (const std::string& source : playlist.sources) {
+        if (auto entry = state.sources.find(source); entry != state.sources.end()) {
+            tracks.insert(entry->second.track);
+        }
+    }
+    return tracks;
+}
+
+int shared_tracks(const core::State& state, const std::string& key, const core::Playlist& playlist, core::SourceType type) {
+    std::set<std::string> elsewhere;
+    for (const auto& [other_key, other] : state.playlists) {
+        if (other_key != key && core::source_type_of_key(other_key) == type) {
+            elsewhere.merge(listed_tracks(state, other));
+        }
+    }
+    return static_cast<int>(std::ranges::count_if(listed_tracks(state, playlist), [&](const std::string& track) { return elsewhere.contains(track); }));
+}
+
 std::optional<PlaylistRow> row_of(const core::State& state, const std::string& key, const core::Playlist& playlist) {
     std::optional<core::SourceType> type = core::source_type_of_key(key);
     // A playlist from a later version's source can't be shown
@@ -24,6 +45,10 @@ std::optional<PlaylistRow> row_of(const core::State& state, const std::string& k
     std::wstring name = playlist.name.empty() ? playlist_type_text(*type) : platform::win32::to_utf16(playlist.name);
     // The key is the source's prefix, a colon and the playlist's ID
     std::wstring id = platform::win32::to_utf16(std::string_view(key).substr(core::source_prefix(*type).size() + 1));
+    std::optional<std::chrono::system_clock::time_point> failed_at;
+    if (!playlist.fetch_error.empty()) {
+        failed_at = playlist.fetch_error_at.value_or(std::chrono::system_clock::time_point{});
+    }
     return PlaylistRow{
         .key = key,
         .type = *type,
@@ -31,6 +56,9 @@ std::optional<PlaylistRow> row_of(const core::State& state, const std::string& k
         .id = std::move(id),
         .url = platform::win32::to_utf16(playlist.url),
         .counts = count_tracks(state, key),
+        .shared = shared_tracks(state, key, playlist, *type),
+        .last_sync = playlist.last_sync,
+        .fetch_failed_at = failed_at,
     };
 }
 
@@ -56,6 +84,19 @@ std::optional<PlaylistRow> playlist_row(const core::State& state, const std::str
         return std::nullopt;
     }
     return row_of(state, playlist->first, playlist->second);
+}
+
+void mark_runs(std::vector<PlaylistRow>& rows, const SyncBoard& board) {
+    for (PlaylistRow& row : rows) {
+        row.run = PlaylistRun::None;
+        row.waiting_for.clear();
+        if (board.current() == row.key) {
+            row.run = PlaylistRun::Fetching;
+            row.waiting_for.assign(board.waiting_for().begin(), board.waiting_for().end());
+        } else if (board.queued(row.key)) {
+            row.run = PlaylistRun::Queued;
+        }
+    }
 }
 
 }

@@ -88,6 +88,19 @@ function Get-SelectedRows($hwnd) {
 	$rows -join ' / '
 }
 
+# Whether the infobar shows, and its message
+function Get-InfobarText($hwnd) {
+	$infobar = Get-Infobar $hwnd
+	"$([W]::IsWindowVisible($infobar)) $([W]::TextOf(([W]::Children($infobar, 'WestieLib.Label'))[0]))"
+}
+
+# The Add playlist button follows the rows, however tall each is
+function Check-ListButton([string]$what, $hwnd, [int]$count) {
+	$list = Get-PlaylistList $hwnd
+	$button = [W]::RectIn(([W]::Children($list, 'Button'))[0], $list)
+	Check $what $button.Top ((Get-PlaylistRowTop $hwnd ($count + 1)) + (S 8))
+}
+
 function Get-TrackSummary($hwnd) { "$([W]::TabTexts((Get-StatusTabs $hwnd))) | $([W]::TextOf((Get-ResultLine $hwnd)))" }
 
 $Cafe = "Caf$([char]0xE9) Lights"
@@ -96,6 +109,7 @@ $SharedName = 'Checked PLshared1'
 $SlowName = 'Checked PLslow1'
 $BrokenError = 'Unable to download API page: HTTP Error 503: Service Unavailable'
 $SyncSpotifyKey = "spotify:$SpotifyId"
+$FetchMessage = "Couldn$([char]0x2019)t fetch $([char]0x201C)Named PLbroken1$([char]0x201D). It may be private or deleted."
 $RowA = " | Way Down We Go | KALEO |  | $TracksName | 3:34"
 $RowB = " | $Cafe | Nova |  | $TracksName | 3:11"
 $RowC = " | No Length | Somebody |  | $TracksName | 0:00"
@@ -127,12 +141,17 @@ Check '  All tracks: rows, by title' (Get-TrackRows $h) "$RowB / $RowC / $RowD /
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 5 | Synced 0 | Waiting 5 | Needs review 0 | Failed 0 | Showing 5 of 5'
 Check '  Library card' (Get-CardTexts $h) "Library card: All tracks / Library / Folder / $DefaultLibrary / Tracks / 5 tracks $MiddleDot 0 synced / Open library folder"
 Check '  syncing after it' (Test-Syncing $h) 'False'
+# The rows with tracks waiting have a line for them
+$script:TallRows = 1, 3
+Check-ListButton '  rows 1 and 3 a line taller: Add playlist under them' $h 4
+Check '  infobar: the failed fetch' (Get-InfobarText $h) "True $FetchMessage"
+Check '  the rows sync controls tooltips' "$([W]::TooltipText((Get-PlaylistList $h), 0)) / $([W]::TooltipText((Get-PlaylistList $h), 3))" "Sync $TracksName / Sync Named PLbroken1"
 
 Click-PlaylistRow $h 1
 Check 'Playlist 1: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowA / 2 | $RowB / 3 | $RowC / 4 | $RowShared"
 Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Synced 0 | Waiting 4 | Needs review 0 | Failed 0 | Showing 4 of 5 in $TracksName"
-Check '  card' (Get-CardTexts $h) ("Playlist card: $TracksName / YouTube Music playlist / Playlist / Link / PLtracks1 / Tracks / 4 / Synced / 0/4 / " +
-	"Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
+Check '  card' ((Get-CardTexts $h) -replace 'today \d\d:\d\d', 'today HH:MM') ("Playlist card: $TracksName / YouTube Music playlist / Playlist / Link / PLtracks1 / " +
+	"Tracks / 4 / Synced / 0/4 / Waiting / 4 / Shared / 1 track is also in other playlists / Last sync / today HH:MM / Sync playlist / Remove playlist$Ellipsis")
 Click-PlaylistRow $h 2
 Check 'The Spotify playlist: no rows' "$(Get-TrackRows $h)| $(Get-TrackSummary $h)" "| All 0 | Synced 0 | Waiting 0 | Needs review 0 | Failed 0 | Showing 0 of 5 in Named $SpotifyId"
 $runs = Get-FetchRuns
@@ -140,11 +159,37 @@ Send-Command $h 'Sync &selected playlist'
 Start-Sleep -Milliseconds 1000
 Check '  Sync selected: nothing fetched' "$(Get-FetchRuns) $(Test-Syncing $h)" "$runs False"
 
+# Details shows the log; the infobar's close box dismisses the failure until the playlist fails again
+$infobar = Get-Infobar $h
+[void][W]::PostMessageW(([W]::Children($infobar, 'Button'))[0], 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Start-Sleep -Milliseconds 300
+Check 'Infobar Details: the log shows' (Get-LogVisibility $h) 'True True'
+Send-Command $h '&Log'
+Start-Sleep -Milliseconds 200
+Send-Click $infobar ((Get-ClientWidth $infobar) - (S 6) - (S 12)) ([int](((Get-ClientHeight $infobar) - 1) / 2))
+Start-Sleep -Milliseconds 300
+Check '  its close box: gone, the panels move up' "$([W]::IsWindowVisible($infobar)) $((Get-RowPanels $h).Count)" 'False 3'
+$runs = Get-FetchRuns
+Click-PlaylistRow $h 4
+Send-Command $h 'Sync &selected playlist'
+Wait-Fetches $h $runs 1
+Check '  the playlist fails again: back' (Get-InfobarText $h) "True $FetchMessage"
+
+# A row's sync control syncs its playlist
+$list = Get-PlaylistList $h
+$control = [W]::ToolRect($list, 0)
+$runs = Get-FetchRuns
+Send-Click $list ([int](($control.Left + $control.Right) / 2)) ([int](($control.Top + $control.Bottom) / 2))
+Wait-Fetches $h $runs 1
+Check 'Row 1 sync control: one fetch, its playlist' "$((Get-FetchRuns) - $runs) $(@(Get-Content $FakeYtDlpRuns -Encoding UTF8)[-1] -replace '^.*list=', '')" '1 PLtracks1'
+
 # Sync now syncs the playlist that was just added; Cancel stops its fetch, which keeps the playlist as it was
 $runs = Get-FetchRuns
 Check 'Add a playlist with Sync now' (Add-Playlist $h 'https://music.youtube.com/playlist?list=PLslow1' -SyncNow) "$SlowName YouTube Music playlist | Add True"
 for ($i = 0; $i -lt 50 -and (Get-FetchRuns) -eq $runs; $i++) { Start-Sleep -Milliseconds 100 }
 Check '  its fetch starts | syncing | Sync all' "$((Get-FetchRuns) - $runs) $(Test-Syncing $h) $(([W]::GetMenuState([W]::GetMenu($h), [W]::CommandOf([W]::GetMenu($h), 'Sync &all'), 0) -band 0x1) -ne 0)" '1 True True'
+Check '  while it syncs, the controls have no tooltip' "[$([W]::TooltipText((Get-PlaylistList $h), 0))]" '[]'
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-syncing.png") }
 $started = [DateTime]::Now
 Send-Command $h '&Cancel'
 for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
@@ -156,6 +201,7 @@ Check '  rows' (Get-TrackRows $h) ''
 $runs = Get-FetchRuns
 Send-Command $h 'Sync &selected playlist'
 Wait-Fetches $h $runs 1
+$script:TallRows = 1, 3, 5
 Check 'Sync selected: its rows' (Get-TrackRows $h) "1 | $RowSlow"
 Check '  tabs | result line' (Get-TrackSummary $h) "All 1 | Synced 0 | Waiting 1 | Needs review 0 | Failed 0 | Showing 1 of 6 in $SlowName"
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-sync.png") }
@@ -166,6 +212,7 @@ Send-Command $h '&Remove playlist...'
 $dialog = Wait-OwnedWindow $h
 [void][W]::PostMessageW($dialog, 0x466, [IntPtr]1, [IntPtr]::Zero)
 Wait-Closed $dialog
+$script:TallRows = 1, 4
 Check 'Remove the second playlist: tracks' (Get-SavedTracks) 'AAAAA1 pending [AAAAA1] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True / SLOWW7 pending [SLOWW7] True'
 Check '  sources' (@((Get-SavedState).sources.PSObject.Properties | ForEach-Object { $_.Name -replace '^ytm:track', '' }) -join ' ') 'AAAAA1 BBBBB2 CCCCC4 SHARE5 SLOWW7'
 Check '  All tracks: rows' (Get-TrackRows $h) "$RowB / $RowC / $RowSharedAlone / $RowSlow / $RowA"

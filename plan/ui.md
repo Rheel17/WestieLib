@@ -103,7 +103,7 @@ Each menu lists its items top to bottom; ─ is a separator. Shortcuts are right
 | Menu  | Items |
 |-------|-------|
 | File  | Add playlist… (Ctrl+N), Remove playlist…, ─, Open library folder, ─, Exit (Ctrl+Q) |
-| Sync  | Sync all (F5), Sync selected playlist, ─, Cancel (Esc while syncing) |
+| Sync  | Sync all (F5), Sync selected playlist, ─, Cancel |
 | Track | Confirm match, Choose video…, Edit track… (Enter, double-click), ─, Retry, Keep, Move to Recycle Bin…, ─, Show in folder, Open on YouTube, Open source page |
 | View  | Log (Ctrl+L), ─, Columns… |
 | Tools | Settings… (Ctrl+Alt+S), Check for updates, ─, Rebuild library from files…, Library folder moved…, ─, Open log folder |
@@ -152,6 +152,18 @@ Only one message shows at a time, in this priority order:
 
 ✕ hides the current message until its cause changes. A dismissed fetch failure still shows ⚠ on its playlist
 row.
+
+So far it shows only fetch failures, one at a time: the first playlist, in the order they were added, whose last fetch
+failed and wasn't dismissed. A later failure of a dismissed playlist shows again. `Details` shows the log pane, which
+lists nothing yet; its lines come with the log.
+
+```
+│ ⚠  Couldn’t fetch “Slow & bluesy”. It may be private or deleted.                         [Details]  ✕ │
+```
+
+The strip is `#FFF4CE` with a 1 px `#EADB9F` rule along its bottom. From the left: 10 px, the 16 px ⚠, 8 px, the
+message (an ellipsis when it doesn't fit), 8 px, `Details` (a compact button), 8 px, and ✕ in a 24 px box, 6 px from
+the right edge. A click on the box dismisses the message.
 
 ## Left panel
 
@@ -202,7 +214,11 @@ The playlists are listed in the order they were added. A playlist that was just 
 with `0/0`, and `○ Never synced ↻`.
 
 **So far** a sync only fetches YouTube Music playlists: their tracks show as Waiting, and nothing downloads. Spotify
-playlists are left out of a sync and stay `Never synced` until fetching them exists.
+playlists are left out of a sync and stay `Never synced` until fetching them exists. Meanwhile:
+
+- the playlist being fetched reads `Syncing…`, without `6 of 22`, which counts downloads;
+- a playlist whose fetch waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of a queued one;
+- a fetch that succeeds sets the last sync, so a playlist whose tracks all wait reads `○ Synced today 14:03 ↻`.
 
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
 so their left edge is where the All tracks name starts.
@@ -429,8 +445,10 @@ The cards, from the top, in DIPs:
   - Library: `Folder` is the library folder in effect, `Tracks` reads like the All tracks row (`0 tracks · 0 synced`).
   - Playlist: `Link` is the playlist's ID (the source shows in the title and subtitle above) as a link to its URL (`#0066CC`, underlined while the mouse is over it, the hand
     cursor over its text); a click opens it in the browser. `Tracks` is the count, `Synced` a bar like the row's
-    that fills the value's width, 6 px, then `synced/total`. `Last sync` reads `Never` until syncing exists. The `Waiting`, `Failed`,
-    `To review` (non-zero only) and `Shared` rows come with tracks.
+    that fills the value's width, 6 px, then `synced/total`. Then, each only when it isn't zero: `Waiting`, `Failed`
+    (in red), `To review` (in amber) and `Shared` (`3 tracks are also in other playlists`, counting the playlists of
+    the same source). `Last sync` reads like the row without `Synced`: `today 14:03`, `yesterday`, `12 Oct`, or
+    `Never`.
 - **Buttons**, 14 px below, 6 px apart, wrapping onto a new row 6 px down when they don't fit: `Open library folder`;
   or `⟳ Sync playlist` and `Remove playlist…`. They follow the command rules (see Menu bar and toolbar).
 
@@ -451,7 +469,7 @@ sides and top, 10 px at the bottom.
 
 | Part    | Content |
 |---------|---------|
-| Run     | `Ready · last sync today 14:05`, or `Syncing 6 of 25` with an embedded progress bar, or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools |
+| Run     | `Ready · last sync today 14:05` (`Ready` before any sync), or `Syncing 6 of 25` with an embedded 120 px progress bar against the part's right edge, or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools. So far a sync only fetches, so it counts playlists: `Syncing 1 of 2` while the first is fetched |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
 | Tools   | `Tools ✓` or `Tools ⚠`, or while the tools are at work, `Tools ◔ installing ffmpeg 35%` with the progress ring: the word, 7 px, a 12 px icon, and then 7 px and what is going on (see below) |
@@ -633,7 +651,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
 | Infobar | custom-painted child window holding push buttons |
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
-| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`, `DrawThemeBackground` toolbar button part for the hot state). It is hit-tested in `WM_LBUTTONDOWN`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle. The spinning sync icon is a 12-frame image list (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`), with the hover colors `#E5F3FF` and a `#CCE8FF` frame (`#99D1FF` on a selected row) while the mouse is over it. It is hit-tested in `WM_LBUTTONDOWN`, takes the mouse capture until `WM_LBUTTONUP`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle while it can be clicked. The spinning sync icon is 12 icon resources (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |

@@ -16,8 +16,8 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 - `MainMenu.cpp` lists the menus as tables of `command_item(id, text)`, with the shortcut after a tab. On
   `WM_INITMENUPOPUP` (not for the window menu) `update_menu_items` grays and checks the popup's items from
   `command_state()`.
-- `MainAccelerators.cpp` holds the shortcut table. `main.cpp` builds it and hands it to `MessageLoop::run`. Esc and
-  Enter appear in the menu text but aren't in the table: they belong to the sync and the track list.
+- `MainAccelerators.cpp` holds the shortcut table. `main.cpp` builds it and hands it to `MessageLoop::run`. Enter
+  appears in the menu text but isn't in the table: it belongs to the track list.
 - `MainWindow::handle_message` first offers every message to its `MenuBarPainter`, which draws the menu bar in white
   so it runs into the toolbar.
 - Menus and accelerators arrive as `WM_COMMAND` with no control. `run_command` drops a command that
@@ -60,7 +60,7 @@ saved `Placement` and asks it for the current one.
 - `MainStatusBar` (`src/ui/statusbar/`) owns the `StatusBar`, its part widths (the `*WidthDips` shares and minimums,
   from `plan/ui.md`), its spacing, and the part texts:
   Run, Tracks and Library from the left, an empty part, then Tools and Version against the right edge, with Version's
-  text centered. Until the core exists, Run reads `Ready` and Version shows the build's version. Library shows the
+  text centered. Version shows the build's version. Library shows the
   folder in effect, with a path ellipsis, and is the part that gives way when Tools needs the room. The texts are
   owner-drawn, so `MainWindow` hands the status bar's `WM_DRAWITEM` to `MainStatusBar::draw`.
 - `MainStatusBar::set_tools` takes the `ToolBoard`. The Tools part reads `Tools` and an icon: the board's `ToolMark`
@@ -70,6 +70,11 @@ saved `Placement` and asks it for the current one.
 - The Tools part is as wide as the widest of `every_tools_work_text`, measured in the bar's font with the percentage
   at `100%` (`measure_tools`, again after each new font), so it never changes width. The ring's 25 steps are icon
   resources from `IDI_RING_0`, loaded at 12 DIPs.
+- `MainStatusBar::set_run` takes the `SyncBoard` and the latest last sync, which `MainWindow::show_run` finds among the
+  rows. Run reads `Ready · last sync today 14:05` (`Ready` before any), `Syncing 1 of 2` while a sync fetches, with a
+  `framework::ProgressBar` that `StatusBar::embed` places against the part's right edge, or the ⧗ and `Waiting for
+  yt-dlp` (`waiting_for_text`, `src/ui/sync/WaitingText.cpp`) while the fetch waits for it. A part without text starts
+  with its icon.
 
 ## Core events and tools
 
@@ -95,9 +100,16 @@ saved `Placement` and asks it for the current one.
   - `Sync all` hands the engine every playlist in row order, `Sync selected playlist` (also the menu's Sync and the
     card's button) the selected one, and Add playlist's `Sync now` the new one. The engine leaves Spotify playlists
     out. `Cancel` calls `SyncEngine::cancel`.
-  - `PlaylistFetched` and `PlaylistFetchFailed` bring the window up to date from a new snapshot (`show_playlists`).
-  - Esc for Cancel isn't in the accelerator table, because the table would take Esc from every control, such as an
-    open drop-down list.
+  - It also counts the playlists the run was given and the ones it has done, for the status bar.
+  - Every sync event brings the window up to date from a new snapshot (`show_playlists`): `mark_runs` tells each
+    `PlaylistRow` whether it's queued or being fetched, and what it waits for.
+  - A row's sync control (`PlaylistEvents::on_sync`) syncs its playlist. Like `Sync all`, it works only while nothing
+    syncs; `update_commands` tells the list so (`set_sync_enabled`).- **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠, the rule and the
+  close box itself, and holds the message `Label` (on the strip's color, `LabelStyle::background`) and `Details`.
+  Its window class has the yellow brush, which the themed button's corners show. `FetchFailureNotice` picks the
+  message from the rows: the first playlist with a fetch error that wasn't dismissed. Dismissing remembers the
+  playlist with the time of its failure, so the next failure shows again. While there is a message, `current_layout`
+  gives the infobar its height, and the panels start under it. `Details` shows the log pane.
 - **State.** The sync's worker writes the state, so the window reads it through `StateStore::snapshot()`, a
   `std::shared_ptr<const State>` that stays as it is while the window uses it. Every function that shows the state
   takes one snapshot and works from it.
@@ -132,10 +144,19 @@ saved `Placement` and asks it for the current one.
     selection isn't saved, so every start begins on All tracks.
 - `MainWindow` keeps a `framework::FocusMemory`: on `WM_ACTIVATE` with `WA_INACTIVE` it notes which child had the
   focus, and on `WM_SETFOCUS`, which `DefWindowProc` sends the window when it's active again, it hands the focus back.
-- `PlaylistRowPainter` draws one row into a given rect, with the logo, the waiting and sync glyphs at 14 DIPs and the
-  fonts it got, and knows the row's height. The list makes a new one on every `apply_dpi`. The names, the label and
+- `PlaylistRowPainter` draws one row into a given rect, with the logo and the status glyphs at 14 DIPs and the
+  fonts it got, and knows each row's height: a row with tracks waiting, failed or to review has a line for them. The
+  list adds the heights up to place the rows. It makes a new painter on every `apply_dpi`. The names, the label and
   the button all start at `text_left()`, which adds up the same DIPs as `AllTracksRow::text_left()`, so everything
-  lines up with All tracks at every scale. Rows have a fixed height until their counts can be non-zero.
+  lines up with All tracks at every scale.
+- `last_sync_line` (`LastSyncLine.cpp`) decides the last line: the status icon (`SyncMark`), the amber
+  `Couldn't fetch`, the text, and the control (`SyncControl`): ↻, the spinning ⟳, or the faded ⟳ of a queued playlist.
+  The painter measures the text to place the control after it, and `sync_button` gives the control's rect for
+  hit-testing and the tooltip tools (`Sync <name>`, only while it can be clicked).
+- The list presses the control as `ItemTracker` presses a row (capture, and a release over it), without selecting the
+  row. While a row spins, a `framework::Animation` runs a 100 ms timer that invalidates the controls, and the step is
+  the time since it started out of 1.2 s (`IDI_SPIN_0` to `IDI_SPIN_0 + 11`, from `res/make-glyphs.ps1`). With
+  Windows' animations off it stands still.
 - `playlist_rows` (`PlaylistRows.cpp`) turns the state into `PlaylistRow`s, in the order the playlists were added,
   with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name, and each one's `TrackCounts`. `MainWindow::show_playlists`
   hands them to the panel.
@@ -152,7 +173,9 @@ saved `Placement` and asks it for the current one.
     a `framework::LinkLabel`. Every window's text is what it shows, so the checks read the cards with
     `GetWindowTextW`.
   - `CardLayout` holds the measures from `plan/ui.md` (Inspector › Nothing selected) and stacks a card's parts from
-    the top: title, subtitle, section, key–value rows and a row of buttons that wraps. A card runs the same `arrange`
+    the top: title, subtitle, section, key–value rows and a row of buttons that wraps. `row_if` hides a row that isn't
+    there, such as the playlist card's `Waiting`, `Failed` (red), `To review` (amber) and `Shared`, which show only
+    when they aren't zero. `Shared` counts the playlist's tracks that other playlists of its source list too. A card runs the same `arrange`
     to place its children on `WM_SIZE` and, without `DeferredPositions`, to measure `height_for(width)`.
   - The panel is `WS_VSCROLL` with a `framework::VerticalScroll`. Its content is the card's height plus the padding;
     scrolling moves the card window, not its children. A new card, or new contents, starts at the top.
@@ -300,7 +323,7 @@ the table itself, through `BufferedPaint`.
   isn't 0), the panel row, the log splitter and log (only while the log shows); the status bar takes the bottom.
   Size limits are constants in `MainLayout.h`; the rules they follow are in `plan/ui.md` (Window layout).
 - A part that isn't there is an empty `std::optional`, and `DeferredPositions::place` hides its window in the same
-  batch. Nothing passes an infobar height yet, so that row stays empty until the infobar exists.
+  batch. The infobar row is there only while the infobar has a message.
 - The `move_*_splitter` functions turn the position a dragged splitter wants into new panel sizes, clamped to the
   limits.
 - `MainWindow::layout_panels()` places every child through one `DeferredPositions` batch. It runs on `WM_SIZE`, after

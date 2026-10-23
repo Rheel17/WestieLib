@@ -22,9 +22,14 @@ public:
     bool queued(const std::string& playlist) const;
     const std::optional<std::string>& current() const noexcept;
     std::span<const core::ToolPackage> waiting_for() const noexcept;
+    int finished() const noexcept;
+    int total() const noexcept;
 
 private:
     bool running_ = false;
+    // Playlists the run has done, and all it was given
+    int finished_ = 0;
+    int total_ = 0;
     std::vector<std::string> queue_;
     std::optional<std::string> current_;
     std::vector<core::ToolPackage> waiting_for_;

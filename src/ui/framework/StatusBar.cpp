@@ -93,7 +93,7 @@ int StatusBar::part_width_for(const PartContent& content) const {
     platform::win32::check(SendMessageW(hwnd(), SB_GETBORDERS, 0, reinterpret_cast<LPARAM>(borders.data())), "SB_GETBORDERS");
     int width = borders[2] + 2 * padding_ + measure(dc.get(), content.text);
     if (content.icon) {
-        width += gap_ + content.icon->size();
+        width += (content.text.empty() ? 0 : gap_) + content.icon->size();
     }
     if (!content.trailing.empty()) {
         width += gap_ + measure(dc.get(), content.trailing);
@@ -125,16 +125,18 @@ void StatusBar::draw(const DRAWITEMSTRUCT& item) const {
         DrawTextW(item.hDC, text.c_str(), static_cast<int>(text.size()), &area, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | ellipsis | alignment);
     };
 
-    // With something after it, the text gets no more than it needs, and leaves the icon room when the part is narrow
+    // With something after it, the text gets no more than it needs, and leaves the icon room when the part is narrow.
+    // Without text the icon starts the part.
     RECT text_bounds = bounds;
-    int icon_width = content.icon ? gap_ + content.icon->size() : 0;
+    int icon_gap = content.text.empty() ? 0 : gap_;
+    int icon_width = content.icon ? icon_gap + content.icon->size() : 0;
     if (content.icon || !content.trailing.empty()) {
         text_bounds.right = std::min<int>(bounds.left + measure(item.hDC, content.text), std::max<int>(bounds.left, bounds.right - icon_width));
     }
     draw_text(content.text, text_bounds);
     int right = text_bounds.right;
     if (content.icon) {
-        content.icon->draw(item.hDC, right + gap_, (item.rcItem.top + item.rcItem.bottom - content.icon->size()) / 2);
+        content.icon->draw(item.hDC, right + icon_gap, (item.rcItem.top + item.rcItem.bottom - content.icon->size()) / 2);
         right += icon_width;
     }
     if (!content.trailing.empty()) {

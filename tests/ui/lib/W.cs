@@ -134,6 +134,33 @@ public static class W {
 	// The text of tool `id` of `window`, from whichever of its process's tooltip windows has it. A tooltip's owner is
 	// the top-level window, not the window its tools are in. TOOLINFOW on x64: hwnd at 8, uId at 16, lpszText at 48,
 	// 72 bytes.
+	// The same tool's rect in `window`, from TTM_GETTOOLINFOW, which leaves it at 24; an empty rect when no tooltip has it
+	public static RECT ToolRect(IntPtr window, int id) {
+		int pid, owner;
+		GetWindowThreadProcessId(window, out pid);
+		var tooltips = new List<IntPtr>();
+		EnumWindows((h, l) => {
+			GetWindowThreadProcessId(h, out owner);
+			if (owner == pid && ClassOf(h) == "tooltips_class32") tooltips.Add(h);
+			return true;
+		}, IntPtr.Zero);
+		foreach (var tooltip in tooltips) {
+			byte[] answer;
+			var found = SendForText(tooltip, 0x435, IntPtr.Zero, 72, text => {
+				var info = new byte[72];
+				BitConverter.GetBytes(72).CopyTo(info, 0);
+				BitConverter.GetBytes((long)window).CopyTo(info, 8);
+				BitConverter.GetBytes((long)id).CopyTo(info, 16);
+				BitConverter.GetBytes(text).CopyTo(info, 48);
+				return info;
+			}, out answer);
+			if (found.Length > 0) {
+				return new RECT { Left = BitConverter.ToInt32(answer, 24), Top = BitConverter.ToInt32(answer, 28), Right = BitConverter.ToInt32(answer, 32), Bottom = BitConverter.ToInt32(answer, 36) };
+			}
+		}
+		return new RECT();
+	}
+
 	public static string TooltipText(IntPtr window, int id) {
 		int pid, owner;
 		GetWindowThreadProcessId(window, out pid);

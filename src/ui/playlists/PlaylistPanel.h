@@ -25,6 +25,7 @@ public:
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void set_track_counts(const TrackCounts& counts);
     void set_playlists(std::vector<PlaylistRow> rows);
+    void set_sync_enabled(bool enabled);
     void show_selection(const std::optional<std::string>& key);
 
 protected:

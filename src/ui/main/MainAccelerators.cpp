@@ -15,7 +15,7 @@ constexpr ACCEL shortcut(BYTE modifiers, WORD key, CommandId command) {
     return {.fVirt = static_cast<BYTE>(FVIRTKEY | modifiers), .key = key, .cmd = std::to_underlying(command)};
 }
 
-// Esc and Enter belong to the sync and the track list, which handle them without taking them from other controls
+// Enter belongs to the track list, which handles it without taking it from other controls
 constexpr std::array Shortcuts = {
     shortcut(FCONTROL, 'N', CommandId::AddPlaylist),
     shortcut(FCONTROL, 'Q', CommandId::Exit),

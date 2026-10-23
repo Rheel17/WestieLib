@@ -40,6 +40,10 @@ void PlaylistPanel::set_playlists(std::vector<PlaylistRow> rows) {
     list_.set_rows(std::move(rows));
 }
 
+void PlaylistPanel::set_sync_enabled(bool enabled) {
+    list_.set_sync_enabled(enabled);
+}
+
 void PlaylistPanel::show_selection(const std::optional<std::string>& key) {
     all_tracks_.set_selected(!key);
     list_.set_selection(key);

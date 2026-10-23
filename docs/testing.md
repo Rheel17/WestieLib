@@ -40,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
 | `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView` |
-| `sync` | Sync all, Sync selected and Sync now: what a fetch writes to state.json, the table's rows, the tab counts and result line, the cards; Spotify left out, a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, and a fetch that waits for yt-dlp | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `ui/sync/`, `ui/tracks/`, `ui/TrackCounts` |
+| `sync` | Sync all, Sync selected and Sync now: what a fetch writes to state.json, the table's rows, the tab counts and result line, the cards; Spotify left out, a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), and a fetch that waits for yt-dlp | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `ui/sync/`, `ui/tracks/`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -89,6 +89,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   against the real cursor, which is elsewhere, starts a drag, and the drag then takes the next click on a header.
   `Get-SelectedRows` lists the selected rows (`LVM_GETNEXTITEM`). `Choose-Source`, `Click-Tab` and `Click-Header`
   are in `lib/Checks.ps1`, since both track suites use them.
+- A playlist row with tracks waiting, failed or to review is a line taller. The rows paint themselves, so the script
+  can't measure them: a suite that knows which rows are tall lists them in `$script:TallRows` (from 1), which
+  `Get-PlaylistRowTop` and `Click-PlaylistRow` add up. `Reset-Checks` empties it.
+- While the infobar shows, the panels start under it, and `Get-RowTop` (which `Get-RowPanels` uses) starts there too.
+  `Get-Infobar` finds it; its close box is painted, so the `sync` suite clicks it by its place (24 DIPs, 6 from the
+  right edge).
+- A row's sync control is painted too, but it has a tooltip tool: `ToolRect` reads the tool's rect
+  (`TTM_GETTOOLINFOW`), which is where to click, and `TooltipText` its text.
+- `Get-CardTexts` reads only the card's visible windows, since the rows a card hides are still its children.
+- The status bar's Run part is owner-drawn, so only the screenshots show it (`-syncing.png` while a fetch runs).
 - Suites start without playlists, so they see the welcome screen. The `playlists` suite adds some in run 1
   (`Add-Playlist`), starts with them in run 2, starts with more than fit in run 3 (`Write-ManyPlaylists`) and scrolls
   them, and breaks `state.json` in run 4. The `tools` suite's run 3 serves yt-dlp from `FakeWeb` and checks that Add

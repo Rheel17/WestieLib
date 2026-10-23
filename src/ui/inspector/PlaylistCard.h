@@ -47,10 +47,21 @@ private:
     framework::Label tracks_;
     framework::Label synced_key_;
     SyncedValue synced_;
+    framework::Label waiting_key_;
+    framework::Label waiting_;
+    framework::Label failed_key_;
+    framework::Label failed_;
+    framework::Label review_key_;
+    framework::Label review_;
+    framework::Label shared_key_;
+    framework::Label shared_;
     framework::Label last_sync_key_;
     framework::Label last_sync_;
     framework::Button sync_;
     framework::Button remove_;
+    // The rows that show only when they aren't zero
+    TrackCounts counts_;
+    int shared_count_ = 0;
     int line_height_ = 0;
 };
 

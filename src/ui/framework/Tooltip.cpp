@@ -38,4 +38,15 @@ void Tooltip::set_tool(UINT_PTR id, const Rect& bounds, const std::wstring& text
     }
 }
 
+void Tooltip::remove_tool(UINT_PTR id) {
+    if (tools_.erase(id) == 0) {
+        return;
+    }
+    TOOLINFOW tool{};
+    tool.cbSize = sizeof(tool);
+    tool.hwnd = owner_;
+    tool.uId = id;
+    SendMessageW(hwnd(), TTM_DELTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+}
+
 }

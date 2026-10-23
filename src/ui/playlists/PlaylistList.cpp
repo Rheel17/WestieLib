@@ -1,6 +1,7 @@
 #include "ui/playlists/PlaylistList.h"
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 #include <windows.h>
@@ -26,6 +27,13 @@ constexpr int EmptyTextBottomDips = 2;
 constexpr int EmptyTextLineDips = 16;
 constexpr int ButtonTopDips = 8;
 constexpr int BottomPaddingDips = 11;
+constexpr UINT_PTR SpinTimer = 1;
+constexpr UINT SpinIntervalMs = 100;
+constexpr std::chrono::milliseconds SpinTurn{1200};
+
+bool spins(const PlaylistRow& row) {
+    return row.run == PlaylistRun::Fetching && row.waiting_for.empty();
+}
 
 }
 
@@ -33,7 +41,9 @@ PlaylistList::PlaylistList(HWND parent, PlaylistEvents events) :
         Window(window_class(), {.title = L"Playlist list", .style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, .parent = parent}),
         events_(std::move(events)),
         empty_text_(hwnd(), L"No playlists yet.", {.color = framework::TextColor::Gray}),
-        add_button_(hwnd(), {.text = L"Add playlist", .command = std::to_underlying(CommandId::AddPlaylist), .icon = IDI_PLUS}) {}
+        add_button_(hwnd(), {.text = L"Add playlist", .command = std::to_underlying(CommandId::AddPlaylist), .icon = IDI_PLUS}),
+        tips_(hwnd()),
+        spin_(SpinTimer, SpinIntervalMs) {}
 
 void PlaylistList::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
     painter_.emplace(dpi, fonts);
@@ -45,6 +55,7 @@ void PlaylistList::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts
 
 void PlaylistList::set_rows(std::vector<PlaylistRow> rows) {
     rows_ = std::move(rows);
+    spin_.run(hwnd(), std::ranges::any_of(rows_, spins));
     layout();
     follow_cursor();
 }
@@ -58,17 +69,27 @@ void PlaylistList::set_selection(const std::optional<std::string>& key) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
+void PlaylistList::set_sync_enabled(bool enabled) {
+    if (enabled == sync_enabled_) {
+        return;
+    }
+    sync_enabled_ = enabled;
+    place_tips();
+    follow_cursor();
+}
+
 LRESULT PlaylistList::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE: layout(); return 0;
     // The paint fills the background, so the rows aren't erased first and don't blink
     case WM_ERASEBKGND:     return TRUE;
     case WM_PAINT:          paint(); return 0;
-    case WM_MOUSEMOVE:      repaint_if(mouse_.move(hwnd(), row_at(point_of(lparam)))); return 0;
-    case WM_MOUSELEAVE:     repaint_if(mouse_.leave()); return 0;
+    case WM_MOUSEMOVE:      track_mouse(point_of(lparam)); return 0;
+    case WM_MOUSELEAVE:     on_mouse_leave(); return 0;
     case WM_LBUTTONDOWN:    on_left_button_down(point_of(lparam)); return 0;
     case WM_LBUTTONUP:      on_left_button_up(point_of(lparam)); return 0;
-    case WM_CAPTURECHANGED: repaint_if(mouse_.cancel()); return 0;
+    case WM_CAPTURECHANGED: on_capture_changed(); return 0;
+    case WM_TIMER:          on_timer(wparam); return 0;
     case WM_KEYDOWN:        return on_key_down(wparam) ? 0 : Window::handle_message(message, wparam, lparam);
     case WM_CONTEXTMENU:    on_context_menu(point_of(lparam)); return 0;
     case WM_VSCROLL:        scrolled(scroll_.on_scroll(hwnd(), LOWORD(wparam))); return 0;
@@ -90,9 +111,13 @@ framework::Rect PlaylistList::client() const {
 }
 
 framework::Rect PlaylistList::row_bounds(std::size_t index) const {
+    // A row with counts that need attention is a line taller than one without
     framework::Dpi dpi = framework::Dpi::of(hwnd());
-    int top = dpi.scale(RowGapDips) + static_cast<int>(index) * (painter_->height() + dpi.scale(RowGapDips)) - scroll_.position();
-    return {dpi.scale(RowInsetDips), top, client().right - dpi.scale(RowInsetDips), top + painter_->height()};
+    int top = dpi.scale(RowGapDips) - scroll_.position();
+    for (std::size_t above = 0; above < index; ++above) {
+        top += painter_->height(rows_[above]) + dpi.scale(RowGapDips);
+    }
+    return {dpi.scale(RowInsetDips), top, client().right - dpi.scale(RowInsetDips), top + painter_->height(rows_[index])};
 }
 
 int PlaylistList::rows_bottom() const {
@@ -133,6 +158,15 @@ std::optional<std::size_t> PlaylistList::row_at(POINT point) const {
     return std::nullopt;
 }
 
+std::optional<std::size_t> PlaylistList::sync_at(POINT point) const {
+    std::optional<std::size_t> row = row_at(point);
+    if (!row || !sync_enabled_) {
+        return std::nullopt;
+    }
+    RECT button = painter_->sync_button(row_bounds(*row), rows_[*row], std::chrono::system_clock::now()).to_rect();
+    return PtInRect(&button, point) ? row : std::nullopt;
+}
+
 void PlaylistList::layout() {
     if (!painter_) {
         return;
@@ -154,6 +188,26 @@ void PlaylistList::layout() {
     positions.place(empty_text_.hwnd(), rows_.empty() ? std::optional(empty) : std::nullopt);
     positions.place(add_button_.hwnd(), framework::Rect{text_left, button_top, text_left + button.width, button_top + button.height});
     positions.apply();
+    place_tips();
+}
+
+void PlaylistList::place_tips() {
+    if (!painter_) {
+        return;
+    }
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    for (std::size_t index = 0; index < rows_.size(); ++index) {
+        // Only a control that can be clicked explains itself
+        if (sync_enabled_) {
+            tips_.set_tool(index, painter_->sync_button(row_bounds(index), rows_[index], now), L"Sync " + rows_[index].name);
+        } else {
+            tips_.remove_tool(index);
+        }
+    }
+    for (std::size_t index = rows_.size(); index < tip_count_; ++index) {
+        tips_.remove_tool(index);
+    }
+    tip_count_ = rows_.size();
 }
 
 void PlaylistList::reveal_selection() {
@@ -177,12 +231,26 @@ void PlaylistList::scrolled(bool moved) {
 void PlaylistList::follow_cursor() {
     // The rows move under a mouse that stands still, which sends no WM_MOUSEMOVE
     POINT point;
-    if (!GetCursorPos(&point)) {
+    if (!GetCursorPos(&point) || !painter_) {
         return;
     }
     bool over = WindowFromPoint(point) == hwnd();
     platform::win32::check(ScreenToClient(hwnd(), &point), "ScreenToClient");
-    repaint_if(mouse_.move(hwnd(), over ? row_at(point) : std::nullopt));
+    track_mouse(over ? std::optional(point) : std::nullopt);
+}
+
+void PlaylistList::track_mouse(std::optional<POINT> point) {
+    bool changed = mouse_.move(hwnd(), point ? row_at(*point) : std::nullopt);
+    std::optional<std::size_t> sync = point ? sync_at(*point) : std::nullopt;
+    // While the control is held, only it reacts
+    if (sync_pressed_ && sync != sync_pressed_) {
+        sync.reset();
+    }
+    if (sync != sync_hot_) {
+        sync_hot_ = sync;
+        changed = true;
+    }
+    repaint_if(changed);
 }
 
 void PlaylistList::repaint_if(bool changed) const {
@@ -200,24 +268,83 @@ void PlaylistList::paint() const {
         return;
     }
     std::optional<std::size_t> selected = selected_index();
+    auto spin_step = static_cast<int>(spin_.progress(SpinTurn) * PlaylistRowPainter::SpinSteps);
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
     for (std::size_t index = 0; index < rows_.size(); ++index) {
         framework::Rect bounds = row_bounds(index);
         if (bounds.bottom > area.top && bounds.top < area.bottom) {
-            painter_->paint(paint.dc(), bounds, rows_[index], row_look(index == selected, index == mouse_.hot(), index == mouse_.pressed()));
+            RowPaint look{
+                .look = row_look(index == selected, index == mouse_.hot(), index == mouse_.pressed()),
+                .sync_hot = index == sync_hot_,
+                .spin_step = spin_step,
+                .now = now,
+            };
+            painter_->paint(paint.dc(), bounds, rows_[index], look);
         }
     }
 }
 
+void PlaylistList::on_mouse_leave() {
+    bool changed = mouse_.leave();
+    // The capture keeps the moves coming while the control is held
+    if (!sync_pressed_ && sync_hot_) {
+        sync_hot_.reset();
+        changed = true;
+    }
+    repaint_if(changed);
+}
+
 void PlaylistList::on_left_button_down(POINT point) {
     SetFocus(hwnd());
+    // The sync control syncs its playlist without selecting it
+    if (std::optional<std::size_t> sync = sync_at(point)) {
+        sync_pressed_ = sync;
+        sync_hot_ = sync;
+        SetCapture(hwnd());
+        repaint_if(true);
+        return;
+    }
     repaint_if(mouse_.press(hwnd(), row_at(point)));
 }
 
 void PlaylistList::on_left_button_up(POINT point) {
+    if (std::optional<std::size_t> pressed = sync_pressed_) {
+        // Cleared first, so the WM_CAPTURECHANGED that ReleaseCapture sends finds nothing to cancel
+        sync_pressed_.reset();
+        platform::win32::check(ReleaseCapture(), "ReleaseCapture");
+        track_mouse(point);
+        if (sync_at(point) == pressed) {
+            events_.on_sync(rows_[*pressed].key);
+        }
+        return;
+    }
     std::optional<std::size_t> clicked = mouse_.release(hwnd(), row_at(point));
     repaint_if(true);
     if (clicked) {
         events_.on_select(rows_[*clicked].key);
+    }
+}
+
+void PlaylistList::on_capture_changed() {
+    bool changed = mouse_.cancel();
+    if (sync_pressed_) {
+        sync_pressed_.reset();
+        sync_hot_.reset();
+        changed = true;
+    }
+    repaint_if(changed);
+}
+
+void PlaylistList::on_timer(WPARAM timer) const {
+    if (!spin_.is_tick(timer)) {
+        return;
+    }
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    for (std::size_t index = 0; index < rows_.size(); ++index) {
+        if (spins(rows_[index])) {
+            RECT button = painter_->sync_button(row_bounds(index), rows_[index], now).to_rect();
+            platform::win32::check(InvalidateRect(hwnd(), &button, FALSE), "InvalidateRect");
+        }
     }
 }
 
@@ -226,7 +353,7 @@ bool PlaylistList::on_key_down(WPARAM key) {
     int last = static_cast<int>(rows_.size());
     std::optional<std::size_t> selected = selected_index();
     int current = selected ? static_cast<int>(*selected) + 1 : 0;
-    int page = std::max(1, client().height() / (painter_->height() + framework::Dpi::of(hwnd()).scale(RowGapDips)));
+    int page = std::max(1, client().height() / (painter_->height(PlaylistRow{}) + framework::Dpi::of(hwnd()).scale(RowGapDips)));
 
     int target = current;
     switch (key) {

@@ -20,6 +20,8 @@ public:
     void subtitle(HWND subtitle, int indent);
     void section(HWND title);
     void row(HWND key, HWND value);
+    // A row that comes and goes; hidden, it takes no room
+    void row_if(bool shown, HWND key, HWND value);
     void buttons(std::initializer_list<const framework::Button*> buttons);
 
 private:

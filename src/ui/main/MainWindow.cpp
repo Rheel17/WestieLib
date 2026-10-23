@@ -63,12 +63,16 @@ MainWindow::MainWindow(
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
         fonts_(framework::Dpi::of(hwnd())),
         toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
+        infobar_(
+                hwnd(), [this] { show_log(); }, [this] { dismiss_fetch_failure(); }
+        ),
         playlists_(
                 hwnd(),
                 {
                     .on_command = [this](CommandId command) { run_command(command); },
                     .on_select = [this](std::optional<std::string> key) { select_playlist(std::move(key)); },
                     .on_context_menu = [this](POINT screen) { show_playlist_menu(screen); },
+                    .on_sync = [this](const std::string& key) { sync_playlist(key); },
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
@@ -150,6 +154,7 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     // The controls keep using the old fonts until they have the new ones
     framework::FontSet fonts(dpi);
     toolbar_.apply_dpi(dpi, fonts.regular());
+    infobar_.apply_dpi(dpi, fonts.regular());
     playlists_.apply_dpi(dpi, fonts);
     tracks_.apply_dpi(dpi, fonts);
     welcome_.apply_dpi(dpi, fonts);
@@ -230,7 +235,10 @@ void MainWindow::show_playlists() {
     if (selected_playlist_ && !state->playlists.contains(*selected_playlist_)) {
         selected_playlist_.reset();
     }
-    playlists_.set_playlists(playlist_rows(*state));
+    std::vector<PlaylistRow> rows = playlist_rows(*state);
+    mark_runs(rows, sync_board_);
+    show_run(rows);
+    playlists_.set_playlists(std::move(rows));
     playlists_.show_selection(selected_playlist_);
     show_scope();
     layout_panels();
@@ -241,6 +249,21 @@ void MainWindow::show_playlists() {
     update_commands();
 }
 
+void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
+    std::optional<std::chrono::system_clock::time_point> last_sync;
+    for (const PlaylistRow& row : rows) {
+        if (row.last_sync && (!last_sync || *row.last_sync > *last_sync)) {
+            last_sync = row.last_sync;
+        }
+    }
+    status_bar_.set_run(sync_board_, last_sync);
+
+    fetch_failure_.update(rows);
+    if (const std::optional<std::wstring>& message = fetch_failure_.message()) {
+        infobar_.set_message(*message);
+    }
+}
+
 void MainWindow::save_state() const {
     save_window_state({.placement = placement_.current(), .panels = panels_});
 }
@@ -248,7 +271,7 @@ void MainWindow::save_state() const {
 MainLayout MainWindow::current_layout() const {
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
-    BarHeights bars{.toolbar = toolbar_.height(), .status_bar = status_bar_.height()};
+    BarHeights bars{.toolbar = toolbar_.height(), .infobar = fetch_failure_.message() ? infobar_.height() : 0, .status_bar = status_bar_.height()};
     return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), bars, panels_);
 }
 
@@ -257,6 +280,7 @@ void MainWindow::layout_panels() {
 
     framework::DeferredPositions positions;
     positions.place(toolbar_.hwnd(), layout.toolbar);
+    positions.place(infobar_.hwnd(), layout.infobar);
     positions.place(playlists_.hwnd(), layout.playlists);
     positions.place(playlists_splitter_.hwnd(), layout.playlists_splitter);
     // Until there are playlists, the welcome screen takes the main column
@@ -284,6 +308,8 @@ CommandState MainWindow::command_state() const {
 void MainWindow::update_commands() {
     toolbar_.update(command_state());
     inspector_.update(command_state());
+    // The rows' sync controls follow Sync all: any playlist, while nothing syncs
+    playlists_.set_sync_enabled(command_state().enabled(CommandId::SyncAll));
 }
 
 void MainWindow::run_command(CommandId command) {
@@ -306,6 +332,12 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::CheckForUpdates:      tools_.run(true); return;
     case CommandId::About:                show_about_dialog(hwnd()); return;
     default:                              return;
+    }
+}
+
+void MainWindow::sync_playlist(const std::string& key) {
+    if (command_state().enabled(CommandId::SyncAll)) {
+        sync_.sync({key});
     }
 }
 
@@ -361,6 +393,17 @@ void MainWindow::toggle_log() {
     panels_.log_visible = !panels_.log_visible;
     layout_panels();
     update_commands();
+}
+
+void MainWindow::show_log() {
+    if (!panels_.log_visible) {
+        toggle_log();
+    }
+}
+
+void MainWindow::dismiss_fetch_failure() {
+    fetch_failure_.dismiss();
+    show_playlists();
 }
 
 void MainWindow::show_settings() {
@@ -423,10 +466,12 @@ void MainWindow::apply_event(const core::PlaylistLookedUp& event) {
 
 void MainWindow::apply_event(const core::SyncQueued& event) {
     sync_board_.apply(event);
+    show_playlists();
 }
 
 void MainWindow::apply_event(const core::PlaylistFetching& event) {
     sync_board_.apply(event);
+    show_playlists();
 }
 
 void MainWindow::apply_event(const core::PlaylistFetched& event) {
@@ -441,6 +486,7 @@ void MainWindow::apply_event(const core::PlaylistFetchFailed& event) {
 
 void MainWindow::apply_event(const core::SyncFinished&) {
     sync_board_.finish();
+    show_playlists();
 }
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {

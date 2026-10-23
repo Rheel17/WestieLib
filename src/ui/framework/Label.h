@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -10,7 +11,7 @@
 
 namespace westie::ui::framework {
 
-enum class TextColor { Normal, Gray, Error };
+enum class TextColor { Normal, Gray, Error, Warning };
 
 enum class LabelAlignment { Left, Center };
 
@@ -19,6 +20,8 @@ struct LabelStyle {
     LabelAlignment alignment = LabelAlignment::Left;
     bool wrap = false;
     TextEllipsis ellipsis = TextEllipsis::End;
+    // The window color unless the label sits on something else
+    std::optional<COLORREF> background{};
 };
 
 class Label final : public Window {

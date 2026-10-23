@@ -3,7 +3,8 @@
 # the mockup's disabled toolbar buttons. Glyphs marked Small also get the sizes of a 12 px glyph, as in the status bar.
 # The progress ring, which the mockup draws with ring(percent), becomes ring-00.ico to ring-24.ico, one per step.
 # The brand logos come from the official SVG files in res/ instead of the mockup's stand-ins, and are also drawn at
-# 14 px, as in the playlist rows.
+# 14 px, as in the playlist rows. The playlist rows' spinning sync control becomes syncing-spin-00.ico to
+# syncing-spin-11.ico, turned 30 degrees a step, and its still, faded look for a queued playlist syncing-faded.ico.
 #
 #   powershell -ExecutionPolicy Bypass -File res/make-glyphs.ps1
 #
@@ -27,12 +28,14 @@ $Glyphs = [ordered]@{
 	stop = @{ Disabled = $true }
 	gear = @{ Disabled = $true }
 	lib = @{}
-	synced = @{ Small = $true }
-	warn = @{ Small = $true }
+	synced = @{ Small = $true; Row = $true }
+	warn = @{ Small = $true; Row = $true }
+	failed = @{ Row = $true }
 	waiting = @{ Row = $true }
-	toolwait = @{}
+	toolwait = @{ Small = $true; Row = $true }
 	syncgray = @{ Row = $true }
 	search = @{}
+	close = @{ Small = $true }
 }
 
 # Brand logo name, its SVG file in res/, and its options as above
@@ -53,6 +56,10 @@ $RingWidth = 2.4
 $RingTrack = '#d6d6d6'
 $RingArc = '#0078d7'
 $Invariant = [Globalization.CultureInfo]::InvariantCulture
+
+# One turn of the sync control, as the playlist rows step through it
+$SpinSteps = 12
+$QueuedOpacity = 0.5
 
 function Get-RingMarkup([int]$step) {
 	$circle = "<circle cx=`"8`" cy=`"8`" r=`"$RingRadius`" fill=`"none`" stroke-width=`"$RingWidth`""
@@ -161,10 +168,11 @@ function Add-Shape($context, [System.Xml.XmlNode]$element, [hashtable]$inherited
 	$context.DrawGeometry((Get-Brush $style['fill']), (Get-Pen $style), $geometry)
 }
 
-# Top-down BGRA with straight alpha, as the icon format wants
-function Get-GlyphPixels($glyph, [int]$size) {
+# Top-down BGRA with straight alpha, as the icon format wants; turned clockwise by $angle degrees about the center
+function Get-GlyphPixels($glyph, [int]$size, [double]$angle = 0) {
 	$visual = New-Object System.Windows.Media.DrawingVisual
 	$context = $visual.RenderOpen()
+	$context.PushTransform((New-Object System.Windows.Media.RotateTransform $angle, ($size / 2), ($size / 2)))
 	# A view box that isn't square is centered in the square glyph
 	$width = $glyph.ViewBox[2]
 	$height = $glyph.ViewBox[3]
@@ -174,6 +182,7 @@ function Get-GlyphPixels($glyph, [int]$size) {
 	$y = (($side - $height) / 2 - $glyph.ViewBox[1]) * $scale
 	$context.PushTransform((New-Object System.Windows.Media.MatrixTransform $scale, 0, 0, $scale, $x, $y))
 	foreach ($element in $glyph.Root.ChildNodes) { Add-Shape $context $element @{} }
+	$context.Pop()
 	$context.Pop()
 	$context.Close()
 
@@ -198,6 +207,12 @@ function ConvertTo-Disabled([byte[]]$pixels) {
 	return , $gray
 }
 
+function ConvertTo-Faded([byte[]]$pixels, [double]$opacity) {
+	$faded = [byte[]]$pixels.Clone()
+	for ($i = 3; $i -lt $faded.Length; $i += 4) { $faded[$i] = [byte][math]::Round($faded[$i] * $opacity) }
+	return , $faded
+}
+
 $html = [System.IO.File]::ReadAllText((Resolve-Path $Mockup))
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
@@ -207,19 +222,26 @@ $work += @(0..$RingSteps | ForEach-Object { [pscustomobject]@{ Name = 'ring-{0:D
 $work += @($BrandGlyphs.Keys | ForEach-Object {
 	[pscustomobject]@{ Name = $_; Glyph = (Get-SvgFileGlyph (Join-Path $PSScriptRoot $BrandGlyphs[$_].File)); Options = $BrandGlyphs[$_] }
 })
+# Only the playlist rows draw these, at 14 px
+$syncing = Get-GlyphMarkup $html 'syncing'
+$work += @(0..($SpinSteps - 1) | ForEach-Object {
+	[pscustomobject]@{ Name = 'syncing-spin-{0:D2}' -f $_; Glyph = $syncing; Options = @{ RowOnly = $true; Angle = 360.0 * $_ / $SpinSteps } }
+})
+$work += [pscustomobject]@{ Name = 'syncing-faded'; Glyph = $syncing; Options = @{ RowOnly = $true; Opacity = $QueuedOpacity } }
 
 foreach ($item in $work) {
 	$name = $item.Name
 	$options = $item.Options
 	$glyph = $item.Glyph
-	$glyphSizes = $Sizes
+	$glyphSizes = if ($options.RowOnly) { $RowSizes } else { $Sizes }
 	if ($options.Small) { $glyphSizes += $SmallSizes }
 	if ($options.Row) { $glyphSizes += $RowSizes }
 	$glyphSizes = @($glyphSizes | Sort-Object -Unique)
 	$frames = @()
 	$disabledFrames = @()
 	foreach ($size in $glyphSizes) {
-		$pixels = Get-GlyphPixels $glyph $size
+		$pixels = Get-GlyphPixels $glyph $size ([double]$options.Angle)
+		if ($options.Opacity) { $pixels = ConvertTo-Faded $pixels $options.Opacity }
 		$frames += [pscustomobject]@{ Size = $size; Bytes = [byte[]](ConvertTo-DibBytes $pixels $size ($size * 4)) }
 		if ($options.Disabled) {
 			$disabledFrames += [pscustomobject]@{ Size = $size; Bytes = [byte[]](ConvertTo-DibBytes (ConvertTo-Disabled $pixels) $size ($size * 4)) }

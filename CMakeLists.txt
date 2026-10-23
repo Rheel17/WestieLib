@@ -130,6 +130,8 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Window.cpp
 	src/ui/framework/WindowClass.cpp
 	src/ui/framework/WindowIcon.cpp
+	src/ui/infobar/FetchFailureNotice.cpp
+	src/ui/infobar/Infobar.cpp
 	src/ui/inspector/CardLayout.cpp
 	src/ui/inspector/CardTitle.cpp
 	src/ui/inspector/InspectorPanel.cpp
@@ -145,6 +147,7 @@ add_executable(WestieLib WIN32
 	src/ui/main/WindowPlacement.cpp
 	src/ui/main/WindowState.cpp
 	src/ui/playlists/AllTracksRow.cpp
+	src/ui/playlists/LastSyncLine.cpp
 	src/ui/playlists/PlaylistList.cpp
 	src/ui/playlists/PlaylistMenu.cpp
 	src/ui/playlists/PlaylistPanel.cpp
@@ -152,6 +155,7 @@ add_executable(WestieLib WIN32
 	src/ui/playlists/PlaylistRows.cpp
 	src/ui/statusbar/MainStatusBar.cpp
 	src/ui/sync/SyncBoard.cpp
+	src/ui/sync/WaitingText.cpp
 	src/ui/toolbar/MainToolbar.cpp
 	src/ui/tools/ToolBoard.cpp
 	src/ui/tools/ToolMark.cpp

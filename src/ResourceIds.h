@@ -18,8 +18,13 @@
 #define IDI_SYNC_GRAY        16
 #define IDI_TOOL_WAIT        17
 #define IDI_SEARCH           18
+#define IDI_FAILED           19
 // The progress ring's 25 steps, empty to full, are IDI_RING_0 to IDI_RING_0 + 24
 #define IDI_RING_0                20
+#define IDI_SYNCING_FADED         45
+#define IDI_CLOSE                 46
+// The sync control's 12 steps of a turn are IDI_SPIN_0 to IDI_SPIN_0 + 11
+#define IDI_SPIN_0                50
 #define IDD_SETTINGS              100
 #define IDC_LIBRARY_FOLDER        1000
 #define IDC_CHANGE_LIBRARY_FOLDER 1001

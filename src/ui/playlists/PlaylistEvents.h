@@ -16,6 +16,8 @@ struct PlaylistEvents {
     std::function<void(std::optional<std::string>)> on_select{};
     // Where the selected playlist's context menu goes, in screen coordinates
     std::function<void(POINT)> on_context_menu{};
+    // A row's sync control was clicked
+    std::function<void(const std::string&)> on_sync{};
 };
 
 }

@@ -7,6 +7,7 @@
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/PlaylistTypeText.h"
+#include "ui/RelativeDayText.h"
 #include "ui/SourceLogo.h"
 #include "ui/inspector/CardLayout.h"
 
@@ -30,9 +31,16 @@ PlaylistCard::PlaylistCard(HWND parent, std::function<void(CommandId)> on_comman
         tracks_(hwnd(), L""),
         synced_key_(hwnd(), L"Synced", {.color = framework::TextColor::Gray}),
         synced_(hwnd()),
+        waiting_key_(hwnd(), L"Waiting", {.color = framework::TextColor::Gray}),
+        waiting_(hwnd(), L""),
+        failed_key_(hwnd(), L"Failed", {.color = framework::TextColor::Gray}),
+        failed_(hwnd(), L"", {.color = framework::TextColor::Error}),
+        review_key_(hwnd(), L"To review", {.color = framework::TextColor::Gray}),
+        review_(hwnd(), L"", {.color = framework::TextColor::Warning}),
+        shared_key_(hwnd(), L"Shared", {.color = framework::TextColor::Gray}),
+        shared_(hwnd(), L""),
         last_sync_key_(hwnd(), L"Last sync", {.color = framework::TextColor::Gray}),
-        // Nothing syncs yet
-        last_sync_(hwnd(), L"Never"),
+        last_sync_(hwnd(), L""),
         sync_(hwnd(), {.text = L"Sync playlist", .command = std::to_underlying(CommandId::SyncSelectedPlaylist), .icon = IDI_SYNCING}),
         remove_(hwnd(), {.text = L"Remove playlist…", .command = std::to_underlying(CommandId::RemovePlaylist)}) {}
 
@@ -43,7 +51,10 @@ int PlaylistCard::height_for(int width) const {
 void PlaylistCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
     title_.apply_dpi(dpi, fonts);
     section_.set_font(fonts.semibold().handle());
-    for (framework::Label* label : {&subtitle_, &link_key_, &tracks_key_, &tracks_, &synced_key_, &last_sync_key_, &last_sync_}) {
+    for (framework::Label* label : {
+             &subtitle_, &link_key_, &tracks_key_, &tracks_, &synced_key_, &waiting_key_, &waiting_, &failed_key_, &failed_, &review_key_, &review_,
+             &shared_key_, &shared_, &last_sync_key_, &last_sync_,
+         }) {
         label->set_font(fonts.regular().handle());
     }
     link_.set_font(fonts.regular().handle());
@@ -60,6 +71,15 @@ void PlaylistCard::set_contents(const PlaylistRow& playlist) {
     link_.set_text(playlist.id);
     tracks_.set_text(std::format(L"{}", playlist.counts.total));
     synced_.set_counts(playlist.counts);
+    waiting_.set_text(std::format(L"{}", playlist.counts.waiting));
+    failed_.set_text(std::format(L"{}", playlist.counts.failed));
+    review_.set_text(std::format(L"{}", playlist.counts.to_review));
+    const wchar_t* tracks = playlist.shared == 1 ? L"track is" : L"tracks are";
+    shared_.set_text(std::format(L"{} {} also in other playlists", playlist.shared, tracks));
+    last_sync_.set_text(playlist.last_sync ? relative_day_text(*playlist.last_sync, std::chrono::system_clock::now()) : L"Never");
+    counts_ = playlist.counts;
+    shared_count_ = playlist.shared;
+    layout();
 }
 
 void PlaylistCard::update(const CommandState& state) {
@@ -83,6 +103,10 @@ int PlaylistCard::arrange(int width, framework::DeferredPositions* positions) co
     layout.row(link_key_.hwnd(), link_.hwnd());
     layout.row(tracks_key_.hwnd(), tracks_.hwnd());
     layout.row(synced_key_.hwnd(), synced_.hwnd());
+    layout.row_if(counts_.waiting > 0, waiting_key_.hwnd(), waiting_.hwnd());
+    layout.row_if(counts_.failed > 0, failed_key_.hwnd(), failed_.hwnd());
+    layout.row_if(counts_.to_review > 0, review_key_.hwnd(), review_.hwnd());
+    layout.row_if(shared_count_ > 0, shared_key_.hwnd(), shared_.hwnd());
     layout.row(last_sync_key_.hwnd(), last_sync_.hwnd());
     layout.buttons({&sync_, &remove_});
     return layout.height();

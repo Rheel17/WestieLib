@@ -43,6 +43,7 @@ using UniqueKey = UniqueHandle<HKEY, RegCloseKey>;
 using UniqueAcceleratorTable = UniqueHandle<HACCEL, DestroyAcceleratorTable>;
 using UniqueFont = UniqueHandle<HFONT, DeleteObject>;
 using UniqueBitmap = UniqueHandle<HBITMAP, DeleteObject>;
+using UniqueBrush = UniqueHandle<HBRUSH, DeleteObject>;
 using UniqueMemoryDc = UniqueHandle<HDC, DeleteDC>;
 using UniqueImageList = UniqueHandle<HIMAGELIST, ImageList_Destroy>;
 using UniqueCoTaskString = UniqueHandle<PWSTR, CoTaskMemFree>;

@@ -3,6 +3,8 @@
 #include <array>
 #include <format>
 
+#include "platform/win32/LocalTime.h"
+
 namespace westie::ui {
 
 namespace {
@@ -29,6 +31,10 @@ std::wstring relative_day_text(std::chrono::local_seconds when, std::chrono::loc
         return std::format(L"{} {}", static_cast<unsigned>(date.day()), month);
     }
     return std::format(L"{} {} {}", static_cast<unsigned>(date.day()), month, static_cast<int>(date.year()));
+}
+
+std::wstring relative_day_text(std::chrono::system_clock::time_point when, std::chrono::system_clock::time_point now) {
+    return relative_day_text(platform::win32::to_local_time(when), platform::win32::to_local_time(now));
 }
 
 }

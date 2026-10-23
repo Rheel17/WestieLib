@@ -15,6 +15,7 @@ public:
     explicit Tooltip(HWND owner);
 
     void set_tool(UINT_PTR id, const Rect& bounds, const std::wstring& text);
+    void remove_tool(UINT_PTR id);
 
 private:
     HWND owner_ = nullptr;

@@ -123,7 +123,14 @@ function Get-ToolbarStrip($hwnd) { ([W]::Children($hwnd, 'WestieLib.MainToolbar'
 
 function Get-StatusBar($hwnd) { ([W]::Children($hwnd, 'msctls_statusbar32'))[0] }
 
-function Get-RowTop($hwnd) { [W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd).Bottom }
+function Get-Infobar($hwnd) { ([W]::Children($hwnd, 'WestieLib.Infobar'))[0] }
+
+# The panels start under the toolbar, or under the infobar while it shows
+function Get-RowTop($hwnd) {
+	$infobar = Get-Infobar $hwnd
+	if ($infobar -and [W]::IsWindowVisible($infobar)) { return [W]::RectIn($infobar, $hwnd).Bottom }
+	[W]::RectIn((Get-ToolbarStrip $hwnd), $hwnd).Bottom
+}
 
 # The main window's own panels; EnumChildWindows also returns the panels inside them
 function Get-MainPanels($hwnd) { @([W]::Children($hwnd, 'WestieLib.Panel') | Where-Object { [W]::GetAncestor($_, 1) -eq $hwnd }) }
@@ -409,6 +416,7 @@ function Reset-Checks {
 	$Web.YtDlp = $null
 	[void]$Web.AssetGate.Reset()
 	$script:dpi = 96
+	$script:TallRows = @()
 }
 
 # The Settings dialog's Tools group: the list's rows, the check box, Last checked, and whether Check for updates is
@@ -461,8 +469,10 @@ function Wait-LinkLine($dialog) {
 
 function Get-PlaylistList($hwnd) { ([W]::Children((Get-RowPanels $hwnd)[0], 'WestieLib.PlaylistList'))[0] }
 
-# Border, padding, the name line, three lines under it, padding, border
-function Get-PlaylistRowHeight { 2 + (S 5) + (S 18) + 3 * (S 16) + (S 6) }
+# Border, padding, the name line, three lines under it, padding, border. A row with tracks waiting, failed or to
+# review has a fourth line; $TallRows lists those rows (from 1), which a suite sets when it knows them.
+function Get-PlaylistRowHeight([switch]$Tall) { 2 + (S 5) + (S 18) + $(if ($Tall) { 4 } else { 3 }) * (S 16) + (S 6) }
+$script:TallRows = @()
 
 # Where the Add playlist button starts in the list, scrolled to the top, under $count rows 1 apart
 function Get-ListButtonTop([int]$count) { (S 1) + $count * ((Get-PlaylistRowHeight) + (S 1)) + (S 8) }
@@ -471,7 +481,9 @@ function Get-AllTracksRow($hwnd) { ([W]::Children((Get-RowPanels $hwnd)[0], 'Wes
 
 # Where row $index (from 1) starts in the list, as it is scrolled now
 function Get-PlaylistRowTop($hwnd, [int]$index) {
-	(S 1) + ($index - 1) * ((Get-PlaylistRowHeight) + (S 1)) - [W]::GetScrollPos((Get-PlaylistList $hwnd), 1)
+	$top = (S 1) - [W]::GetScrollPos((Get-PlaylistList $hwnd), 1)
+	for ($row = 1; $row -lt $index; $row++) { $top += (Get-PlaylistRowHeight -Tall:($script:TallRows -contains $row)) + (S 1) }
+	$top
 }
 
 # What paints the selection box, sampled just inside each box's top-left corner: All tracks, and the rows from 1 of the
@@ -496,7 +508,7 @@ function Send-Click($window, [int]$x, [int]$y) {
 }
 
 function Click-PlaylistRow($hwnd, [int]$index) {
-	Send-Click (Get-PlaylistList $hwnd) (S 20) ((Get-PlaylistRowTop $hwnd $index) + [int]((Get-PlaylistRowHeight) / 2))
+	Send-Click (Get-PlaylistList $hwnd) (S 20) ((Get-PlaylistRowTop $hwnd $index) + [int]((Get-PlaylistRowHeight -Tall:($script:TallRows -contains $index)) / 2))
 }
 
 function Click-AllTracks($hwnd) { Send-Click (Get-AllTracksRow $hwnd) (S 20) (S 10) }
@@ -558,8 +570,8 @@ function Get-InspectorCard($hwnd) {
 function Get-CardTexts($hwnd) {
 	$card = Get-InspectorCard $hwnd
 	$windows = @([W]::Children($card, [NullString]::Value) | Where-Object { [W]::GetAncestor($_, 1) -eq $card } |
-		ForEach-Object { [pscustomobject]@{ Rect = [W]::RectIn($_, $card); Text = [W]::TextOf($_) } })
-	$texts = @($windows | Sort-Object { $_.Rect.Top }, { $_.Rect.Left } | ForEach-Object { $_.Text })
+		ForEach-Object { [pscustomobject]@{ Window = $_; Rect = [W]::RectIn($_, $card); Text = [W]::TextOf($_) } })
+	$texts = @($windows | Where-Object { [W]::IsWindowVisible($_.Window) } | Sort-Object { $_.Rect.Top }, { $_.Rect.Left } | ForEach-Object { $_.Text })
 	"$([W]::TextOf($card)): $($texts -join ' / ')"
 }
 

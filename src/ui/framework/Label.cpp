@@ -12,12 +12,14 @@ namespace westie::ui::framework {
 namespace {
 
 constexpr COLORREF ErrorColor = RGB(0xC4, 0x2B, 0x1C);
+constexpr COLORREF WarningColor = RGB(0x9D, 0x5D, 0x00);
 
 COLORREF color_of(TextColor color) {
     switch (color) {
-    case TextColor::Gray:  return GetSysColor(COLOR_GRAYTEXT);
-    case TextColor::Error: return ErrorColor;
-    default:               return GetSysColor(COLOR_WINDOWTEXT);
+    case TextColor::Gray:    return GetSysColor(COLOR_GRAYTEXT);
+    case TextColor::Error:   return ErrorColor;
+    case TextColor::Warning: return WarningColor;
+    default:                 return GetSysColor(COLOR_WINDOWTEXT);
     }
 }
 
@@ -92,7 +94,8 @@ void Label::paint() const {
     BufferedPaint paint(hwnd());
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
-    FillRect(paint.dc(), &client, GetSysColorBrush(COLOR_WINDOW));
+    SetDCBrushColor(paint.dc(), style_.background.value_or(GetSysColor(COLOR_WINDOW)));
+    FillRect(paint.dc(), &client, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
     SelectObject(paint.dc(), font_);
     SetBkMode(paint.dc(), TRANSPARENT);
     SetTextColor(paint.dc(), color_of(style_.color));

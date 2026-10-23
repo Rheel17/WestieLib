@@ -42,7 +42,7 @@ $menu = [W]::GetMenu($h)
 Check 'Menu bar' ([W]::MenuText($menu)) '&File &Sync &Track &View T&ools &Help'
 $popups = @(
 	'&Add playlist... [Ctrl+N], &Remove playlist..., -, &Open library folder, -, E&xit [Ctrl+Q]',
-	'Sync &all [F5], Sync &selected playlist, -, &Cancel [Esc]',
+	'Sync &all [F5], Sync &selected playlist, -, &Cancel',
 	'&Confirm match, C&hoose video..., &Edit track... [Enter], -, &Retry, &Keep, &Move to Recycle Bin..., -, &Show in folder, Open on &YouTube, Open source &page',
 	'&Log [Ctrl+L], -, &Columns...',
 	'&Settings... [Ctrl+Alt+S], Check for &updates, -, &Rebuild library from files..., Library folder &moved..., -, Open &log folder',

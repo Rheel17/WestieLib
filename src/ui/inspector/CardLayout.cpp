@@ -45,6 +45,15 @@ void CardLayout::row(HWND key, HWND value) {
     place(value, row);
 }
 
+void CardLayout::row_if(bool shown, HWND key, HWND value) {
+    if (shown) {
+        row(key, value);
+    } else if (positions_ != nullptr) {
+        positions_->place(key, std::nullopt);
+        positions_->place(value, std::nullopt);
+    }
+}
+
 void CardLayout::buttons(std::initializer_list<const framework::Button*> buttons) {
     int top = bottom_ + dpi_.scale(ButtonsGapDips);
     int left = 0;

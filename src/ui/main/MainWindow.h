@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <windows.h>
 
@@ -36,6 +37,8 @@
 #include "ui/framework/Splitter.h"
 #include "ui/framework/Window.h"
 #include "ui/framework/WindowIcon.h"
+#include "ui/infobar/FetchFailureNotice.h"
+#include "ui/infobar/Infobar.h"
 #include "ui/inspector/InspectorPanel.h"
 #include "ui/log/LogPanel.h"
 #include "ui/main/MainLayout.h"
@@ -82,12 +85,14 @@ private:
     void show_scope();
     void show_inspector();
     void show_playlists();
+    void show_run(const std::vector<PlaylistRow>& rows);
     void save_state() const;
     MainLayout current_layout() const;
     void layout_panels();
     CommandState command_state() const;
     void update_commands();
     void run_command(CommandId command);
+    void sync_playlist(const std::string& key);
     void sync_all();
     std::optional<PlaylistRow> selected_row() const;
     void show_playlist_menu(POINT screen);
@@ -96,6 +101,8 @@ private:
     void open_playlist_page() const;
     void copy_playlist_link() const;
     void toggle_log();
+    void show_log();
+    void dismiss_fetch_failure();
     void show_settings();
     void show_tools();
     void on_core_events();
@@ -135,6 +142,7 @@ private:
     framework::MenuBarPainter menu_bar_;
     framework::FontSet fonts_;
     MainToolbar toolbar_;
+    Infobar infobar_;
     PlaylistPanel playlists_;
     framework::Splitter playlists_splitter_;
     TrackPanel tracks_;
@@ -147,6 +155,7 @@ private:
     PanelState panels_;
     framework::FocusMemory focus_;
     TrackCounts track_counts_;
+    FetchFailureNotice fetch_failure_;
     // A playlist's key, or nothing while All tracks is selected
     std::optional<std::string> selected_playlist_;
     // Only while they're open, so tool and look-up events can reach them

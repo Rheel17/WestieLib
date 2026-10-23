@@ -31,7 +31,7 @@ constexpr std::array SyncItems = {
     command_item(CommandId::SyncAll, L"Sync &all\tF5"),
     command_item(CommandId::SyncSelectedPlaylist, L"Sync &selected playlist"),
     framework::MenuSeparator,
-    command_item(CommandId::CancelSync, L"&Cancel\tEsc"),
+    command_item(CommandId::CancelSync, L"&Cancel"),
 };
 
 constexpr std::array TrackItems = {
