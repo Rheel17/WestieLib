@@ -270,8 +270,19 @@ the table itself, through `BufferedPaint`.
   Match and File are in the table but hidden: the header menu that shows them comes later.
 - `track_rows` (`TrackRows.cpp`) turns a snapshot into the scope's `TrackRow`s: all tracks, in key order, or the
   playlist's, by where it first lists each. A row has the track's status as a `StatusTab`, the title, artists and
-  length of its first source, the names of the playlists that list it (in the order they were added), and its
-  position. Filtering and sorting them come next.
+  length of its first source, the names of the playlists that list it (in the order they were added), its position,
+  and the kinds of source it has.
+- `TrackPanel` keeps the scope's rows and narrows them in `show_rows`: `rows_from_source` by the filter bar's
+  `source()`, then `rows_in_tab` by the selected tab (Synced takes Needs review in too). The tabs count the rows
+  before the tab narrows them, so each shows what it would list. The source, a tab, Clear and new rows all show the
+  rows again. The search field doesn't filter yet.
+- `TrackTable` owns the sort: `set_rows` and a header click sort the rows with `sort_track_rows` (`TrackSort.cpp`).
+  Text columns compare as Explorer sorts names (`CompareStringEx` with `LINGUISTIC_IGNORECASE |
+  SORT_DIGITSASNUMBERS`), # by position, Time by length, Status by the tabs' order; rows that tie go by title, then
+  key, whichever way the column sorts. The list's selection is by index, so the table notes the selected and focused
+  tracks' keys before the rows change and selects them again after (`ListView::selected_items`, `select_items`). A
+  sort also scrolls the focused row into view. Another tab (`show_tab_change`, which Clear goes through too) or
+  another scope (`show_tracks`) clears the selection first, so nothing carries over.
 - `TrackTable::set_rows` keeps the rows and hands the list their count. The list asks for each cell in
   `LVN_GETDISPINFOW` by the column's index, which `column_subitem` turns into the `TrackColumn`. The Status column has
   no text: `NM_CUSTOMDRAW` draws the status's 16 DIP icon in the cell after the row is painted (`ListView::cell_rect`).

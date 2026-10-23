@@ -1,5 +1,6 @@
 #include "ui/tracks/TrackRows.h"
 
+#include <algorithm>
 #include <map>
 #include <ranges>
 #include <set>
@@ -111,11 +112,36 @@ std::vector<TrackRow> track_rows(const core::State& state, const std::optional<s
             row.artists = join_utf8(source->artists);
             row.duration = source->duration;
         }
+        for (const std::string& source : track->second.sources) {
+            std::optional<core::SourceType> type = core::source_type_of_key(source);
+            if (type && !std::ranges::contains(row.sources, *type)) {
+                row.sources.push_back(*type);
+            }
+        }
         row.playlists = join(names[listing.track]);
         row.key = std::move(listing.track);
         rows.push_back(std::move(row));
     }
     return rows;
+}
+
+std::vector<TrackRow> rows_from_source(const std::vector<TrackRow>& rows, std::optional<core::SourceType> source) {
+    if (!source) {
+        return rows;
+    }
+    return rows | std::views::filter([&](const TrackRow& row) { return std::ranges::contains(row.sources, *source); }) | std::ranges::to<std::vector>();
+}
+
+std::vector<TrackRow> rows_in_tab(const std::vector<TrackRow>& rows, StatusTab tab) {
+    auto in_tab = [tab](const TrackRow& row) {
+        switch (tab) {
+        case StatusTab::All:    return true;
+        // Needs review is part of Synced
+        case StatusTab::Synced: return row.status == StatusTab::Synced || row.status == StatusTab::NeedsReview;
+        default:                return row.status == tab;
+        }
+    };
+    return rows | std::views::filter(in_tab) | std::ranges::to<std::vector>();
 }
 
 StatusCounts status_counts(const std::vector<TrackRow>& rows) {

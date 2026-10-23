@@ -524,6 +524,31 @@ function Get-ResultLine($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'Wes
 
 function Get-TrackTable($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'SysListView32')[0] }
 
+function Get-FilterBar($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'WestieLib.Panel')[0] }
+
+function Get-SourceBox($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'ComboBox'))[0] }
+
+# Chooses All (0), YouTube Music (1) or Spotify (2). CB_SETCURSEL doesn't notify; a choice by the user does.
+function Choose-Source($hwnd, [int]$index) {
+	$source = Get-SourceBox $hwnd
+	[void][W]::SendMessageW($source, 0x14E, [IntPtr]$index, [IntPtr]::Zero)
+	[void][W]::SendMessageW((Get-FilterBar $hwnd), 0x111, [IntPtr](1 -shl 16), $source)
+}
+
+function Click-Tab($hwnd, [int]$index) {
+	$tabs = Get-StatusTabs $hwnd
+	$r = [W]::SendForRect($tabs, 0x130A, [IntPtr]$index)
+	Send-Click $tabs ([int](($r.Left + $r.Right) / 2)) ([int](($r.Top + $r.Bottom) / 2))
+}
+
+# Clicks a header by its place in the display order
+function Click-Header($hwnd, [int]$position) {
+	$header = [W]::SendMessageW((Get-TrackTable $hwnd), 0x101F, [IntPtr]::Zero, [IntPtr]::Zero)
+	$index = [W]::SendMessageW($header, 0x120F, [IntPtr]$position, [IntPtr]::Zero)
+	$r = [W]::SendForRect($header, 0x1207, $index)
+	Send-Click $header ([int](($r.Left + $r.Right) / 2)) ([int](($r.Top + $r.Bottom) / 2))
+}
+
 # The inspector's visible card
 function Get-InspectorCard($hwnd) {
 	@(Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Panel' | Where-Object { [W]::IsWindowVisible($_) })[0]

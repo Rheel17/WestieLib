@@ -32,8 +32,11 @@ private:
     void layout();
     void paint() const;
     LRESULT on_notify(NMHDR& header);
+    void on_filter_change();
     void update_clear();
     void clear_status();
+    void show_tab_change(StatusTab before);
+    void show_rows();
     void show_result_line();
 
     FilterBar filter_;
@@ -43,6 +46,8 @@ private:
     // The scope's playlist, or nothing for All tracks
     std::optional<std::string> playlist_;
     std::optional<std::wstring> playlist_name_;
+    // Every row of the scope, before the source and the tab narrow them
+    std::vector<TrackRow> scope_rows_;
     int shown_ = 0;
     int library_total_ = 0;
     int result_height_ = 0;

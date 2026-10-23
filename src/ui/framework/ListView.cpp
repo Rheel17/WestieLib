@@ -121,6 +121,37 @@ RECT ListView::cell_rect(int item, int column_index) const {
     return rect;
 }
 
+std::vector<int> ListView::selected_items() const {
+    std::vector<int> items;
+    for (auto item = static_cast<int>(SendMessageW(hwnd(), LVM_GETNEXTITEM, -1, LVNI_SELECTED)); item != -1;
+         item = static_cast<int>(SendMessageW(hwnd(), LVM_GETNEXTITEM, item, LVNI_SELECTED))) {
+        items.push_back(item);
+    }
+    return items;
+}
+
+std::optional<int> ListView::focused_item() const {
+    auto item = static_cast<int>(SendMessageW(hwnd(), LVM_GETNEXTITEM, -1, LVNI_FOCUSED));
+    return item == -1 ? std::nullopt : std::optional(item);
+}
+
+void ListView::select_items(std::span<const int> items, std::optional<int> focused) {
+    auto set_state = [this](int item, UINT state, UINT mask) {
+        LVITEMW entry{};
+        entry.state = state;
+        entry.stateMask = mask;
+        platform::win32::check(SendMessageW(hwnd(), LVM_SETITEMSTATE, item, reinterpret_cast<LPARAM>(&entry)), "LVM_SETITEMSTATE");
+    };
+    // Item -1 is every item
+    set_state(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+    for (int item : items) {
+        set_state(item, LVIS_SELECTED, LVIS_SELECTED);
+    }
+    if (focused) {
+        set_state(*focused, LVIS_FOCUSED, LVIS_FOCUSED);
+    }
+}
+
 LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     LRESULT result = Control::handle_message(message, wparam, lparam);
     if (message != WM_NOTIFY || reinterpret_cast<const NMHDR*>(lparam)->hwndFrom != header()) {

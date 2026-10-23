@@ -1,9 +1,11 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 
 #include <windows.h>
 
+#include "core/sources/SourceType.h"
 #include "ui/framework/Button.h"
 #include "ui/framework/ComboBox.h"
 #include "ui/framework/Dpi.h"
@@ -22,6 +24,7 @@ public:
     int height() const;
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     bool is_default() const;
+    std::optional<core::SourceType> source() const;
     void clear();
     void set_clear_enabled(bool enabled);
 

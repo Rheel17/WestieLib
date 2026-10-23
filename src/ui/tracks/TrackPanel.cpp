@@ -39,7 +39,7 @@ framework::Rect inset(framework::Rect rect, int side) {
 TrackPanel::TrackPanel(HWND parent) :
         Panel(parent, L"Tracks"),
         filter_(
-                hwnd(), [this] { update_clear(); }, [this] { clear_status(); }
+                hwnd(), [this] { on_filter_change(); }, [this] { clear_status(); }
         ),
         status_(hwnd()),
         result_(hwnd(), L"", {.color = framework::TextColor::Gray}),
@@ -58,17 +58,16 @@ void TrackPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) 
 
 void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total) {
     std::optional<std::string> key = playlist ? std::optional(playlist->key) : std::nullopt;
-    // Another scope starts at its default sort; new tracks in the same one keep the sort
+    // Another scope starts at its default sort, with nothing selected; new tracks in the same one keep both
     if (key != playlist_) {
         playlist_ = std::move(key);
         table_.show_scope(playlist_.has_value());
+        table_.clear_selection();
     }
     playlist_name_ = playlist ? std::optional(playlist->name) : std::nullopt;
-    shown_ = static_cast<int>(rows.size());
+    scope_rows_ = std::move(rows);
     library_total_ = library_total;
-    status_.set_counts(status_counts(rows));
-    table_.set_rows(std::move(rows));
-    show_result_line();
+    show_rows();
 }
 
 LRESULT TrackPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -123,10 +122,24 @@ LRESULT TrackPanel::on_notify(NMHDR& header) {
         return table_.on_notify(header);
     }
     if (header.hwndFrom == status_.hwnd() && header.code == TCN_SELCHANGE) {
+        StatusTab before = status_.selected();
         status_.on_selection_change();
-        update_clear();
+        show_tab_change(before);
     }
     return 0;
+}
+
+void TrackPanel::show_tab_change(StatusTab before) {
+    if (status_.selected() != before) {
+        table_.clear_selection();
+    }
+    update_clear();
+    show_rows();
+}
+
+void TrackPanel::on_filter_change() {
+    update_clear();
+    show_rows();
 }
 
 void TrackPanel::update_clear() {
@@ -134,8 +147,19 @@ void TrackPanel::update_clear() {
 }
 
 void TrackPanel::clear_status() {
+    StatusTab before = status_.selected();
     status_.reset();
-    update_clear();
+    show_tab_change(before);
+}
+
+void TrackPanel::show_rows() {
+    // The tabs count what each would show, so they take the source into account but not the tab
+    std::vector<TrackRow> from_source = rows_from_source(scope_rows_, filter_.source());
+    status_.set_counts(status_counts(from_source));
+    std::vector<TrackRow> shown = rows_in_tab(from_source, status_.selected());
+    shown_ = static_cast<int>(shown.size());
+    table_.set_rows(std::move(shown));
+    show_result_line();
 }
 
 void TrackPanel::show_result_line() {

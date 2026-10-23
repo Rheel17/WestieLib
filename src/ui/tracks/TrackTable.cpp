@@ -6,7 +6,9 @@
 #include <cstddef>
 #include <format>
 #include <optional>
+#include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -132,10 +134,17 @@ void TrackTable::show_scope(bool playlist) {
 }
 
 void TrackTable::set_rows(std::vector<TrackRow> rows) {
+    Selection selected = selection();
     rows_ = std::move(rows);
+    sort_track_rows(rows_, sort_);
     list_.set_item_count(static_cast<int>(rows_.size()));
+    restore(selected);
     // A virtual list doesn't know its texts changed
     platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
+void TrackTable::clear_selection() {
+    list_.select_items({}, std::nullopt);
 }
 
 LRESULT TrackTable::on_notify(NMHDR& header) {
@@ -165,11 +174,48 @@ void TrackTable::sort_by(int column_index) {
         sort_ = {.column = column};
     }
     show_sort();
+
+    Selection selected = selection();
+    sort_track_rows(rows_, sort_);
+    restore(selected);
+    // The row the user was on moved with the sort, so the list follows it
+    if (std::optional<int> focused = list_.focused_item()) {
+        SendMessageW(list_.hwnd(), LVM_ENSUREVISIBLE, *focused, FALSE);
+    }
+    platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
 void TrackTable::show_sort() {
     std::optional<int> index = list_.column_index(std::to_underlying(sort_.column));
     list_.set_sort_arrow(index ? std::optional(framework::ListSortArrow{.index = *index, .direction = sort_.direction}) : std::nullopt);
+}
+
+TrackTable::Selection TrackTable::selection() const {
+    Selection selected;
+    for (int item : list_.selected_items()) {
+        if (std::cmp_less(item, rows_.size())) {
+            selected.keys.push_back(rows_[item].key);
+        }
+    }
+    if (std::optional<int> focused = list_.focused_item(); focused && std::cmp_less(*focused, rows_.size())) {
+        selected.focused = rows_[*focused].key;
+    }
+    return selected;
+}
+
+void TrackTable::restore(const Selection& selection) {
+    std::set<std::string_view> keys(selection.keys.begin(), selection.keys.end());
+    std::vector<int> items;
+    std::optional<int> focused;
+    for (std::size_t index = 0; index < rows_.size(); ++index) {
+        if (keys.contains(rows_[index].key)) {
+            items.push_back(static_cast<int>(index));
+        }
+        if (selection.focused == rows_[index].key) {
+            focused = static_cast<int>(index);
+        }
+    }
+    list_.select_items(items, focused);
 }
 
 void TrackTable::show_cell(LVITEMW& item) const {

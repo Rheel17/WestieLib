@@ -13,16 +13,9 @@
 #include "ui/framework/MessageFont.h"
 #include "ui/tracks/StatusCounts.h"
 #include "ui/tracks/TrackRows.h"
+#include "ui/tracks/TrackSort.h"
 
 namespace westie::ui {
-
-// Title is sub-item 0: column 0 holds the item's text, can't be right-aligned and can't be removed
-enum class TrackColumn { Title, Number, Status, Artists, Album, Playlists, Time, Source, Match, File };
-
-struct TrackSort {
-    TrackColumn column = TrackColumn::Title;
-    framework::SortDirection direction = framework::SortDirection::Ascending;
-};
 
 class TrackTable {
 public:
@@ -32,6 +25,7 @@ public:
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     void show_scope(bool playlist);
     void set_rows(std::vector<TrackRow> rows);
+    void clear_selection();
     LRESULT on_notify(NMHDR& header);
 
 private:
@@ -40,9 +34,17 @@ private:
         framework::IconResource icon;
     };
 
+    // By track key, so it stays with the tracks when the rows change or move
+    struct Selection {
+        std::vector<std::string> keys{};
+        std::optional<std::string> focused{};
+    };
+
     void add_number_column();
     void sort_by(int column_index);
     void show_sort();
+    Selection selection() const;
+    void restore(const Selection& selection);
     void show_cell(LVITEMW& item) const;
     LRESULT on_custom_draw(const NMLVCUSTOMDRAW& draw) const;
     void draw_status(HDC dc, int item) const;

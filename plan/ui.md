@@ -348,6 +348,9 @@ Default sort is Title in All tracks and # in a playlist scope. A click on a head
 a second click reverses it, however quickly it follows; the header shows the arrow. Another scope starts at its default sort. The row context
 menu is the Track menu.
 
+The selection stays with its tracks while the rows are sorted, filtered by source or refreshed by a sync; a track that
+is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
+
 ## Inspector
 
 **One track selected**, top to bottom:

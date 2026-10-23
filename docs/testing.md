@@ -40,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
 | `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView` |
-| `sync` | Sync all, Sync selected and Sync now: what a fetch writes to state.json, the table's rows, the tab counts and result line, the cards; Spotify left out, a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, and a fetch that waits for yt-dlp | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `ui/sync/`, `ui/tracks/TrackRows`, `ui/tracks/TrackTable`, `ui/TrackCounts` |
+| `sync` | Sync all, Sync selected and Sync now: what a fetch writes to state.json, the table's rows, the tab counts and result line, the cards; Spotify left out, a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, and a fetch that waits for yt-dlp | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `ui/sync/`, `ui/tracks/`, `ui/TrackCounts` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -85,6 +85,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   the fake yt-dlp has logged the fetches it expects, which comes after the window knows of the sync, then until Cancel
   grays. `Get-TrackRows` reads the table's rows through `ListViewRow`, and `Get-SavedPlaylistSync`,
   `Get-SavedSources` and `Get-SavedTracks` read state.json.
+- `Select-TrackRow` selects a table row with Home and Down (`WM_KEYDOWN`), not a click: the list checks a sent click
+  against the real cursor, which is elsewhere, starts a drag, and the drag then takes the next click on a header.
+  `Get-SelectedRows` lists the selected rows (`LVM_GETNEXTITEM`). `Choose-Source`, `Click-Tab` and `Click-Header`
+  are in `lib/Checks.ps1`, since both track suites use them.
 - Suites start without playlists, so they see the welcome screen. The `playlists` suite adds some in run 1
   (`Add-Playlist`), starts with them in run 2, starts with more than fit in run 3 (`Write-ManyPlaylists`) and scrolls
   them, and breaks `state.json` in run 4. The `tools` suite's run 3 serves yt-dlp from `FakeWeb` and checks that Add

@@ -45,6 +45,9 @@ public:
     void set_sort_arrow(std::optional<ListSortArrow> arrow);
     void set_item_count(int count);
     RECT cell_rect(int item, int column_index) const;
+    std::vector<int> selected_items() const;
+    std::optional<int> focused_item() const;
+    void select_items(std::span<const int> items, std::optional<int> focused);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

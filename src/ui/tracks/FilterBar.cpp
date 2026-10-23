@@ -66,6 +66,15 @@ bool FilterBar::is_default() const {
     return search_.text().empty() && source_.selected() == 0;
 }
 
+std::optional<core::SourceType> FilterBar::source() const {
+    int selected = source_.selected();
+    // The list starts with All, then the sources in their order
+    if (selected <= 0 || std::cmp_greater(selected, core::AllSourceTypes.size())) {
+        return std::nullopt;
+    }
+    return core::AllSourceTypes[selected - 1];
+}
+
 void FilterBar::clear() {
     search_.set_text(L"");
     source_.select(0);

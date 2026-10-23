@@ -1,11 +1,7 @@
 # The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns.
 # Dot-sourced by ui-checks.ps1.
 
-function Get-FilterBar($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'WestieLib.Panel')[0] }
-
 function Get-SearchField($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Edit'))[0] }
-
-function Get-SourceBox($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'ComboBox'))[0] }
 
 function Get-ClearButton($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Button'))[0] }
 
@@ -16,20 +12,6 @@ function Get-SelectedSource($hwnd) { [int][W]::SendMessageW((Get-SourceBox $hwnd
 # The search text, the source, the tab, and whether Clear is enabled
 function Get-Filters($hwnd) {
 	"'$([W]::EditText((Get-SearchField $hwnd)))' source $(Get-SelectedSource $hwnd) tab $(Get-SelectedTab $hwnd) | Clear $([W]::IsWindowEnabled((Get-ClearButton $hwnd)))"
-}
-
-function Click-Tab($hwnd, [int]$index) {
-	$tabs = Get-StatusTabs $hwnd
-	$r = [W]::SendForRect($tabs, 0x130A, [IntPtr]$index)
-	Send-Click $tabs ([int](($r.Left + $r.Right) / 2)) ([int](($r.Top + $r.Bottom) / 2))
-}
-
-# Clicks a header by its place in the display order
-function Click-Header($hwnd, [int]$position) {
-	$header = [W]::SendMessageW((Get-TrackTable $hwnd), 0x101F, [IntPtr]::Zero, [IntPtr]::Zero)
-	$index = [W]::SendMessageW($header, 0x120F, [IntPtr]$position, [IntPtr]::Zero)
-	$r = [W]::SendForRect($header, 0x1207, $index)
-	Send-Click $header ([int](($r.Left + $r.Right) / 2)) ([int](($r.Top + $r.Bottom) / 2))
 }
 
 # Each tab is as wide as its text and 8 DIPs at either side
