@@ -11,6 +11,7 @@
 #include "core/playlists/PlaylistLookup.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
+#include "core/sources/SpotifyUrls.h"
 #include "core/state/StateStore.h"
 #include "core/sync/SyncEngine.h"
 #include "core/tools/ToolFolder.h"
@@ -80,8 +81,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
                 tool_folder, events
         );
         westie::core::YtDlp yt_dlp(tool_folder, files, processes);
-        westie::core::PlaylistLookup lookup(yt_dlp, http, service_url(L"WESTIELIB_SPOTIFY_URL", "https://open.spotify.com"), events);
-        westie::core::SyncEngine sync(yt_dlp, tool_folder, state, events);
+        westie::core::SpotifyUrls spotify{
+            .web = service_url(L"WESTIELIB_SPOTIFY_URL", "https://open.spotify.com"),
+            .api = service_url(L"WESTIELIB_SPOTIFY_API", "https://api-partner.spotify.com"),
+        };
+        westie::core::PlaylistLookup lookup(yt_dlp, http, spotify.web, events);
+        westie::core::SyncEngine sync(yt_dlp, tool_folder, http, spotify, state, events);
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;

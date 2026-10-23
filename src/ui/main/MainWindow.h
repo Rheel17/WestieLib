@@ -17,6 +17,7 @@
 #include "core/sync/PlaylistFetchFailed.h"
 #include "core/sync/PlaylistFetched.h"
 #include "core/sync/PlaylistFetching.h"
+#include "core/sync/PlaylistPageFetched.h"
 #include "core/sync/SyncEngine.h"
 #include "core/sync/SyncFinished.h"
 #include "core/sync/SyncQueued.h"
@@ -112,6 +113,7 @@ private:
     void apply_event(const core::PlaylistLookedUp& event);
     void apply_event(const core::SyncQueued& event);
     void apply_event(const core::PlaylistFetching& event);
+    void apply_event(const core::PlaylistPageFetched& event);
     void apply_event(const core::PlaylistFetched& event);
     void apply_event(const core::PlaylistFetchFailed& event);
     void apply_event(const core::SyncFinished& event);

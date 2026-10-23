@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <format>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <windows.h>
 #include <winhttp.h>
 
 #include "platform/Cancelled.h"
+#include "platform/HttpError.h"
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32Error.h"
 
@@ -42,6 +44,14 @@ std::string error_text(DWORD error) {
     return to_utf8(text);
 }
 
+std::wstring header_text(const std::vector<HttpHeader>& headers) {
+    std::wstring text;
+    for (const HttpHeader& header : headers) {
+        text += to_utf16(std::format("{}: {}\r\n", header.name, header.value));
+    }
+    return text;
+}
+
 [[noreturn]] void fail(const std::stop_token& stop, const std::wstring& host) {
     DWORD error = GetLastError();
     // A stop request closes the request handle, so a call that fails after one was cancelled
@@ -60,9 +70,9 @@ WinHttpClient::WinHttpClient(const std::wstring& user_agent) :
     check(WinHttpSetTimeouts(session_.get(), ResolveTimeoutMs, ConnectTimeoutMs, SendTimeoutMs, ReceiveTimeoutMs), "WinHttpSetTimeouts");
 }
 
-std::string WinHttpClient::get(const std::string& url, const std::stop_token& stop) {
+std::string WinHttpClient::get(const std::string& url, const std::vector<HttpHeader>& headers, const std::stop_token& stop) {
     std::string body;
-    request(url, [&body](std::span<const char> data) { body.append(data.begin(), data.end()); }, stop);
+    request(url, headers, [&body](std::span<const char> data) { body.append(data.begin(), data.end()); }, stop);
     return body;
 }
 
@@ -75,7 +85,7 @@ void WinHttpClient::download(
     }
     std::uint64_t received = 0;
     request(
-            url,
+            url, {},
             [&](std::span<const char> data) {
                 DWORD written = 0;
                 check(WriteFile(output.get(), data.data(), static_cast<DWORD>(data.size()), &written, nullptr), "WriteFile");
@@ -87,7 +97,9 @@ void WinHttpClient::download(
     check(FlushFileBuffers(output.get()), "FlushFileBuffers");
 }
 
-void WinHttpClient::request(const std::string& url, const std::function<void(std::span<const char>)>& on_data, const std::stop_token& stop) {
+void WinHttpClient::request(
+        const std::string& url, const std::vector<HttpHeader>& headers, const std::function<void(std::span<const char>)>& on_data, const std::stop_token& stop
+) {
     std::wstring wide_url = to_utf16(url);
     URL_COMPONENTS parts{};
     parts.dwStructSize = sizeof(parts);
@@ -113,7 +125,10 @@ void WinHttpClient::request(const std::string& url, const std::function<void(std
     // fail rather than race with the reset.
     HINTERNET handle = request.get();
     std::stop_callback cancel(stop, [&request] { request.reset(); });
-    if (!WinHttpSendRequest(handle, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) || !WinHttpReceiveResponse(handle, nullptr)) {
+    std::wstring header_lines = header_text(headers);
+    LPCWSTR header_data = header_lines.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : header_lines.c_str();
+    if (!WinHttpSendRequest(handle, header_data, static_cast<DWORD>(header_lines.size()), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        !WinHttpReceiveResponse(handle, nullptr)) {
         fail(stop, host);
     }
 
@@ -125,7 +140,7 @@ void WinHttpClient::request(const std::string& url, const std::function<void(std
         fail(stop, host);
     }
     if (status < FirstSuccessStatus || status >= FirstFailureStatus) {
-        throw std::runtime_error(std::format("HTTP {} from {}", status, to_utf8(host)));
+        throw HttpError(static_cast<int>(status), to_utf8(host));
     }
 
     // A synchronous read waits until it fills the buffer, so read what has arrived, and progress keeps up with a slow

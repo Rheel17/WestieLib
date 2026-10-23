@@ -37,7 +37,8 @@ add_executable(WestieLib WIN32
 	src/core/playlists/RemovePlaylist.cpp
 	src/core/settings/SettingsStore.cpp
 	src/core/sources/SourceType.cpp
-	src/core/sources/SpotifyPlaylistName.cpp
+	src/core/sources/SpotifyEmbedPage.cpp
+	src/core/sources/SpotifyPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylistName.cpp
 	src/core/sources/YtDlpError.cpp

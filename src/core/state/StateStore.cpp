@@ -48,6 +48,7 @@ struct PlaylistJson {
 struct SourceJson {
     std::string title{};
     std::vector<std::string> artists{};
+    std::optional<std::string> album{};
     std::int64_t duration_ms = 0;
     std::string track{};
 };
@@ -131,7 +132,7 @@ struct glz::meta<westie::core::PlaylistJson> {
 template<>
 struct glz::meta<westie::core::SourceJson> {
     using T = westie::core::SourceJson;
-    constexpr static auto value = glz::object("title", &T::title, "artists", &T::artists, "durationMs", &T::duration_ms, "track", &T::track);
+    constexpr static auto value = glz::object("title", &T::title, "artists", &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "track", &T::track);
 };
 
 template<>
@@ -180,6 +181,7 @@ State StateStore::load() const {
         state.sources[key] = {
             .title = std::move(source.title),
             .artists = std::move(source.artists),
+            .album = std::move(source.album).value_or(""),
             .duration = std::chrono::milliseconds(source.duration_ms),
             .track = std::move(source.track),
         };
@@ -200,7 +202,13 @@ void StateStore::save(const State& state) {
         json.playlists[key] = json_of(playlist);
     }
     for (const auto& [key, source] : state.sources) {
-        json.sources[key] = {.title = source.title, .artists = source.artists, .duration_ms = source.duration.count(), .track = source.track};
+        json.sources[key] = {
+            .title = source.title,
+            .artists = source.artists,
+            .album = source.album.empty() ? std::nullopt : std::optional(source.album),
+            .duration_ms = source.duration.count(),
+            .track = source.track,
+        };
     }
     for (const auto& [key, track] : state.tracks) {
         json.tracks[key] = {.sources = track.sources, .status = std::string(status_name(track.status)), .added_at = format_iso_time(track.added_at)};

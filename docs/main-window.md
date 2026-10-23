@@ -98,10 +98,10 @@ saved `Placement` and asks it for the current one.
   whether it goes (from `SyncQueued` until `SyncFinished`), the playlists queued, the one being fetched and the tools
   it waits for. `CommandState::syncing` comes from it.
   - `Sync all` hands the engine every playlist in row order, `Sync selected playlist` (also the menu's Sync and the
-    card's button) the selected one, and Add playlist's `Sync now` the new one. The engine leaves Spotify playlists
-    out. `Cancel` calls `SyncEngine::cancel`.
+    card's button) the selected one, and Add playlist's `Sync now` the new one. `Cancel` calls `SyncEngine::cancel`.
   - It also counts the playlists the run was given and the ones it has done, for the status bar.
-  - Every sync event brings the window up to date from a new snapshot (`show_playlists`): `mark_runs` tells each
+  - Every sync event brings the window up to date from a new snapshot (`show_playlists`), `PlaylistPageFetched` too,
+    so a Spotify playlist's tracks show page by page: `mark_runs` tells each
     `PlaylistRow` whether it's queued or being fetched, and what it waits for.
   - A row's sync control (`PlaylistEvents::on_sync`) syncs its playlist. Like `Sync all`, it works only while nothing
     syncs; `update_commands` tells the list so (`set_sync_enabled`).- **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠, the rule and the

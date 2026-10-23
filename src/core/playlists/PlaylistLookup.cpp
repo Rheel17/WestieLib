@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "core/playlists/PlaylistLookedUp.h"
-#include "core/sources/SpotifyPlaylistName.h"
+#include "core/sources/SpotifyEmbedPage.h"
 #include "core/sources/YouTubeMusicPlaylistName.h"
 #include "core/tools/ToolMissing.h"
 #include "platform/Cancelled.h"
@@ -47,9 +47,17 @@ void PlaylistLookup::work(const std::stop_token& stop, const PlaylistLink& link)
 std::optional<std::string> PlaylistLookup::name(const PlaylistLink& link, const std::stop_token& stop) const {
     switch (link.type) {
     case SourceType::YouTubeMusic: return youtube_music_playlist_name(yt_dlp_, link, stop);
-    case SourceType::Spotify:      return spotify_playlist_name(http_, spotify_url_, link.id, stop);
+    case SourceType::Spotify:      return spotify_playlist_name(link, stop);
     }
     return std::nullopt;
+}
+
+std::optional<std::string> PlaylistLookup::spotify_playlist_name(const PlaylistLink& link, const std::stop_token& stop) const {
+    std::optional<SpotifyEmbedPage> page = read_spotify_embed_page(http_, spotify_url_, link.id, stop);
+    if (!page) {
+        return std::nullopt;
+    }
+    return std::move(page->name);
 }
 
 }

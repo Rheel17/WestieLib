@@ -9,6 +9,7 @@ namespace westie::core {
 struct Source {
     std::string title{};
     std::vector<std::string> artists{};
+    std::string album{};
     std::chrono::milliseconds duration{};
     std::string track{};
 };

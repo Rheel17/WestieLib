@@ -474,6 +474,10 @@ void MainWindow::apply_event(const core::PlaylistFetching& event) {
     show_playlists();
 }
 
+void MainWindow::apply_event(const core::PlaylistPageFetched&) {
+    show_playlists();
+}
+
 void MainWindow::apply_event(const core::PlaylistFetched& event) {
     sync_board_.finish_playlist(event.playlist);
     show_playlists();

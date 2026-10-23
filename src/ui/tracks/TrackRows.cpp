@@ -110,6 +110,7 @@ std::vector<TrackRow> track_rows(const core::State& state, const std::optional<s
         if (const core::Source* source = first_source(state, track->second)) {
             row.title = platform::win32::to_utf16(source->title);
             row.artists = join_utf8(source->artists);
+            row.album = platform::win32::to_utf16(source->album);
             row.duration = source->duration;
         }
         for (const std::string& source : track->second.sources) {

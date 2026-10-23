@@ -1,7 +1,9 @@
 #include "core/sync/ApplyFetch.h"
 
 #include <algorithm>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "core/state/PruneTracks.h"
 
@@ -13,6 +15,9 @@ void add_source(State& state, SourceTrack&& listed, std::chrono::system_clock::t
     Source& source = state.sources[listed.key];
     source.title = std::move(listed.title);
     source.artists = std::move(listed.artists);
+    if (listed.album) {
+        source.album = std::move(*listed.album);
+    }
     source.duration = listed.duration;
     if (state.tracks.contains(source.track)) {
         return;
@@ -47,6 +52,28 @@ void apply_fetch(State& state, const std::string& playlist_key, PlaylistContents
     playlist->second.fetch_error.clear();
     playlist->second.fetch_error_at.reset();
     prune_tracks(state);
+}
+
+void apply_fetch_page(State& state, const std::string& playlist_key, const PlaylistContents& so_far, std::chrono::system_clock::time_point now) {
+    auto playlist = state.playlists.find(playlist_key);
+    if (playlist == state.playlists.end()) {
+        return;
+    }
+
+    if (!so_far.name.empty()) {
+        playlist->second.name = so_far.name;
+    }
+    // The earlier sources stay until the whole list is in, so no track leaves the playlist halfway
+    std::vector<std::string> earlier = std::exchange(playlist->second.sources, {});
+    for (const SourceTrack& listed : so_far.tracks) {
+        playlist->second.sources.push_back(listed.key);
+        add_source(state, SourceTrack(listed), now);
+    }
+    for (std::string& key : earlier) {
+        if (!std::ranges::contains(playlist->second.sources, key)) {
+            playlist->second.sources.push_back(std::move(key));
+        }
+    }
 }
 
 void apply_fetch_failure(State& state, const std::string& playlist_key, std::string error, std::chrono::system_clock::time_point now) {

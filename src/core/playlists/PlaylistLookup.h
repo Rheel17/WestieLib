@@ -22,6 +22,7 @@ public:
 private:
     void work(const std::stop_token& stop, const PlaylistLink& link);
     std::optional<std::string> name(const PlaylistLink& link, const std::stop_token& stop) const;
+    std::optional<std::string> spotify_playlist_name(const PlaylistLink& link, const std::stop_token& stop) const;
 
     const YtDlp& yt_dlp_;
     platform::HttpClient& http_;

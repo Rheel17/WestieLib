@@ -218,8 +218,8 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | Field                            | Meaning                                                                    |
 |----------------------------------|----------------------------------------------------------------------------|
 | `title`, `artists`, `durationMs` | From the playlist                                                          |
-| `album`, `year`                  | Spotify: from the playlist response, when it has them. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
-| `isrc`, `coverUrl`               | Spotify only                                                               |
+| `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
+| `isrc`, `coverUrl`               | Spotify only. The playlist response has the cover but no ISRC; where the ISRC comes from is decided with the Matcher |
 | `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence`, `review`, and the video's `title`, `artist` and `durationMs`, so a review shows what was matched |
 | `track`                          | Key of the track this source belongs to                                    |
 
@@ -311,7 +311,7 @@ The cover art comes from the first of:
 
 | Service          | Implementation                                                                       |
 |------------------|--------------------------------------------------------------------------------------|
-| `HttpClient`     | WinHTTP (`WinHttpClient`). `get` returns a body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
+| `HttpClient`     | WinHTTP (`WinHttpClient`). `get` sends the request headers it is given and returns a body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HttpError`, which keeps the status and reads `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
 | `ProcessRunner`  | `Win32ProcessRunner`. `run(program, arguments, stop)` starts the program with `CreateProcessW`, without a console window, and returns its exit code, stdout and stderr. Arguments and output are UTF-8; the arguments are quoted by the C runtime's rules. A child inherits only its own pipe ends and NUL as stdin (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so children started at the same time never hold each other's pipes open. It starts suspended, joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and only then runs. A `std::stop_token` cancels: its callback terminates the job, and the call throws `Cancelled`. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. So far it returns the whole output at the end; splitting it into lines as they arrive comes with the Downloader's progress. |
 | `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
@@ -344,7 +344,7 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   long as it needs, unchanged. `update` holds a second mutex for its whole run, so changes never interleave, and swaps
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
-  `fetchErrorAt`; sources with `title`, `artists`, `durationMs` and `track`; and tracks with `sources`, `status` and
+  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs` and `track`; and tracks with `sources`, `status` and
   `addedAt`. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
@@ -366,6 +366,8 @@ caches it as `remote.json`. A compiled-in default is used until the first succes
 ```
 
 Updating this file in the repository updates every installation on its next start.
+
+So far there is no RemoteConfig: `SpotifyPlaylist.cpp` has these three values compiled in.
 
 ### ToolManager
 
@@ -528,14 +530,35 @@ A new look-up stops the one before, and so does `stop()`; a stopped look-up answ
 **SpotifySource** reads public Spotify playlists:
 
 1. `GET https://open.spotify.com/embed/playlist/<id>` and parse the `__NEXT_DATA__` JSON. It holds an anonymous
-   access token (`props.pageProps.state.settings.session.accessToken`) and its expiry.
+   access token (`props.pageProps.state.settings.session.accessToken`) and its expiry. The page's own `trackList`
+   stops at 100 tracks and joins the artists into one string, so the tracks come from the query below. The public Web
+   API (`api.spotify.com/v1`) answers this token with HTTP 429.
 2. Page through `GET https://api-partner.spotify.com/pathfinder/v1/query` with `operationName`,
-   `variables` (`uri`, `offset`, `limit`) and `extensions` (persisted-query hash from RemoteConfig), sending
-   `Authorization: Bearer <token>` and `app-platform: WebPlayer`.
+   `variables` (`uri`, `offset`, `limit`, and `enableWatchFeedEntrypoint: false`, which the query requires) and
+   `extensions` (persisted-query hash from RemoteConfig), sending `Authorization: Bearer <token>` and
+   `app-platform: WebPlayer`.
 3. Map each item to a `SourceTrack` with title, artists, album, duration, the largest cover URL and the ISRC when
    present.
 
-The token is refreshed from the embed page when it expires or a request returns 401.
+Each fetch reads a new token from the embed page. A fetch takes seconds and a token lasts most of an hour, so it is
+never refreshed.
+
+- `fetch_spotify_playlist` (`src/core/sources/SpotifyPlaylist.cpp`) does it, and `read_spotify_embed_page`
+  (`SpotifyEmbedPage.cpp`) reads the page for it and for the look-up. `WESTIELIB_SPOTIFY_API` replaces
+  `https://api-partner.spotify.com`; the UI checks point it at the same fake server as `WESTIELIB_SPOTIFY_URL`.
+- The answer is `data.playlistV2`, with `content.totalCount` and `content.items`. An item's `itemV2.data` has
+  `__typename`, `uri` (`spotify:track:<id>`), `name`, `artists.items[].profile.name`, `albumOfTrack.name`,
+  `albumOfTrack.coverArt.sources` and `trackDuration.totalMilliseconds`. It has no ISRC and no year.
+- Only items of type `Track` count; episodes and local files are skipped. Pages of 100 are read until `totalCount` or
+  an empty page. After each page but the last, the fetch hands the tracks read so far to the SyncEngine, which shows
+  them (see SyncEngine › So far).
+- So far a source keeps the title, artists, album and duration; the cover URL arrives with the Downloader.
+- Errors:
+  - the embed page's error page, or `playlistV2` of type `NotFound`: "The playlist doesn't exist or is private.";
+  - an answer with `errors` (`PersistedQueryNotFound` when the hash is stale): "Spotify said: <message>";
+  - any HTTP error as `HttpClient` words it. Spotify's servers answer a page with HTTP 500 now and then, and the same
+    request goes through a moment later, so a page that gets a 5xx is asked for once more, a second later; a stop
+    request ends that wait at once.
 
 ### Matcher
 
@@ -647,8 +670,8 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
      cleared. The engine emits `PlaylistFetched`.
    - A new source becomes a new `pending` track with `addedAt`. The exception is a new YouTube Music source
      whose video already belongs to a track: it joins that track (see Merging).
-   - On failure, the playlist gets `fetchError` / `fetchErrorAt` and keeps its previous source list, so none of
-     its tracks become orphans. The engine emits `PlaylistFetchFailed`, and the run continues with the other
+   - On failure, the playlist gets `fetchError` / `fetchErrorAt` and keeps its previous source list, plus the pages
+     a Spotify fetch read before it failed, so none of its tracks become orphans. The engine emits `PlaylistFetchFailed`, and the run continues with the other
      playlists.
 2. **Orphans.** `downloaded` tracks with no source in any playlist become `orphaned`. The engine emits one
    `RemovalsPending` event with all of them.
@@ -678,8 +701,7 @@ A `kept` or `orphaned` track that one of its sources brings back into a playlist
 **Cancellation** sets the run's `CancelToken` and terminates the Job Object. In-flight tracks return to `pending`
 and their work folders are cleaned.
 
-**So far** (`src/core/sync/`), a run only fetches, and only YouTube Music playlists; Spotify playlists are left out
-until SpotifySource exists.
+**So far** (`src/core/sync/`), a run only fetches, YouTube Music and Spotify playlists alike.
 - `sync(keys)` queues the playlists that aren't queued yet and emits `SyncQueued`. Without a run it starts one on a
   worker thread (`std::jthread`); during a run they join its queue. The queue is behind a mutex, so a run that finds
   it empty and ends can't miss a `sync` that comes at the same moment.
@@ -687,11 +709,16 @@ until SpotifySource exists.
   the state: the playlist's `name` and `sources`, `lastSync`, no `fetchError`, the source values from the playlist,
   a `pending` track for each new source (keyed like the source), then `prune_tracks`. A playlist removed during
   the fetch is left alone. Then the run emits `PlaylistFetched`.
-- A failed fetch stores `fetchError` / `fetchErrorAt` and emits `PlaylistFetchFailed`; the run goes on.
-- Without yt-dlp, the run emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs it
+- A Spotify fetch also hands over the tracks read so far after every page but the last. `apply_fetch_page` puts them
+  in the state: the playlist's `name`, and as its `sources` the ones read so far followed by its earlier sources that
+  haven't come back yet, with the source values and new `pending` tracks as above. It leaves `lastSync`, `fetchError`
+  and the pruning to the end, so no track leaves a playlist halfway. Then the run emits `PlaylistPageFetched`.
+- A failed fetch stores `fetchError` / `fetchErrorAt` and emits `PlaylistFetchFailed`; the run goes on. The pages a
+  Spotify fetch read before it failed stay, beside the playlist's earlier sources.
+- Without yt-dlp, a YouTube Music fetch emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs it
   (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
-- `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, the queue is dropped,
-  and nothing is written.
+- `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, apart from the pages a
+  Spotify fetch already read (as for a failure); the queue is dropped, and nothing more is written.
 - Every run ends with `SyncFinished`, cancelled or not.
 
 ## Core API
@@ -724,6 +751,7 @@ until SpotifySource exists.
 | `SyncQueued`                   | so far: playlist keys added to the run's queue (it replaces `SyncStarted`) |
 | `PlaylistFetching`             | playlist key, the tools its fetch waits for     |
 | `PlaylistLookedUp`             | playlist key, outcome, name or error            |
+| `PlaylistPageFetched`          | so far: playlist key, after each page of a Spotify fetch but the last |
 | `PlaylistFetched`              | playlist id, name, track count                  |
 | `PlaylistFetchFailed`          | playlist id, error                              |
 | `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for |
@@ -773,7 +801,7 @@ src/
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
         playlists/  playlist links, the playlist look-up, addPlaylist
         settings/   Settings, SettingsStore
-        sources/    SourceType, each source's playlist name, the YouTube Music fetch; later SpotifySource
+        sources/    SourceType, each source's playlist name, the Spotify embed page, the YouTube Music and Spotify fetches
         state/      State, StateStore, prune_tracks
         sync/       SyncEngine, apply_fetch and the sync events
         tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore, ToolFolder, YtDlp and the tool types

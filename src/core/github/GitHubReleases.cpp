@@ -33,7 +33,7 @@ struct ReleaseJson {
 GitHubReleases::GitHubReleases(platform::HttpClient& http, std::string api_url) : http_(http), api_url_(std::move(api_url)) {}
 
 Release GitHubReleases::latest(std::string_view repository, const std::stop_token& stop) const {
-    std::string body = http_.get(std::format("{}/repos/{}/releases/latest", api_url_, repository), stop);
+    std::string body = http_.get(std::format("{}/repos/{}/releases/latest", api_url_, repository), {}, stop);
     ReleaseJson json;
     if (glz::error_ctx error = glz::read<JsonReadOptions>(json, body)) {
         throw std::runtime_error(std::format("GitHub's answer for {} doesn't read: {}", repository, glz::format_error(error, body)));

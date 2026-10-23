@@ -28,6 +28,7 @@ Add-Type -Path (Join-Path $PSScriptRoot 'FakeYtDlp.cs') -OutputAssembly $FakeYtD
 $FakeYtDlpRuns = Join-Path $ToolsDir 'yt-dlp-runs.txt'
 $Web = New-Object FakeWeb
 $env:WESTIELIB_SPOTIFY_URL = $Web.Url
+$env:WESTIELIB_SPOTIFY_API = $Web.Url
 $Ellipsis = [char]0x2026
 $script:failures = 0
 $script:dpi = 96

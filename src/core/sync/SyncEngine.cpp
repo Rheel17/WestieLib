@@ -7,11 +7,13 @@
 #include <utility>
 
 #include "core/sources/SourceType.h"
+#include "core/sources/SpotifyPlaylist.h"
 #include "core/sources/YouTubeMusicPlaylist.h"
 #include "core/sync/ApplyFetch.h"
 #include "core/sync/PlaylistFetchFailed.h"
 #include "core/sync/PlaylistFetched.h"
 #include "core/sync/PlaylistFetching.h"
+#include "core/sync/PlaylistPageFetched.h"
 #include "core/sync/SyncFinished.h"
 #include "core/sync/SyncQueued.h"
 #include "core/tools/ToolMissing.h"
@@ -19,8 +21,8 @@
 
 namespace westie::core {
 
-SyncEngine::SyncEngine(const YtDlp& yt_dlp, ToolFolder& tools, StateStore& state, EventSink& events) :
-        yt_dlp_(yt_dlp), tools_(tools), state_(state), events_(events) {}
+SyncEngine::SyncEngine(const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, SpotifyUrls spotify, StateStore& state, EventSink& events) :
+        yt_dlp_(yt_dlp), tools_(tools), http_(http), spotify_(std::move(spotify)), state_(state), events_(events) {}
 
 void SyncEngine::sync(const std::vector<std::string>& playlists) {
     std::unique_lock lock(mutex_);
@@ -33,8 +35,7 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
 
     SyncQueued queued;
     for (const std::string& playlist : playlists) {
-        // Fetching a Spotify playlist doesn't exist yet
-        if (source_type_of_key(playlist) != SourceType::YouTubeMusic || current_ == playlist || std::ranges::contains(queue_, playlist)) {
+        if (current_ == playlist || std::ranges::contains(queue_, playlist)) {
             continue;
         }
         queue_.push_back(playlist);
@@ -86,7 +87,7 @@ void SyncEngine::fetch(const std::string& playlist, const std::stop_token& stop)
     }
     // An exception that leaves a thread ends the process, so it becomes the playlist's error instead
     try {
-        PlaylistContents contents = fetch_when_installed(*link, stop);
+        PlaylistContents contents = fetch_contents(*link, stop);
         state_.update([&](State& state) { apply_fetch(state, playlist, std::move(contents), std::chrono::system_clock::now()); });
         events_.emit(PlaylistFetched{.playlist = playlist});
     } catch (const platform::Cancelled&) {
@@ -102,8 +103,21 @@ void SyncEngine::fetch(const std::string& playlist, const std::stop_token& stop)
     }
 }
 
-PlaylistContents SyncEngine::fetch_when_installed(const PlaylistLink& link, const std::stop_token& stop) {
+PlaylistContents SyncEngine::fetch_contents(const PlaylistLink& link, const std::stop_token& stop) {
     events_.emit(PlaylistFetching{.playlist = link.key()});
+    switch (link.type) {
+    case SourceType::YouTubeMusic: return fetch_when_installed(link, stop);
+    case SourceType::Spotify:      return fetch_spotify_playlist(http_, spotify_, link, [&](const PlaylistContents& so_far) { show_page(link, so_far); }, stop);
+    }
+    return {};
+}
+
+void SyncEngine::show_page(const PlaylistLink& link, const PlaylistContents& so_far) {
+    state_.update([&](State& state) { apply_fetch_page(state, link.key(), so_far, std::chrono::system_clock::now()); });
+    events_.emit(PlaylistPageFetched{.playlist = link.key()});
+}
+
+PlaylistContents SyncEngine::fetch_when_installed(const PlaylistLink& link, const std::stop_token& stop) {
     while (true) {
         std::uint64_t installs = tools_.installs(ToolPackage::YtDlp);
         try {
