@@ -141,6 +141,7 @@ add_executable(WestieLib WIN32
 	src/ui/inspector/LibraryCard.cpp
 	src/ui/inspector/PlaylistCard.cpp
 	src/ui/inspector/SectionTitle.cpp
+	src/ui/inspector/SelectionCard.cpp
 	src/ui/inspector/SourceLink.cpp
 	src/ui/inspector/SyncedValue.cpp
 	src/ui/inspector/TrackCard.cpp

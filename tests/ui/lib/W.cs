@@ -56,6 +56,15 @@ public static class W {
 	// Presses Ctrl+key (or Ctrl+Alt+key) in the app without real input, so nothing can reach the user's other windows.
 	// While the threads are attached they share their key state, so the app's TranslateAccelerator sees Ctrl held.
 	public static void PostCtrlKey(IntPtr h, int key, bool alt = false) {
+		PostKeyHeld(h, key, alt ? new[] { 0x11, 0x12 } : new[] { 0x11 });
+	}
+
+	// Presses Shift+key the same way
+	public static void PostShiftKey(IntPtr h, int key) {
+		PostKeyHeld(h, key, new[] { 0x10 });
+	}
+
+	static void PostKeyHeld(IntPtr h, int key, int[] held) {
 		int pid;
 		uint thread = GetWindowThreadProcessId(h, out pid), self = GetCurrentThreadId();
 		AttachThreadInput(self, thread, true);
@@ -63,8 +72,7 @@ public static class W {
 		GetKeyboardState(state);
 		var saved = (byte[])state.Clone();
 		try {
-			state[0x11] |= 0x80;
-			if (alt) state[0x12] |= 0x80;
+			foreach (int modifier in held) state[modifier] |= 0x80;
 			SetKeyboardState(state);
 			PostMessageW(h, 0x100, (IntPtr)key, (IntPtr)1);
 			System.Threading.Thread.Sleep(300);

@@ -14,9 +14,11 @@
 #include "ui/inspector/InspectorEvents.h"
 #include "ui/inspector/LibraryCard.h"
 #include "ui/inspector/PlaylistCard.h"
+#include "ui/inspector/SelectionCard.h"
 #include "ui/inspector/TrackCard.h"
 #include "ui/inspector/TrackDetails.h"
 #include "ui/playlists/PlaylistRow.h"
+#include "ui/tracks/StatusCounts.h"
 
 namespace westie::ui {
 
@@ -29,13 +31,14 @@ public:
     void show_library(const std::filesystem::path& folder, const TrackCounts& counts);
     void show_playlist(const PlaylistRow& playlist);
     void show_track(const TrackDetails& track);
+    void show_selection(const StatusCounts& counts);
     void update(const CommandState& state);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
 
 private:
-    enum class Content { FirstRun, Library, Playlist, Track };
+    enum class Content { FirstRun, Library, Playlist, Track, Selection };
 
     // The track's or playlist's key, if the card shows one
     void show_content(Content content, const std::string& subject);
@@ -47,6 +50,7 @@ private:
     LibraryCard library_;
     PlaylistCard playlist_;
     TrackCard track_;
+    SelectionCard selection_;
     framework::VerticalScroll scroll_;
     Content content_ = Content::FirstRun;
     std::string subject_;

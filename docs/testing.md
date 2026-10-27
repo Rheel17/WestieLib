@@ -40,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
 | `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView` |
-| `sync` | Sync all, Sync selected and Sync now: what a YouTube Music or Spotify fetch writes to state.json, the table's rows, the tab counts and result line, the cards; a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, the track card of a selected row and its playlist link, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), a fetch that waits for yt-dlp, and a Spotify fetch that shows its pages as they come (also when cancelled between them, or when the list changes), asks for a page again after HTTP 500, or fails | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `core/sources/Spotify*`, `platform/win32/WinHttpClient`, `ui/sync/`, `ui/tracks/`, `ui/inspector/Track*`, `ui/inspector/SourceLink`, `ui/inspector/CoverArt`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
+| `sync` | Sync all, Sync selected and Sync now: what a YouTube Music or Spotify fetch writes to state.json, the table's rows, the tab counts and result line, the cards; a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, the track card of a selected row and its playlist link, the selection card of two, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), a fetch that waits for yt-dlp, and a Spotify fetch that shows its pages as they come (also when cancelled between them, or when the list changes), asks for a page again after HTTP 500, or fails | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `core/sources/Spotify*`, `platform/win32/WinHttpClient`, `ui/sync/`, `ui/tracks/`, `ui/inspector/Track*`, `ui/inspector/SourceLink`, `ui/inspector/CoverArt`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -156,7 +156,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   next checks run against a window stuck in menu mode (`Check-MenuBarEdge -Menus`).
 - `PostCtrlKey` presses a Ctrl shortcut without real input, so nothing can reach the user's other windows: it attaches
   to the app's input thread, sets Ctrl in the shared key state, and posts the key's `WM_KEYDOWN`. The app's
-  `TranslateAccelerator` sees Ctrl held, as with a real key press.
+  `TranslateAccelerator` sees Ctrl held, as with a real key press. `PostShiftKey` holds Shift the same way, which the
+  `sync` suite uses to select a second row with Shift+Down.
 - The app sets menu item states when a popup opens, so send `WM_INITMENUPOPUP` before reading them
   (`Update-MenuStates`). `Send-Command` looks a command up by its menu text, so the scripts don't repeat IDs.
 - Common controls don't marshal pointers across processes. A message that fills a buffer (`TB_GETBUTTON`,
@@ -188,7 +189,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `Click-PlaylistRow` and `Click-AllTracks` send `WM_LBUTTONDOWN` and `WM_LBUTTONUP` (`Send-Click`), and
   `Press-ListKey` sends `WM_KEYDOWN` to the list, which acts on it whether or not it has the focus. `FocusOf` tells
   which window has the focus on the app's thread (`GetGUIThreadInfo`).
-- The inspector shows one card at a time, a panel named `Library card`, `Playlist card` or `Track card`
+- The inspector shows one card at a time, a panel named `Library card`, `Playlist card`, `Track card`
+  or `Selection card`
   (`Get-InspectorCard`), or none on the first run. It follows the table's selection on a posted message, so after
   selecting rows read it with `Wait-CardTexts`, which waits for the card it's given. `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right
   within a row, and `Get-CardLayout` gives where the card, its title, its values and its buttons sit.

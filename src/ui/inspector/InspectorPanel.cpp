@@ -21,12 +21,14 @@ InspectorPanel::InspectorPanel(HWND parent, const InspectorEvents& events) :
         Panel(parent, L"Inspector", WS_VSCROLL),
         library_(hwnd(), events.on_command),
         playlist_(hwnd(), events.on_command),
-        track_(hwnd(), events) {}
+        track_(hwnd(), events),
+        selection_(hwnd()) {}
 
 void InspectorPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
     library_.apply_dpi(dpi, fonts);
     playlist_.apply_dpi(dpi, fonts);
     track_.apply_dpi(dpi, fonts);
+    selection_.apply_dpi(dpi, fonts);
     layout();
 }
 
@@ -47,6 +49,11 @@ void InspectorPanel::show_playlist(const PlaylistRow& playlist) {
 void InspectorPanel::show_track(const TrackDetails& track) {
     track_.set_contents(track);
     show_content(Content::Track, track.row.key);
+}
+
+void InspectorPanel::show_selection(const StatusCounts& counts) {
+    selection_.set_contents(counts);
+    show_content(Content::Selection, {});
 }
 
 void InspectorPanel::update(const CommandState& state) {
@@ -86,10 +93,11 @@ framework::Rect InspectorPanel::padded_area() const {
 
 int InspectorPanel::card_height(int width) const {
     switch (content_) {
-    case Content::FirstRun: return 0;
-    case Content::Library:  return library_.height_for(width);
-    case Content::Playlist: return playlist_.height_for(width);
-    case Content::Track:    return track_.height_for(width);
+    case Content::FirstRun:  return 0;
+    case Content::Library:   return library_.height_for(width);
+    case Content::Playlist:  return playlist_.height_for(width);
+    case Content::Track:     return track_.height_for(width);
+    case Content::Selection: return selection_.height_for(width);
     }
     std::unreachable();
 }
@@ -108,6 +116,7 @@ void InspectorPanel::layout() {
     positions.place(library_.hwnd(), content_ == Content::Library ? std::optional(card) : std::nullopt);
     positions.place(playlist_.hwnd(), content_ == Content::Playlist ? std::optional(card) : std::nullopt);
     positions.place(track_.hwnd(), content_ == Content::Track ? std::optional(card) : std::nullopt);
+    positions.place(selection_.hwnd(), content_ == Content::Selection ? std::optional(card) : std::nullopt);
     positions.apply();
 }
 

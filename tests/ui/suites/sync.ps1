@@ -220,6 +220,13 @@ Check '  its playlist link: the playlist selected | card' "$(Get-Selection $h 4)
 Check '  no track selected' "[$(Get-SelectedRows $h)]" '[]'
 Click-AllTracks $h
 
+# Several selected tracks show the selection card
+Select-TrackRow $h 0
+[W]::PostShiftKey((Get-TrackTable $h), 0x28)
+Check 'Shift+Down: two rows selected' (Get-SelectedRows $h) "0 $Cafe / 1 Late Night Swing"
+Check '  the selection card' (Wait-CardTexts $h 'Selection card') 'Selection card: 2 tracks selected / Status / Waiting / 2'
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-selection.png") }
+
 Click-PlaylistRow $h 1
 Check 'Playlist 1: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowA / 2 | $RowB / 3 | $RowC / 4 | $RowShared"
 Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Synced 0 | Waiting 4 | Needs review 0 | Failed 0 | Showing 4 of 7 in $TracksName"

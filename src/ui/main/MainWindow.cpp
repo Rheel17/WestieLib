@@ -238,6 +238,10 @@ void MainWindow::show_inspector() {
             return;
         }
     }
+    if (selected.size() > 1) {
+        inspector_.show_selection(status_counts(selected));
+        return;
+    }
     if (std::optional<PlaylistRow> playlist = selected_row()) {
         inspector_.show_playlist(*playlist);
     } else {

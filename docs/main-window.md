@@ -164,7 +164,7 @@ saved `Placement` and asks it for the current one.
   the counts.
 - `InspectorPanel` (`src/ui/inspector/`) shows a card at the top of its padding, or nothing on the first run.
   `MainWindow::show_inspector` picks from the state and the selections: no playlists, one selected track
-  (`track_details`), a selected playlist (`playlist_row`), or else All tracks. It asks `TrackPanel::selected_rows`
+  (`track_details`), several (`status_counts` of their rows), a selected playlist (`playlist_row`), or else All tracks. It asks `TrackPanel::selected_rows`
   itself, so it's right even while a change of the table's selection is still on its way: `TrackTable` reports each
   `LVN_ITEMCHANGED` of a row's selected state and each `LVN_ODSTATECHANGED`, and `TrackPanel` posts itself one
   `SelectionChangedMessage` for a burst of them (selecting all, or `restore` after new rows), which then calls
@@ -190,6 +190,8 @@ saved `Placement` and asks it for the current one.
     each kind (`core::source_page_url`), and the playlists that list the track, in the left panel's order. Its links
     go through `InspectorEvents`: a source's `Open` to `on_open_url`, a playlist to `on_select_playlist`, which
     selects it as a click on its row does.
+  - `SelectionCard` shows several selected tracks: their number, and a row per status that holds any of them, its
+    count in an `IconText` with the status's icon.
   - The cards' buttons and the link send `CommandId`s (the link `OpenPlaylistPage`, which isn't in the menu bar) to
     `run_command`, like the menus.
 
