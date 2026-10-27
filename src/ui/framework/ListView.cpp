@@ -45,9 +45,7 @@ void ListView::apply_dpi(Dpi dpi, const MessageFont& font, int row_height_dips) 
 
     if (dpi.value() != dpi_.value()) {
         for (int index = 0; index < column_count(); ++index) {
-            auto width = static_cast<int>(SendMessageW(hwnd(), LVM_GETCOLUMNWIDTH, index, 0));
-            int scaled = MulDiv(width, static_cast<int>(dpi.value()), static_cast<int>(dpi_.value()));
-            platform::win32::check(SendMessageW(hwnd(), LVM_SETCOLUMNWIDTH, index, MAKELPARAM(scaled, 0)), "LVM_SETCOLUMNWIDTH");
+            set_column_width(index, MulDiv(column_width(index), static_cast<int>(dpi.value()), static_cast<int>(dpi_.value())));
         }
         dpi_ = dpi;
     }
@@ -88,6 +86,14 @@ std::optional<int> ListView::column_index(int subitem) const {
         }
     }
     return std::nullopt;
+}
+
+int ListView::column_width(int index) const {
+    return static_cast<int>(SendMessageW(hwnd(), LVM_GETCOLUMNWIDTH, index, 0));
+}
+
+void ListView::set_column_width(int index, int width) {
+    platform::win32::check(SendMessageW(hwnd(), LVM_SETCOLUMNWIDTH, index, MAKELPARAM(width, 0)), "LVM_SETCOLUMNWIDTH");
 }
 
 std::vector<int> ListView::column_order() const {

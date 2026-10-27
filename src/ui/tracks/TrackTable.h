@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +26,8 @@ public:
     HWND hwnd() const noexcept;
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     void show_scope(bool playlist);
+    std::map<TrackColumn, int> column_widths() const;
+    void set_column_widths(const std::map<TrackColumn, int>& width_dips);
     void set_rows(std::vector<TrackRow> rows);
     void scroll_to_top();
     void clear_selection();
@@ -56,6 +59,8 @@ private:
     void draw_status(HDC dc, int item) const;
 
     std::function<void()> on_selection_change_;
+    // Every column's, so a column that comes back, like #, has the width it had
+    std::map<TrackColumn, int> width_dips_;
     framework::ListView list_;
     TrackSort sort_;
     std::vector<TrackRow> rows_;

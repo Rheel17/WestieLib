@@ -1,5 +1,7 @@
 #include "ui/main/WindowState.h"
 
+#include <array>
+
 #include <windows.h>
 
 #include "platform/win32/RegistryKey.h"
@@ -19,12 +21,40 @@ constexpr wchar_t InspectorWidthValue[] = L"InspectorWidthDips";
 constexpr wchar_t LogHeightValue[] = L"LogHeightDips";
 constexpr wchar_t LogVisibleValue[] = L"LogVisible";
 
+struct ColumnValue {
+    TrackColumn column = TrackColumn::Title;
+    const wchar_t* name = nullptr;
+};
+
+constexpr std::array ColumnValues = {
+    ColumnValue{TrackColumn::Number, L"NumberColumnWidthDips"},
+    ColumnValue{TrackColumn::Status, L"StatusColumnWidthDips"},
+    ColumnValue{TrackColumn::Title, L"TitleColumnWidthDips"},
+    ColumnValue{TrackColumn::Artists, L"ArtistsColumnWidthDips"},
+    ColumnValue{TrackColumn::Album, L"AlbumColumnWidthDips"},
+    ColumnValue{TrackColumn::Playlists, L"PlaylistsColumnWidthDips"},
+    ColumnValue{TrackColumn::Time, L"TimeColumnWidthDips"},
+    ColumnValue{TrackColumn::Source, L"SourceColumnWidthDips"},
+    ColumnValue{TrackColumn::Match, L"MatchColumnWidthDips"},
+    ColumnValue{TrackColumn::File, L"FileColumnWidthDips"},
+};
+
 std::optional<int> read_int(const platform::win32::RegistryKey& key, const wchar_t* name) {
     return key.read_dword(name).transform([](DWORD value) { return static_cast<int>(value); });
 }
 
 void write_int(platform::win32::RegistryKey& key, const wchar_t* name, int value) {
     key.write_dword(name, static_cast<DWORD>(value));
+}
+
+std::map<TrackColumn, int> read_columns(const platform::win32::RegistryKey& key) {
+    std::map<TrackColumn, int> widths;
+    for (const ColumnValue& value : ColumnValues) {
+        if (std::optional<int> width = read_int(key, value.name)) {
+            widths[value.column] = *width;
+        }
+    }
+    return widths;
 }
 
 }
@@ -56,6 +86,7 @@ std::optional<WindowState> load_window_state() {
             .log_dips = read_int(*key, LogHeightValue).value_or(defaults.log_dips),
             .log_visible = read_int(*key, LogVisibleValue).value_or(defaults.log_visible) != 0,
         },
+        .column_dips = read_columns(*key),
     };
 }
 
@@ -71,6 +102,11 @@ void save_window_state(const WindowState& state) {
     write_int(key, InspectorWidthValue, state.panels.inspector_dips);
     write_int(key, LogHeightValue, state.panels.log_dips);
     write_int(key, LogVisibleValue, state.panels.log_visible);
+    for (const ColumnValue& value : ColumnValues) {
+        if (auto width = state.column_dips.find(value.column); width != state.column_dips.end()) {
+            write_int(key, value.name, width->second);
+        }
+    }
 }
 
 }

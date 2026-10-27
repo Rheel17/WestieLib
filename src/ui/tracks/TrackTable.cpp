@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <format>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -23,6 +24,8 @@ namespace {
 constexpr int RowHeightDips = 22;
 constexpr int StatusIconDips = 16;
 constexpr int StatusIconLeftDips = 9;
+// A negative width asks the list to size the column itself, and a huge one overflows when scaled
+constexpr int MaxColumnWidthDips = 4000;
 
 struct ColumnSpec {
     TrackColumn column = TrackColumn::Title;
@@ -63,10 +66,18 @@ constexpr std::array StatusIcons = {
     StatusIconSpec{std::nullopt, IDI_DUPLICATE},
 };
 
-framework::ListColumn list_column(const ColumnSpec& spec, framework::Dpi dpi) {
+std::map<TrackColumn, int> default_widths() {
+    std::map<TrackColumn, int> widths{{NumberColumn.column, NumberColumn.width_dips}};
+    for (const ColumnSpec& spec : Columns) {
+        widths[spec.column] = spec.width_dips;
+    }
+    return widths;
+}
+
+framework::ListColumn list_column(const ColumnSpec& spec, int width) {
     return {
         .title = spec.title,
-        .width = dpi.scale(spec.width_dips),
+        .width = width,
         .subitem = std::to_underlying(spec.column),
         .right_aligned = spec.right_aligned,
     };
@@ -92,12 +103,12 @@ std::wstring cell_text(const TrackRow& row, TrackColumn column) {
 }
 
 TrackTable::TrackTable(HWND parent, std::function<void()> on_selection_change) :
-        on_selection_change_(std::move(on_selection_change)), list_(parent), sort_(default_sort(false)) {
+        on_selection_change_(std::move(on_selection_change)), width_dips_(default_widths()), list_(parent), sort_(default_sort(false)) {
     framework::Dpi dpi = framework::Dpi::of(list_.hwnd());
     std::vector<int> subitems;
     for (const ColumnSpec& spec : Columns) {
         if (spec.shown) {
-            list_.insert_column(spec.column == TrackColumn::Title ? 0 : list_.column_count(), list_column(spec, dpi));
+            list_.insert_column(spec.column == TrackColumn::Title ? 0 : list_.column_count(), list_column(spec, dpi.scale(spec.width_dips)));
             subitems.push_back(std::to_underlying(spec.column));
         }
     }
@@ -127,10 +138,30 @@ void TrackTable::show_scope(bool playlist) {
     if (playlist && !number) {
         add_number_column();
     } else if (!playlist && number) {
+        width_dips_ = column_widths();
         list_.delete_column(*number);
     }
     sort_ = default_sort(playlist);
     show_sort();
+}
+
+std::map<TrackColumn, int> TrackTable::column_widths() const {
+    std::map<TrackColumn, int> widths = width_dips_;
+    framework::Dpi dpi = framework::Dpi::of(list_.hwnd());
+    for (int index = 0; index < list_.column_count(); ++index) {
+        widths[static_cast<TrackColumn>(list_.column_subitem(index))] = dpi.unscale(list_.column_width(index));
+    }
+    return widths;
+}
+
+void TrackTable::set_column_widths(const std::map<TrackColumn, int>& width_dips) {
+    for (auto [column, width] : width_dips) {
+        width_dips_[column] = std::clamp(width, 0, MaxColumnWidthDips);
+    }
+    framework::Dpi dpi = framework::Dpi::of(list_.hwnd());
+    for (int index = 0; index < list_.column_count(); ++index) {
+        list_.set_column_width(index, dpi.scale(width_dips_.at(static_cast<TrackColumn>(list_.column_subitem(index)))));
+    }
 }
 
 void TrackTable::set_rows(std::vector<TrackRow> rows) {
@@ -181,7 +212,7 @@ void TrackTable::on_item_changed(const NMLISTVIEW& change) const {
 
 void TrackTable::add_number_column() {
     int index = list_.column_count();
-    list_.insert_column(index, list_column(NumberColumn, framework::Dpi::of(list_.hwnd())));
+    list_.insert_column(index, list_column(NumberColumn, framework::Dpi::of(list_.hwnd()).scale(width_dips_.at(TrackColumn::Number))));
     std::vector<int> order = list_.column_order();
     std::erase(order, index);
     order.insert(order.begin(), index);

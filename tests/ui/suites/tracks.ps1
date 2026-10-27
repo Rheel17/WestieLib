@@ -1,5 +1,5 @@
-# The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns.
-# Dot-sourced by ui-checks.ps1.
+# The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns,
+# their widths saved across restarts. Dot-sourced by ui-checks.ps1.
 
 function Get-ClearButton($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Button'))[0] }
 
@@ -35,6 +35,14 @@ function Double-Click-Header($hwnd, [int]$position) {
 }
 
 function Get-Columns($hwnd) { [W]::ListViewColumns((Get-TrackTable $hwnd)) }
+
+# Sets the width of the column at $position in the header's order, as a drag of its divider does
+function Set-ColumnWidth($hwnd, [int]$position, [int]$width) {
+	$list = Get-TrackTable $hwnd
+	$header = [W]::SendMessageW($list, 0x101F, [IntPtr]::Zero, [IntPtr]::Zero)
+	$index = [W]::SendMessageW($header, 0x120F, [IntPtr]$position, [IntPtr]::Zero)
+	[void][W]::SendMessageW($list, 0x101E, $index, [IntPtr]$width)
+}
 
 function Get-AllTracksColumns { "Status $(S 56) | Title $(S 204) ^ | Artists $(S 156) | Album $(S 132) | Playlists $(S 114) | Time $(S 48)" }
 
@@ -262,4 +270,25 @@ if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-tra
 Set-Bounds $h 100 100 (S 1100) (S 700)
 Start-Sleep -Milliseconds 300
 Check-TrackLayout 'Narrow window:' $h
+
+# A width the user gives a column stays through other scopes, and # keeps its own while All tracks hides it
+Set-ColumnWidth $h 1 (S 250)
+Click-PlaylistRow $h 1
+Set-ColumnWidth $h 0 (S 60)
+Click-AllTracks $h
+$resizedAllTracks = (Get-AllTracksColumns) -replace "Title $(S 204)", "Title $(S 250)"
+Check 'Title resized: kept in a playlist and back' (Get-Columns $h) $resizedAllTracks
+Click-PlaylistRow $h 1
+$resizedPlaylist = "# $(S 60) ^ | $($resizedAllTracks -replace ' \^', '')"
+Check '# resized: kept through All tracks' (Get-Columns $h) $resizedPlaylist
+Stop-App $app
+$saved = Get-ItemProperty $KeyPath
+Check '  saved Title, #, Artists, File (DIPs)' "$($saved.TitleColumnWidthDips) $($saved.NumberColumnWidthDips) $($saved.ArtistsColumnWidthDips) $($saved.FileColumnWidthDips)" '250 60 156 200'
+
+"--- Run 2: the column widths come back"
+$app = Start-App
+$h = $app.Hwnd
+Check 'Restored columns in All tracks' (Get-Columns $h) $resizedAllTracks
+Click-PlaylistRow $h 1
+Check '  and in a playlist' (Get-Columns $h) $resizedPlaylist
 Stop-App $app

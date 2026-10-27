@@ -105,6 +105,7 @@ MainWindow::MainWindow(
 
     if (std::optional<WindowState> state = load_window_state()) {
         panels_ = state->panels;
+        tracks_.set_column_widths(state->column_dips);
         placement_.restore(state->placement);
     } else {
         placement_.apply_initial_size(InitialWindowDips);
@@ -286,7 +287,7 @@ void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
 }
 
 void MainWindow::save_state() const {
-    save_window_state({.placement = placement_.current(), .panels = panels_});
+    save_window_state({.placement = placement_.current(), .panels = panels_, .column_dips = tracks_.column_widths()});
 }
 
 MainLayout MainWindow::current_layout() const {

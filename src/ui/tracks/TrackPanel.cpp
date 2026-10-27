@@ -84,6 +84,14 @@ std::vector<TrackRow> TrackPanel::selected_rows() const {
     return table_.selected_rows();
 }
 
+std::map<TrackColumn, int> TrackPanel::column_widths() const {
+    return table_.column_widths();
+}
+
+void TrackPanel::set_column_widths(const std::map<TrackColumn, int>& width_dips) {
+    table_.set_column_widths(width_dips);
+}
+
 void TrackPanel::focus_search() {
     filter_.focus_search();
 }

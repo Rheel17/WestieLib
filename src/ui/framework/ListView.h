@@ -44,6 +44,8 @@ public:
     void delete_column(int index);
     int column_subitem(int index) const;
     std::optional<int> column_index(int subitem) const;
+    int column_width(int index) const;
+    void set_column_width(int index, int width);
     std::vector<int> column_order() const;
     void set_column_order(std::span<const int> order);
     void set_sort_arrow(std::optional<ListSortArrow> arrow);

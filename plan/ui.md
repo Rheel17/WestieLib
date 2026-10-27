@@ -46,9 +46,9 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
   splitter only trades height with the panels. When the window gets too short for the saved height, the log gives
   way; its height comes back when the window grows.
 - The infobar row is 32 px tall, right under the toolbar, and takes its height from the panels.
-- The window placement (normal bounds and maximized state), the panel widths, the log height and whether the log
-  shows are saved under `HKCU\Software\WestieLib\Window` when the window closes, and restored on the next start. A
-  minimized window comes back restored, or maximized if it was maximized before.
+- The window placement (normal bounds and maximized state), the panel widths, the log height, whether the log
+  shows and the track table's column widths are saved under `HKCU\Software\WestieLib\Window` when the window closes,
+  and restored on the next start. A minimized window comes back restored, or maximized if it was maximized before.
 - The inspector is always shown. View › Log toggles the log pane.
 - Minimum window size is about 1100×680. The mockup draws the window at 1280×800, with a 250 px left panel and
   a 290 px inspector.
@@ -389,7 +389,8 @@ when you click their header. Right-click the header to show, hide or reorder col
 | File      | off     | file name |
 
 Rows are 22 px tall. A 1 px rule (`#E5E5E5`) runs under the column titles, across the table's width. The default widths are # 34, Status 56, Title 204, Artists 156, Album 132, Playlists 114 and
-Time 48 px; # and Time are right-aligned.
+Time 48 px; # and Time are right-aligned. A column the user resizes keeps its width in every scope and across
+restarts; # keeps its width while All tracks hides it.
 
 Default sort is Title in All tracks and # in a playlist scope. A click on a header sorts by that column, ascending, and
 a second click reverses it, however quickly it follows; the header shows the arrow. The sort is stable: rows that tie on

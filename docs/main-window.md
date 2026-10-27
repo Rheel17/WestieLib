@@ -308,7 +308,8 @@ the table itself, through `BufferedPaint`.
   right-aligned or removed; the column order puts Status before it. `show_scope` inserts `#` and moves it to the front
   of the order, or deletes it, and goes back to the scope's default sort. `LVN_COLUMNCLICK` sorts by the clicked
   column, or turns the order round when it's sorted by that column already, and moves the header's arrow. Source,
-  Match and File are in the table but hidden: the header menu that shows them comes later.
+  Match and File are in the table but hidden: the header menu that shows them comes later. The widths are saved with
+  the window (Saved state).
 - `track_rows` (`TrackRows.cpp`) turns a snapshot into the scope's `TrackRow`s (see `plan/ui.md`, Tracks, sources and
   entries). All tracks has a row per track, for its first entry in `track_entries` order (`TrackEntries.cpp`: the
   playlists in the left panel's order, each source once at its first position, then the sources of tracks no playlist
@@ -362,8 +363,12 @@ the table itself, through `BufferedPaint`.
 `*Value` constants there.
 
 - Bounds are `rcNormalPosition`: workspace coordinates in physical pixels, negative numbers as two's complement.
-  Panel widths and the log height are DIPs; `LogVisible` and `Maximized` are 0 or 1.
+  Panel widths, the log height and the track table's column widths (`<Column>ColumnWidthDips`, one per `TrackColumn`)
+  are DIPs; `LogVisible` and `Maximized` are 0 or 1.
 - Without all four bounds the saved state is ignored. Other missing values fall back to their defaults.
+- `TrackTable` keeps every column's width in DIPs, # and the hidden columns too, and notes #'s before `show_scope`
+  deletes it. `column_widths()` reads the shown columns from the header, so `save_state` gets the widths as the user
+  left them; `set_column_widths` clamps what it restores to 0–4000, because a negative width is an `LVSCW_` code.
 - When the restored bounds land on a monitor with a different DPI, `WindowPlacement::restoring()` makes
   `on_dpi_changed` skip the suggested rect, because the saved bounds are already in that monitor's pixels, and only
   lay out again.
