@@ -13,7 +13,7 @@
 #include "ui/framework/Label.h"
 #include "ui/framework/LinkLabel.h"
 #include "ui/framework/Panel.h"
-#include "ui/inspector/CardTitle.h"
+#include "ui/inspector/IconText.h"
 #include "ui/inspector/SectionTitle.h"
 #include "ui/inspector/SyncedValue.h"
 #include "ui/playlists/PlaylistRow.h"
@@ -38,7 +38,7 @@ private:
     void on_command(WPARAM wparam) const;
 
     std::function<void(CommandId)> on_command_;
-    CardTitle title_;
+    IconText title_;
     framework::Label subtitle_;
     SectionTitle section_;
     framework::Label link_key_;

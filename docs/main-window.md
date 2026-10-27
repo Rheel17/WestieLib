@@ -163,14 +163,20 @@ saved `Placement` and asks it for the current one.
 - `AllTracksRow` is a window that paints the row: its look (hover, pressed or selected), glyph, name in semibold, and
   the counts.
 - `InspectorPanel` (`src/ui/inspector/`) shows a card at the top of its padding, or nothing on the first run.
-  `MainWindow::show_inspector` picks from the state and the selection: no playlists, a selected playlist
-  (`playlist_row`), or else All tracks. It runs whenever one of those changes, and when
+  `MainWindow::show_inspector` picks from the state and the selections: no playlists, one selected track
+  (`track_details`), a selected playlist (`playlist_row`), or else All tracks. It asks `TrackPanel::selected_rows`
+  itself, so it's right even while a change of the table's selection is still on its way: `TrackTable` reports each
+  `LVN_ITEMCHANGED` of a row's selected state and each `LVN_ODSTATECHANGED`, and `TrackPanel` posts itself one
+  `SelectionChangedMessage` for a burst of them (selecting all, or `restore` after new rows), which then calls
+  `show_inspector`. It runs whenever one of those changes, and when
   the library folder or the track counts (`track_counts_`) change. `update_commands` hands the inspector the
   `CommandState`, so the cards' buttons follow the same rules as the menus.
-  - `LibraryCard` and `PlaylistCard` are panels of `Label`s, `Button`s and small windows that paint themselves:
-    `CardTitle` (glyph and name in the title font), `SectionTitle` (semibold text and the rule after it),
-    `SyncedValue` (`paint_sync_bar`, from `src/ui/SyncBar.cpp`, which the playlist rows use too, then the counts), and
-    a `framework::LinkLabel`. Every window's text is what it shows, so the checks read the cards with
+  - `LibraryCard`, `PlaylistCard` and `TrackCard` are panels of `Label`s, `Button`s and small windows that paint
+    themselves: `IconText` (a 16 px glyph and a line of text, with the gap and line height its style gives: the card
+    titles, the track's status), `SectionTitle` (semibold text and the rule after it), `SyncedValue`
+    (`paint_sync_bar`, from `src/ui/SyncBar.cpp`, which the playlist rows use too, then the counts), `CoverArt` (the
+    track's cover, so far the placeholder), `SourceLink` (an `IconText` with the source's logo and name, and an
+    `Open` link), and `framework::LinkLabel`s. Every window's text is what it shows, so the checks read the cards with
     `GetWindowTextW`.
   - `CardLayout` holds the measures from `plan/ui.md` (Inspector › Nothing selected) and stacks a card's parts from
     the top: title, subtitle, section, key–value rows and a row of buttons that wraps. `row_if` hides a row that isn't
@@ -178,7 +184,12 @@ saved `Placement` and asks it for the current one.
     when they aren't zero. `Shared` counts the playlist's tracks that other playlists of its source list too. A card runs the same `arrange`
     to place its children on `WM_SIZE` and, without `DeferredPositions`, to measure `height_for(width)`.
   - The panel is `WS_VSCROLL` with a `framework::VerticalScroll`. Its content is the card's height plus the padding;
-    scrolling moves the card window, not its children. A new card, or new contents, starts at the top.
+    scrolling moves the card window, not its children. Another card, or the same card for another track or
+    playlist (`subject_`), starts at the top; a refresh of the same one keeps the scroll position.
+  - `TrackCard` shows a `TrackDetails` (`track_details`): the table's `TrackRow`, the page of the first source of
+    each kind (`core::source_page_url`), and the playlists that list the track, in the left panel's order. Its links
+    go through `InspectorEvents`: a source's `Open` to `on_open_url`, a playlist to `on_select_playlist`, which
+    selects it as a click on its row does.
   - The cards' buttons and the link send `CommandId`s (the link `OpenPlaylistPage`, which isn't in the menu bar) to
     `run_command`, like the menus.
 

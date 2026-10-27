@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -20,10 +21,11 @@ namespace westie::ui {
 
 class TrackPanel final : public framework::Panel {
 public:
-    explicit TrackPanel(HWND parent);
+    TrackPanel(HWND parent, std::function<void()> on_selection_change);
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total);
+    std::vector<TrackRow> selected_rows() const;
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -31,6 +33,8 @@ protected:
 private:
     void layout();
     void paint() const;
+    void post_selection_change();
+    void on_selection_change();
     LRESULT on_notify(NMHDR& header);
     void on_filter_change();
     void update_clear();
@@ -39,6 +43,7 @@ private:
     void show_rows();
     void show_result_line();
 
+    std::function<void()> on_selection_change_;
     FilterBar filter_;
     StatusFilter status_;
     framework::Label result_;
@@ -52,6 +57,8 @@ private:
     int library_total_ = 0;
     int result_height_ = 0;
     int rule_top_ = 0;
+    // A change is already on its way, so the ones after it before it arrives don't send another
+    bool selection_change_posted_ = false;
 };
 
 }

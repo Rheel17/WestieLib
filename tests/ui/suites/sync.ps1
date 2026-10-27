@@ -200,6 +200,26 @@ Check-ListButton '  rows 1 to 3 a line taller: Add playlist under them' $h 4
 Check '  infobar: the failed fetch' (Get-InfobarText $h) "True $FetchMessage"
 Check '  the rows sync controls tooltips' "$([W]::TooltipText((Get-PlaylistList $h), 0)) / $([W]::TooltipText((Get-PlaylistList $h), 3))" "Sync $TracksName / Sync Named PLbroken1"
 
+# One selected track shows its card; a link to one of its playlists selects that playlist
+Select-TrackRow $h 5
+Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Shared Song / Both / Album is read when it downloads / " +
+	"Status / Waiting / Downloads on the next sync. / Source / Source / YouTube Music $MiddleDot Open / Playlists / $TracksName, $SharedName / " +
+	"Key / ytm:trackSHARE5 / Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
+Select-TrackRow $h 1
+Check 'Late Night Swing selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
+	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / $SpotifyName / " +
+	"Key / spotify:spTrackLateNight000001 / Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-track.png") }
+$card = Get-InspectorCard $h
+$cover =[W]::RectIn(([W]::Children($card, 'WestieLib.CoverArt'))[0], $card)
+Check '  cover: 144 square, centered' "$($cover.Right - $cover.Left)x$($cover.Bottom - $cover.Top) $($cover.Left - ((Get-ClientWidth $card) - $cover.Right))" "$(S 144)x$(S 144) 0"
+# Only the card's own link: the source rows' links open a browser
+$playlistLinks = @(Get-DirectChildren $card 'WestieLib.LinkLabel')[0]
+if ([W]::TextOf($playlistLinks) -eq $SpotifyName) { Send-Click $playlistLinks 2 (S 8) }
+Check '  its playlist link: the playlist selected | card' "$(Get-Selection $h 4) | $([W]::TextOf((Get-InspectorCard $h)))" 'row 2 | Playlist card'
+Check '  no track selected' "[$(Get-SelectedRows $h)]" '[]'
+Click-AllTracks $h
+
 Click-PlaylistRow $h 1
 Check 'Playlist 1: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowA / 2 | $RowB / 3 | $RowC / 4 | $RowShared"
 Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Synced 0 | Waiting 4 | Needs review 0 | Failed 0 | Showing 4 of 7 in $TracksName"

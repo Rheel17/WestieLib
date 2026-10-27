@@ -14,7 +14,7 @@
 #include "ui/framework/FontSet.h"
 #include "ui/framework/Label.h"
 #include "ui/framework/Panel.h"
-#include "ui/inspector/CardTitle.h"
+#include "ui/inspector/IconText.h"
 #include "ui/inspector/SectionTitle.h"
 
 namespace westie::ui {
@@ -37,7 +37,7 @@ private:
     void on_command(WPARAM wparam) const;
 
     std::function<void(CommandId)> on_command_;
-    CardTitle title_;
+    IconText title_;
     SectionTitle section_;
     framework::Label folder_key_;
     framework::Label folder_;

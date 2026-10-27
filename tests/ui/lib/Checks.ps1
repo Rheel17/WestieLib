@@ -576,6 +576,12 @@ function Get-CardTexts($hwnd) {
 	"$([W]::TextOf($card)): $($texts -join ' / ')"
 }
 
+# The inspector follows a change of the selected tracks on a posted message, so this waits for the card named $name
+function Wait-CardTexts($hwnd, [string]$name) {
+	for ($i = 0; $i -lt 20 -and [W]::TextOf((Get-InspectorCard $hwnd)) -ne $name; $i++) { Start-Sleep -Milliseconds 50 }
+	Get-CardTexts $hwnd
+}
+
 # Adds a playlist through File > Add playlist; returns the dialog's line for the link. Sync now is turned off unless
 # -SyncNow says to leave it on, so a check of state.json doesn't race a sync.
 function Add-Playlist($hwnd, [string]$link, [switch]$SyncNow) {

@@ -13,6 +13,7 @@ public:
     SectionTitle(HWND parent, std::wstring text);
 
     void set_font(HFONT font);
+    void set_text(std::wstring text);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

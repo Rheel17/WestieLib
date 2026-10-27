@@ -409,6 +409,75 @@ is filtered out loses it. Selecting another status tab or another scope (All tra
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
+So far a track has only what its playlists list, so the track card shows what the mockup shows for a waiting track,
+whatever its status: no cover, no year, `Video` and `File` not chosen yet. The status's explanation is there, but the
+Needs review note, the Failed reason and output, the ISRC, the matcher rows and every action button come with their
+features, and so do the selection card's bulk actions.
+
+```
+┌ inspector ──────────────────────┐   ┌ inspector ──────────────────────┐
+│          ┌──────────┐           │   │ 2 tracks selected               │
+│          │          │           │   │                                 │
+│          │    ♫     │           │   │ Status ──────────────────────── │
+│          └──────────┘           │   │ Synced    ✓ 1                   │
+│ Best Part                       │   │ Waiting   ◷ 1                   │
+│ Daniel Caesar, H.E.R.           │   │                                 │
+│ Freudian                        │   │                                 │
+│                                 │   │                                 │
+│ Status ──────────────────────── │   │                                 │
+│ ◷ Waiting                       │   │                                 │
+│ Downloads on the next sync.     │   │                                 │
+│                                 │   │                                 │
+│ Sources ─────────────────────── │   │                                 │
+│ Listed on ● YouTube Music · Open│   │                                 │
+│           ● Spotify · Open track│   │                                 │
+│ Playlists WCS, Slow & bluesy    │   │                                 │
+│ Key       ytm:5aM1xdk8lRw       │   │                                 │
+│                                 │   │                                 │
+│ Audio ───────────────────────── │   │                                 │
+│ Video     Chosen when it downl… │   │                                 │
+│                                 │   │                                 │
+│ File ────────────────────────── │   │                                 │
+│ Not downloaded yet.             │   │                                 │
+└─────────────────────────────────┘   └─────────────────────────────────┘
+```
+
+The track card, from the top, in DIPs:
+
+- **Cover**: 144 square, centered, then 12 px to the title. Without a file it's a `#F0F0F0` square with a 1 px
+  `#E5E5E5` border, with a 28 px note glyph in its middle.
+- **Title** in semibold at 125% of the message font, on 20 px lines, then the **artists** (`, ` between them) 1 px
+  below on 16 px lines. Both wrap. Then the album line in gray, which ends in an ellipsis: the album and year
+  (`Freudian · 2017`), or `Album is read when it downloads` when there's no album.
+- **Status**: the section title as in the other cards, 7 px, then the status line: its 16 px icon (synced, waiting,
+  warn, failed, removed or kept), 6 px, and the word in semibold, on a 16 px line. The explanation follows 3 px below
+  in gray, and wraps:
+
+  | Status       | Explanation |
+  |--------------|-------------|
+  | Synced       | The file is in the library and tagged. |
+  | Waiting      | Downloads on the next sync. |
+  | Failed       | The last attempt failed. It's retried on the next sync. A failed match says "No usable video was found. Choose one yourself." instead |
+  | Removed      | No longer in any playlist. The file is still in the library. |
+  | Kept         | Kept after it left every playlist. |
+
+- **Source** (**Sources** when the track has more than one kind of source) holds rows like the other cards':
+  - one row per kind of source the track has, YouTube Music first. Its key is `Source`, or with two kinds `Listed on`
+    on the first row and nothing on the second. Its value is the logo (16 px), 6 px, the name, ` · `, and a link,
+    `Open` for YouTube Music and `Open track` for Spotify, that opens the source's page in the browser
+    (`https://music.youtube.com/watch?v=<id>`, `https://open.spotify.com/track/<id>`);
+  - `Playlists`: the track's playlists, in the left panel's order, as links with `, ` between them. A click selects
+    that playlist, as a click on its row does. A link that doesn't fit ends in an ellipsis, and the ones after it
+    don't show. A track in no playlist reads `None` in gray;
+  - `Key`: the track key.
+- **Audio**: `Video` reads `Chosen when it downloads` in gray until a video is chosen.
+- **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file.
+
+The selection card: `N tracks selected` in the title's font and line, without a glyph; then **Status**, with a row for
+each status that holds any of the tracks, in the order Synced (with Needs review), Waiting, Failed, Removed, Kept: the
+word as the key, and its 16 px icon, 4 px, and the count as the value. When all of them are Removed, "No longer in any
+playlist. Their files are still in the library." follows 6 px below in gray.
+
 **No playlists yet** (first run): empty.
 
 **Nothing selected**:
@@ -457,7 +526,8 @@ The cards, from the top, in DIPs:
   or `⟳ Sync playlist` and `Remove playlist…`. They follow the command rules (see Menu bar and toolbar).
 
 The inspector scrolls vertically when its content is taller than the panel, inside the same padding: 12 px on the
-sides and top, 10 px at the bottom.
+sides and top, 10 px at the bottom. Another card, or the same card for another track or playlist, starts at the top;
+a card that only changes (a sync reports progress) keeps its place.
 
 ## Log pane
 

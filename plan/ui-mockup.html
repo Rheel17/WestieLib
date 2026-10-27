@@ -193,7 +193,7 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .cover { position: relative; overflow: hidden; flex: none; margin: 0 auto 12px; }
 .cover .disc { position: absolute; border-radius: 50%; right: -17%; top: -14%; }
 .cover .al { position: absolute; left: 10px; right: 10px; bottom: 9px; color: rgba(255,255,255,.93); font-size: 11px; line-height: 14px; font-weight: 600; }
-.cover.none { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--face); border: 1px solid var(--line); color: var(--gray); }
+.cover.none { display: flex; align-items: center; justify-content: center; background: var(--face); border: 1px solid var(--line); color: var(--gray); }
 .it { font-size: 15px; line-height: 20px; font-weight: 600; }
 .ia { margin-top: 1px; }
 .ib { color: var(--gray); }
@@ -719,7 +719,7 @@ function inspector(s, cfg) {
 
 function cover(t, size = 144) {
 	const box = `width:${size}px;height:${size}px`;
-	if (!t.file) return `<div class="cover none" style="${box}">${ic('note', 's28')}<span>No cover yet</span></div>`;
+	if (!t.file) return `<div class="cover none" style="${box}">${ic('note', 's28')}</div>`;
 	const h = hash(t.album || t.title) % 360, d = Math.round(size * .72);
 	return `<div class="cover" style="${box};background:linear-gradient(135deg,hsl(${h} 45% 50%),hsl(${(h + 50) % 360} 55% 22%))">
 		<i class="disc" style="width:${d}px;height:${d}px;background:hsl(${(h + 180) % 360} 60% 72% / .30)"></i><span class="al">${esc(t.album || t.title)}</span></div>`;

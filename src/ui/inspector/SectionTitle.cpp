@@ -27,6 +27,15 @@ void SectionTitle::set_font(HFONT font) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
+void SectionTitle::set_text(std::wstring text) {
+    if (text == text_) {
+        return;
+    }
+    platform::win32::check(SetWindowTextW(hwnd(), text.c_str()), "SetWindowTextW");
+    text_ = std::move(text);
+    platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
 LRESULT SectionTitle::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_PAINT: paint(); return 0;

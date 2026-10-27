@@ -36,6 +36,7 @@ add_executable(WestieLib WIN32
 	src/core/playlists/PlaylistLookup.cpp
 	src/core/playlists/RemovePlaylist.cpp
 	src/core/settings/SettingsStore.cpp
+	src/core/sources/SourcePage.cpp
 	src/core/sources/SourceType.cpp
 	src/core/sources/SpotifyEmbedPage.cpp
 	src/core/sources/SpotifyPlaylist.cpp
@@ -134,12 +135,17 @@ add_executable(WestieLib WIN32
 	src/ui/infobar/FetchFailureNotice.cpp
 	src/ui/infobar/Infobar.cpp
 	src/ui/inspector/CardLayout.cpp
-	src/ui/inspector/CardTitle.cpp
+	src/ui/inspector/CoverArt.cpp
+	src/ui/inspector/IconText.cpp
 	src/ui/inspector/InspectorPanel.cpp
 	src/ui/inspector/LibraryCard.cpp
 	src/ui/inspector/PlaylistCard.cpp
 	src/ui/inspector/SectionTitle.cpp
+	src/ui/inspector/SourceLink.cpp
 	src/ui/inspector/SyncedValue.cpp
+	src/ui/inspector/TrackCard.cpp
+	src/ui/inspector/TrackDetails.cpp
+	src/ui/inspector/TrackStatusText.cpp
 	src/ui/log/LogPanel.cpp
 	src/ui/main/MainAccelerators.cpp
 	src/ui/main/MainLayout.cpp

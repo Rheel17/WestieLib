@@ -4,8 +4,6 @@
 
 namespace westie::ui {
 
-namespace {
-
 const wchar_t* status_word(StatusTab tab) {
     switch (tab) {
     case StatusTab::Synced:      return L"Synced";
@@ -16,8 +14,6 @@ const wchar_t* status_word(StatusTab tab) {
     case StatusTab::Kept:        return L"Kept";
     default:                     return L"All";
     }
-}
-
 }
 
 int status_count(const StatusCounts& counts, StatusTab tab) {

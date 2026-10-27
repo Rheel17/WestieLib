@@ -16,12 +16,16 @@ public:
     CardLayout(framework::Dpi dpi, int width, int line_height, framework::DeferredPositions* positions);
 
     int height() const noexcept;
+    void cover(HWND cover, int size);
     void title(HWND title, int height);
+    // A window as wide as the card, such as text that wraps
+    void block(HWND window, int gap, int height);
     void subtitle(HWND subtitle, int indent);
     void section(HWND title);
     void row(HWND key, HWND value);
     // A row that comes and goes; hidden, it takes no room
     void row_if(bool shown, HWND key, HWND value);
+    void hide(HWND window);
     void buttons(std::initializer_list<const framework::Button*> buttons);
 
 private:

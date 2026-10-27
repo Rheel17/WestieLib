@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -19,13 +20,14 @@ namespace westie::ui {
 
 class TrackTable {
 public:
-    explicit TrackTable(HWND parent);
+    TrackTable(HWND parent, std::function<void()> on_selection_change);
 
     HWND hwnd() const noexcept;
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     void show_scope(bool playlist);
     void set_rows(std::vector<TrackRow> rows);
     void clear_selection();
+    std::vector<TrackRow> selected_rows() const;
     LRESULT on_notify(NMHDR& header);
 
 private:
@@ -40,6 +42,7 @@ private:
         std::optional<std::string> focused{};
     };
 
+    void on_item_changed(const NMLISTVIEW& change) const;
     void add_number_column();
     void sort_by(int column_index);
     void show_sort();
@@ -49,6 +52,7 @@ private:
     LRESULT on_custom_draw(const NMLVCUSTOMDRAW& draw) const;
     void draw_status(HDC dc, int item) const;
 
+    std::function<void()> on_selection_change_;
     framework::ListView list_;
     TrackSort sort_;
     std::vector<TrackRow> rows_;

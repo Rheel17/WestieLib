@@ -1,6 +1,7 @@
 #include "ui/inspector/PlaylistCard.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <format>
 #include <utility>
 
@@ -22,11 +23,11 @@ constexpr int LineDips = 16;
 PlaylistCard::PlaylistCard(HWND parent, std::function<void(CommandId)> on_command) :
         Panel(parent, L"Playlist card"),
         on_command_(std::move(on_command)),
-        title_(hwnd()),
+        title_(hwnd(), CardTitleStyle),
         subtitle_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         section_(hwnd(), L"Playlist"),
         link_key_(hwnd(), L"Link", {.color = framework::TextColor::Gray}),
-        link_(hwnd(), [this] { on_command_(CommandId::OpenPlaylistPage); }),
+        link_(hwnd(), [this](std::size_t) { on_command_(CommandId::OpenPlaylistPage); }),
         tracks_key_(hwnd(), L"Tracks", {.color = framework::TextColor::Gray}),
         tracks_(hwnd(), L""),
         synced_key_(hwnd(), L"Synced", {.color = framework::TextColor::Gray}),
@@ -49,7 +50,7 @@ int PlaylistCard::height_for(int width) const {
 }
 
 void PlaylistCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
-    title_.apply_dpi(dpi, fonts);
+    title_.apply_dpi(dpi, fonts.title());
     section_.set_font(fonts.semibold().handle());
     for (framework::Label* label : {
              &subtitle_, &link_key_, &tracks_key_, &tracks_, &synced_key_, &waiting_key_, &waiting_, &failed_key_, &failed_, &review_key_, &review_,

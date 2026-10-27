@@ -40,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
 | `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView` |
-| `sync` | Sync all, Sync selected and Sync now: what a YouTube Music or Spotify fetch writes to state.json, the table's rows, the tab counts and result line, the cards; a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), a fetch that waits for yt-dlp, and a Spotify fetch that shows its pages as they come (also when cancelled between them, or when the list changes), asks for a page again after HTTP 500, or fails | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `core/sources/Spotify*`, `platform/win32/WinHttpClient`, `ui/sync/`, `ui/tracks/`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
+| `sync` | Sync all, Sync selected and Sync now: what a YouTube Music or Spotify fetch writes to state.json, the table's rows, the tab counts and result line, the cards; a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter and the tabs, the selection through all that, the track card of a selected row and its playlist link, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), a fetch that waits for yt-dlp, and a Spotify fetch that shows its pages as they come (also when cancelled between them, or when the list changes), asks for a page again after HTTP 500, or fails | `core/sync/`, `core/state/`, `core/sources/YouTubeMusicPlaylist`, `core/sources/Spotify*`, `platform/win32/WinHttpClient`, `ui/sync/`, `ui/tracks/`, `ui/inspector/Track*`, `ui/inspector/SourceLink`, `ui/inspector/CoverArt`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -188,8 +188,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `Click-PlaylistRow` and `Click-AllTracks` send `WM_LBUTTONDOWN` and `WM_LBUTTONUP` (`Send-Click`), and
   `Press-ListKey` sends `WM_KEYDOWN` to the list, which acts on it whether or not it has the focus. `FocusOf` tells
   which window has the focus on the app's thread (`GetGUIThreadInfo`).
-- The inspector shows one card at a time, a panel named `Library card` or `Playlist card` (`Get-InspectorCard`), or
-  none on the first run. `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right
+- The inspector shows one card at a time, a panel named `Library card`, `Playlist card` or `Track card`
+  (`Get-InspectorCard`), or none on the first run. It follows the table's selection on a posted message, so after
+  selecting rows read it with `Wait-CardTexts`, which waits for the card it's given. `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right
   within a row, and `Get-CardLayout` gives where the card, its title, its values and its buttons sit.
 - A context menu runs a modal loop, so post `WM_CONTEXTMENU` (`lparam` -1 for the keyboard's), then find the popup as
   the process's visible `#32768` window (`Wait-PopupMenu`). `MN_GETHMENU` gives its menu, which `Get-PopupItems`
@@ -206,7 +207,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   `WM_LBUTTONDBLCLK`, up of two quick clicks. The `tracks` suite's table holds no rows, so the row height
   check gives it three with `LVM_SETITEMCOUNT` and measures one.
 - A TaskDialog's buttons aren't child windows. Post it `TDM_CLICK_BUTTON` (`WM_USER + 102`) with the button's id.
-- The checks never run Open in browser, the playlist card's link, Open library folder or Copy URL: they would open a
+- The checks never run Open in browser, the playlist card's link, a track card's `Open` links, Open library folder or
+  Copy URL: they would open a
   browser or Explorer on the user's screen, or replace what's on their clipboard. Try those by hand.
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of

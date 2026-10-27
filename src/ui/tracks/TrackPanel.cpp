@@ -27,6 +27,8 @@ constexpr int ResultLineDips = 16;
 // A hairline stays one pixel at every scale
 constexpr int HairlinePixels = 1;
 constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
+// Selecting all, or keeping the selection through new rows, changes it one row at a time
+constexpr UINT SelectionChangedMessage = WM_APP;
 
 framework::Rect inset(framework::Rect rect, int side) {
     rect.take_left(side);
@@ -36,14 +38,15 @@ framework::Rect inset(framework::Rect rect, int side) {
 
 }
 
-TrackPanel::TrackPanel(HWND parent) :
+TrackPanel::TrackPanel(HWND parent, std::function<void()> on_selection_change) :
         Panel(parent, L"Tracks"),
+        on_selection_change_(std::move(on_selection_change)),
         filter_(
                 hwnd(), [this] { on_filter_change(); }, [this] { clear_status(); }
         ),
         status_(hwnd()),
         result_(hwnd(), L"", {.color = framework::TextColor::Gray}),
-        table_(hwnd()) {
+        table_(hwnd(), [this] { post_selection_change(); }) {
     show_result_line();
 }
 
@@ -70,9 +73,14 @@ void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::ve
     show_rows();
 }
 
+std::vector<TrackRow> TrackPanel::selected_rows() const {
+    return table_.selected_rows();
+}
+
 LRESULT TrackPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE: layout(); return 0;
+    case WM_SIZE:                 layout(); return 0;
+    case SelectionChangedMessage: on_selection_change(); return 0;
     // The paint fills the background, so the rule isn't erased first and doesn't blink
     case WM_ERASEBKGND: return TRUE;
     case WM_PAINT:      paint(); return 0;
@@ -115,6 +123,18 @@ void TrackPanel::paint() const {
     RECT rule{client.left, rule_top_, client.right, rule_top_ + HairlinePixels};
     SetDCBrushColor(paint.dc(), RuleColor);
     FillRect(paint.dc(), &rule, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
+}
+
+void TrackPanel::post_selection_change() {
+    if (!selection_change_posted_) {
+        platform::win32::check(PostMessageW(hwnd(), SelectionChangedMessage, 0, 0), "PostMessageW");
+        selection_change_posted_ = true;
+    }
+}
+
+void TrackPanel::on_selection_change() {
+    selection_change_posted_ = false;
+    on_selection_change_();
 }
 
 LRESULT TrackPanel::on_notify(NMHDR& header) {

@@ -225,7 +225,7 @@ function Get-CardLayout($hwnd) {
 	$inspector = Get-Panel $hwnd 'Inspector'
 	$card = Get-InspectorCard $hwnd
 	$r = [W]::RectIn($card, $inspector)
-	$title = [W]::RectIn(([W]::Children($card, 'WestieLib.CardTitle'))[0], $card)
+	$title = [W]::RectIn(([W]::Children($card, 'WestieLib.IconText'))[0], $card)
 	$values = @([W]::Children($card, 'WestieLib.Label') | Where-Object { [W]::RectIn($_, $card).Left -gt 0 } | ForEach-Object { [W]::RectIn($_, $card).Left })
 	$buttons = @([W]::Children($card, 'Button') | ForEach-Object { [W]::RectIn($_, $card) })
 	$gaps = @(for ($i = 1; $i -lt $buttons.Count; $i++) { "$($buttons[$i].Top - $buttons[0].Top),$($buttons[$i].Left - $buttons[$i - 1].Right)" })

@@ -93,7 +93,8 @@ std::wstring cell_text(const TrackRow& row, TrackColumn column) {
 
 }
 
-TrackTable::TrackTable(HWND parent) : list_(parent), sort_(default_sort(false)) {
+TrackTable::TrackTable(HWND parent, std::function<void()> on_selection_change) :
+        on_selection_change_(std::move(on_selection_change)), list_(parent), sort_(default_sort(false)) {
     framework::Dpi dpi = framework::Dpi::of(list_.hwnd());
     std::vector<int> subitems;
     for (const ColumnSpec& spec : Columns) {
@@ -147,12 +148,31 @@ void TrackTable::clear_selection() {
     list_.select_items({}, std::nullopt);
 }
 
+std::vector<TrackRow> TrackTable::selected_rows() const {
+    std::vector<TrackRow> selected;
+    for (int item : list_.selected_items()) {
+        if (std::cmp_less(item, rows_.size())) {
+            selected.push_back(rows_[item]);
+        }
+    }
+    return selected;
+}
+
 LRESULT TrackTable::on_notify(NMHDR& header) {
     switch (header.code) {
-    case LVN_COLUMNCLICK:  sort_by(reinterpret_cast<const NMLISTVIEW&>(header).iSubItem); return 0;
-    case LVN_GETDISPINFOW: show_cell(reinterpret_cast<NMLVDISPINFOW&>(header).item); return 0;
-    case NM_CUSTOMDRAW:    return on_custom_draw(reinterpret_cast<const NMLVCUSTOMDRAW&>(header));
-    default:               return 0;
+    case LVN_COLUMNCLICK:    sort_by(reinterpret_cast<const NMLISTVIEW&>(header).iSubItem); return 0;
+    case LVN_GETDISPINFOW:   show_cell(reinterpret_cast<NMLVDISPINFOW&>(header).item); return 0;
+    case LVN_ITEMCHANGED:    on_item_changed(reinterpret_cast<const NMLISTVIEW&>(header)); return 0;
+    // A virtual list reports a range selected with Shift only as the range
+    case LVN_ODSTATECHANGED: on_selection_change_(); return 0;
+    case NM_CUSTOMDRAW:      return on_custom_draw(reinterpret_cast<const NMLVCUSTOMDRAW&>(header));
+    default:                 return 0;
+    }
+}
+
+void TrackTable::on_item_changed(const NMLISTVIEW& change) const {
+    if ((change.uChanged & LVIF_STATE) && ((change.uNewState ^ change.uOldState) & LVIS_SELECTED)) {
+        on_selection_change_();
     }
 }
 

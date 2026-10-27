@@ -23,6 +23,9 @@
 #define IDI_RING_0                20
 #define IDI_SYNCING_FADED         45
 #define IDI_CLOSE                 46
+#define IDI_REMOVED               47
+#define IDI_KEPT                  48
+#define IDI_NOTE                  49
 // The sync control's 12 steps of a turn are IDI_SPIN_0 to IDI_SPIN_0 + 11
 #define IDI_SPIN_0                50
 #define IDD_SETTINGS              100

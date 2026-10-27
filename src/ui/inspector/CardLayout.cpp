@@ -6,6 +6,7 @@ namespace westie::ui {
 
 namespace {
 
+constexpr int CoverGapDips = 12;
 constexpr int SubtitleGapDips = 1;
 constexpr int SectionGapDips = 14;
 constexpr int RowsGapDips = 7;
@@ -24,8 +25,18 @@ int CardLayout::height() const noexcept {
     return bottom_;
 }
 
+void CardLayout::cover(HWND cover, int size) {
+    int left = (width_ - size) / 2;
+    place(cover, {left, bottom_, left + size, bottom_ + size});
+    bottom_ += size + dpi_.scale(CoverGapDips);
+}
+
 void CardLayout::title(HWND title, int height) {
     place(title, line(0, 0, height));
+}
+
+void CardLayout::block(HWND window, int gap, int height) {
+    place(window, line(gap, 0, height));
 }
 
 void CardLayout::subtitle(HWND subtitle, int indent) {
@@ -48,9 +59,15 @@ void CardLayout::row(HWND key, HWND value) {
 void CardLayout::row_if(bool shown, HWND key, HWND value) {
     if (shown) {
         row(key, value);
-    } else if (positions_ != nullptr) {
-        positions_->place(key, std::nullopt);
-        positions_->place(value, std::nullopt);
+    } else {
+        hide(key);
+        hide(value);
+    }
+}
+
+void CardLayout::hide(HWND window) {
+    if (positions_ != nullptr) {
+        positions_->place(window, std::nullopt);
     }
 }
 

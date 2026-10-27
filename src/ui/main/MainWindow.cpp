@@ -26,6 +26,7 @@
 #include "ui/framework/Rect.h"
 #include "ui/framework/Size.h"
 #include "ui/framework/WindowClass.h"
+#include "ui/inspector/TrackDetails.h"
 #include "ui/main/MainMenu.h"
 #include "ui/main/WindowState.h"
 #include "ui/playlists/PlaylistMenu.h"
@@ -76,7 +77,7 @@ MainWindow::MainWindow(
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
-        tracks_(hwnd()),
+        tracks_(hwnd(), [this] { show_inspector(); }),
         welcome_(
                 hwnd(),
                 settings_store.defaults().library_path,
@@ -84,7 +85,14 @@ MainWindow::MainWindow(
                 [this](const std::filesystem::path& folder) { change_library_folder(folder); }
         ),
         inspector_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_inspector_splitter_drag(left); }),
-        inspector_(hwnd(), [this](CommandId command) { run_command(command); }),
+        inspector_(
+                hwnd(),
+                {
+                    .on_command = [this](CommandId command) { run_command(command); },
+                    .on_open_url = [this](const std::wstring& url) { platform::win32::open_with_shell(hwnd(), url); },
+                    .on_select_playlist = [this](const std::string& key) { select_playlist(key); },
+                }
+        ),
         log_splitter_(hwnd(), framework::SplitterAxis::Y, [this](int top) { on_log_splitter_drag(top); }),
         log_(hwnd()),
         status_bar_(hwnd()) {
@@ -222,6 +230,13 @@ void MainWindow::show_inspector() {
     if (!has_playlists()) {
         inspector_.show_first_run();
         return;
+    }
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    if (selected.size() == 1) {
+        if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), selected.front())) {
+            inspector_.show_track(*track);
+            return;
+        }
     }
     if (std::optional<PlaylistRow> playlist = selected_row()) {
         inspector_.show_playlist(*playlist);

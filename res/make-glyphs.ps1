@@ -20,8 +20,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore, WindowsBase
 . (Join-Path $PSScriptRoot 'IconFile.ps1')
 
-# Glyph name in the mockup, whether it needs a disabled copy, and whether it is also drawn at 12 px (Small) or at
-# 14 px, as in the playlist rows (Row)
+# Glyph name in the mockup, whether it needs a disabled copy, and whether it is also drawn at 12 px (Small), at
+# 14 px, as in the playlist rows (Row), or only at 28 px, as on the inspector's cover placeholder (Cover)
 $Glyphs = [ordered]@{
 	plus = @{ Disabled = $true }
 	syncing = @{ Disabled = $true; Small = $true }
@@ -36,6 +36,9 @@ $Glyphs = [ordered]@{
 	syncgray = @{ Row = $true }
 	search = @{}
 	close = @{ Small = $true }
+	removed = @{}
+	kept = @{}
+	note = @{ Cover = $true }
 }
 
 # Brand logo name, its SVG file in res/, and its options as above
@@ -44,10 +47,11 @@ $BrandGlyphs = [ordered]@{
 	spotify = @{ File = 'Spotify_icon.svg'; Row = $true }
 }
 
-# 100% to 300% display scaling of a 16 px glyph, of a 12 px one, and of a 14 px one
+# 100% to 300% display scaling of a 16 px glyph, of a 12 px one, of a 14 px one, and of a 28 px one
 $Sizes = 16, 20, 24, 28, 32, 40, 48
 $SmallSizes = 12, 15, 18, 21, 24, 30, 36
 $RowSizes = 14, 18, 21, 25, 28, 35, 42
+$CoverSizes = 28, 35, 42, 49, 56, 70, 84
 
 # The mockup's ring(): a gray track and a blue arc from 12 o'clock, clockwise
 $RingSteps = 24
@@ -233,7 +237,7 @@ foreach ($item in $work) {
 	$name = $item.Name
 	$options = $item.Options
 	$glyph = $item.Glyph
-	$glyphSizes = if ($options.RowOnly) { $RowSizes } else { $Sizes }
+	$glyphSizes = if ($options.RowOnly) { $RowSizes } elseif ($options.Cover) { $CoverSizes } else { $Sizes }
 	if ($options.Small) { $glyphSizes += $SmallSizes }
 	if ($options.Row) { $glyphSizes += $RowSizes }
 	$glyphSizes = @($glyphSizes | Sort-Object -Unique)

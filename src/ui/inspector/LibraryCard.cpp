@@ -19,7 +19,7 @@ constexpr int LineDips = 16;
 LibraryCard::LibraryCard(HWND parent, std::function<void(CommandId)> on_command) :
         Panel(parent, L"Library card"),
         on_command_(std::move(on_command)),
-        title_(hwnd()),
+        title_(hwnd(), CardTitleStyle),
         section_(hwnd(), L"Library"),
         folder_key_(hwnd(), L"Folder", {.color = framework::TextColor::Gray}),
         folder_(hwnd(), L"", {.ellipsis = framework::TextEllipsis::Path}),
@@ -34,7 +34,7 @@ int LibraryCard::height_for(int width) const {
 }
 
 void LibraryCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
-    title_.apply_dpi(dpi, fonts);
+    title_.apply_dpi(dpi, fonts.title());
     section_.set_font(fonts.semibold().handle());
     for (framework::Label* label : {&folder_key_, &folder_, &tracks_key_, &tracks_}) {
         label->set_font(fonts.regular().handle());
