@@ -380,6 +380,39 @@ Check '  the YouTube Music row filtered out: no selection' "[$(Get-SelectedRows 
 Choose-Source $h 0
 Check '  back to All: the track filtered out stays unselected' "[$(Get-SelectedRows $h)]" '[]'
 
+# The search: each word somewhere in the title, artists or album, in any order, case and accents aside. The playlists
+# aren't searched, so "late" leaves out the rows of Late Night Cafe.
+$search = Get-SearchField $h
+foreach ($case in @(
+	@{Text = 'CAFE'; Rows = $RowB}, @{Text = 'senorita'; Rows = $RowSenorita}, @{Text = "Se$([char]0xD1)ORITA"; Rows = $RowSenorita},
+	@{Text = ' swing  ana '; Rows = $RowLate}, @{Text = 'summer'; Rows = $RowSenorita}, @{Text = 'late'; Rows = $RowLate}
+)) {
+	[W]::SetEditText($search, $case.Text)
+	Check "Search '$($case.Text)': rows" (Get-TrackRows $h) $case.Rows
+}
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 1 | Synced 0 | Waiting 1 | Needs review 0 | Failed 0 | Showing 1 of 7'
+[W]::SetEditText($search, 'zzz')
+Check "Search 'zzz': rows | tabs | result line" "[$(Get-TrackRows $h)] | $(Get-TrackSummary $h)" '[] | All 0 | Synced 0 | Waiting 0 | Needs review 0 | Failed 0 | Showing 0 of 7'
+[W]::SetEditText($search, 'night')
+Choose-Source $h 2
+Check "Search 'night' and Source Spotify" (Get-TrackRows $h) $RowLate
+Choose-Source $h 1
+Check '  and Source YouTube Music' "[$(Get-TrackRows $h)]" '[]'
+Choose-Source $h 0
+
+# The selection stays with its track while the search keeps it
+[void][W]::SendMessageW($search, 0x102, [IntPtr]0x1B, [IntPtr]1)
+Check 'Esc: the search empties, every row back' "'$([W]::EditText($search))' $(Get-TrackRows $h)" (
+	"'' $RowC / $RowSenorita / $RowB / $RowSharedAlone / $RowA / $RowLate / $RowSlow")
+Select-TrackRow $h 6
+[W]::SetEditText($search, 'o')
+Check "Search 'o': the selected row kept" (Get-SelectedRows $h) '5 Slow One'
+[W]::SetEditText($search, 'turtle')
+Check "  'turtle', its artist: kept" (Get-SelectedRows $h) '0 Slow One'
+[W]::SetEditText($search, 'cafe')
+Check "  'cafe': filtered out, so unselected" "[$(Get-SelectedRows $h)]" '[]'
+[void][W]::SendMessageW($search, 0x102, [IntPtr]0x1B, [IntPtr]1)
+
 # Another tab or scope starts with nothing selected
 Select-TrackRow $h 1
 Click-Tab $h 1

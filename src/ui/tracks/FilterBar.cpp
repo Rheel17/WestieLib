@@ -36,7 +36,7 @@ FilterBar::FilterBar(HWND parent, std::function<void()> on_change, std::function
         Panel(parent, L"Filter bar"),
         on_change_(std::move(on_change)),
         on_clear_(std::move(on_clear)),
-        search_(hwnd(), {.cue_banner = L"Search title, artist, album", .leading_dips = SearchIconDips + SearchIconGapDips}),
+        search_(hwnd(), {.cue_banner = L"Search title, artist, album", .leading_dips = SearchIconDips + SearchIconGapDips, .escape_clears = true}),
         search_icon_(search_.hwnd(), IDI_SEARCH, SearchIconDips),
         source_label_(hwnd(), L"Source"),
         source_(hwnd()),
@@ -66,6 +66,10 @@ bool FilterBar::is_default() const {
     return search_.text().empty() && source_.selected() == 0;
 }
 
+std::wstring FilterBar::search() const {
+    return search_.text();
+}
+
 std::optional<core::SourceType> FilterBar::source() const {
     int selected = source_.selected();
     // The list starts with All, then the sources in their order
@@ -82,6 +86,11 @@ void FilterBar::clear() {
 
 void FilterBar::set_clear_enabled(bool enabled) {
     clear_.set_enabled(enabled);
+}
+
+void FilterBar::focus_search() {
+    SetFocus(search_.hwnd());
+    search_.select_all();
 }
 
 LRESULT FilterBar::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {

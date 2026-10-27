@@ -92,6 +92,11 @@ function Check-AddPlaylistDialog($hwnd) {
 		Start-Sleep -Milliseconds 300
 		Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-add-playlist.png")
 	}
+	# Ctrl+Backspace (WM_CHAR 0x7F) deletes the word before the caret, rather than typing a box
+	[W]::SetEditText($edit, 'sunday social')
+	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]13, [IntPtr]13)
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x7F, [IntPtr]1)
+	Check '  Ctrl+Backspace in the link' "'$([W]::EditText($edit))'" "'sunday '"
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
 	Check '  Cancel writes no state.json' (Test-Path $StateFile) 'False'

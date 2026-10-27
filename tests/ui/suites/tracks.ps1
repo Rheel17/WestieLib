@@ -1,8 +1,6 @@
 # The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns.
 # Dot-sourced by ui-checks.ps1.
 
-function Get-SearchField($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Edit'))[0] }
-
 function Get-ClearButton($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Button'))[0] }
 
 function Get-SelectedTab($hwnd) { [int][W]::SendMessageW((Get-StatusTabs $hwnd), 0x130B, [IntPtr]::Zero, [IntPtr]::Zero) }
@@ -133,6 +131,55 @@ function Check-Clear($hwnd) {
 	Check '  Needs review clicked, then All' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
 }
 
+# Ctrl+Backspace (the WM_CHAR 0x7F it types) and Ctrl+Delete delete words, or the selection; undo is off; Esc empties the
+# search; Ctrl+F puts the focus in it with its text selected. The messages are sent, so each is handled before the
+# next check reads the text.
+function Check-EditKeys($app) {
+	$hwnd = $app.Hwnd
+	$edit = Get-SearchField $hwnd
+	[W]::SetEditText($edit, 'C:\Music\Westie')
+	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]15, [IntPtr]15)
+	$steps = foreach ($i in 1..5) {
+		[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x7F, [IntPtr]1)
+		"'$([W]::EditText($edit))'"
+	}
+	Check 'Ctrl+Backspace at the end, five times' ($steps -join ' ') "'C:\Music\' 'C:\Music' 'C:\' 'C' ''"
+	[W]::SetEditText($edit, 'Late Night  Swing')
+	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]12, [IntPtr]12)
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x7F, [IntPtr]1)
+	Check '  before the spaces after a word: the word and the spaces' "'$([W]::EditText($edit))'" "'Late Swing'"
+	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]0, [IntPtr]0)
+	[W]::PostCtrlKey($edit, 0x2E)
+	Check 'Ctrl+Delete at the start: the word and the space after it' "'$([W]::EditText($edit))'" "'Swing'"
+	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]0, [IntPtr]2)
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x7F, [IntPtr]1)
+	Check 'Ctrl+Backspace with a selection: the selection' "'$([W]::EditText($edit))'" "'ing'"
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x1A, [IntPtr]1)
+	[void][W]::SendMessageW($edit, 0x304, [IntPtr]::Zero, [IntPtr]::Zero)
+	[void][W]::SendMessageW($edit, 0xC7, [IntPtr]::Zero, [IntPtr]::Zero)
+	$can_undo = [int64][W]::SendMessageW($edit, 0xC6, [IntPtr]::Zero, [IntPtr]::Zero)
+	Check '  Ctrl+Z, WM_UNDO, EM_UNDO: nothing undone | EM_CANUNDO' "'$([W]::EditText($edit))' | $can_undo" "'ing' | 0"
+	[void][W]::PostMessageW($edit, 0x7B, $edit, [IntPtr]-1)
+	$popup = Wait-PopupMenu $app
+	# The edit's items are in Windows' language, and their ids are the messages they send
+	$menu = [W]::SendMessageW($popup, 0x1E1, [IntPtr]::Zero, [IntPtr]::Zero)
+	Check '  its context menu: Undo grayed' ([W]::GetMenuState($menu, [uint32]0x304, 0) -band 0x1) '1'
+	Close-PopupMenu $app $popup
+
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x0D, [IntPtr]1)
+	Check 'Enter types nothing' "'$([W]::EditText($edit))'" "'ing'"
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x1B, [IntPtr]1)
+	Check 'Esc empties the search' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
+
+	[W]::SetEditText($edit, 'bruno')
+	$table = Get-TrackTable $hwnd
+	[W]::Focus($table)
+	[W]::PostCtrlKey($table, 0x46)
+	$selection = [int64][W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero)
+	Check 'Ctrl+F: focus in the search | selection' "$([W]::FocusOf($hwnd) -eq $edit) | $($selection -band 0xFFFF)-$($selection -shr 16)" 'True | 0-5'
+	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x1B, [IntPtr]1)
+}
+
 # All tracks has no # column and sorts by Title; a playlist shows # first and sorts by it. A header click sorts by its
 # column, a second one turns the order round.
 function Check-Columns($hwnd) {
@@ -183,6 +230,7 @@ Check 'Status tabs | selected' "$([W]::TabTexts((Get-StatusTabs $h))) | $(Get-Se
 Check '  width beyond each text' (Get-TabPadding $h) ((1..5 | ForEach-Object { 2 * (S 8) }) -join ' ')
 Check 'Result line' ([W]::TextOf((Get-ResultLine $h))) 'Showing 0 of 0'
 Check-Clear $h
+Check-EditKeys $app
 Check-Columns $h
 Check-RowHeight $h
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-tracks.png") }

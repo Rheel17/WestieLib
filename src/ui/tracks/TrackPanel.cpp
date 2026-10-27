@@ -12,6 +12,7 @@
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Rect.h"
 #include "ui/tracks/ResultLineText.h"
+#include "ui/tracks/TrackSearch.h"
 
 namespace westie::ui {
 
@@ -38,8 +39,9 @@ framework::Rect inset(framework::Rect rect, int side) {
 
 }
 
-TrackPanel::TrackPanel(HWND parent, std::function<void()> on_selection_change) :
+TrackPanel::TrackPanel(HWND parent, const platform::TextNormalizer& normalizer, std::function<void()> on_selection_change) :
         Panel(parent, L"Tracks"),
+        normalizer_(normalizer),
         on_selection_change_(std::move(on_selection_change)),
         filter_(
                 hwnd(), [this] { on_filter_change(); }, [this] { clear_status(); }
@@ -80,6 +82,10 @@ void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::ve
 
 std::vector<TrackRow> TrackPanel::selected_rows() const {
     return table_.selected_rows();
+}
+
+void TrackPanel::focus_search() {
+    filter_.focus_search();
 }
 
 LRESULT TrackPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -183,10 +189,10 @@ void TrackPanel::clear_status() {
 }
 
 void TrackPanel::show_rows() {
-    // The tabs count what each would show, so they take the source into account but not the tab
-    std::vector<TrackRow> from_source = rows_from_source(scope_rows_, filter_.source());
-    status_.set_counts(status_counts(from_source));
-    std::vector<TrackRow> shown = rows_in_tab(from_source, status_.selected());
+    // The tabs count what each would show, so they take the search and the source into account but not the tab
+    std::vector<TrackRow> found = rows_matching(rows_from_source(scope_rows_, filter_.source()), search_words(normalizer_, filter_.search()));
+    status_.set_counts(status_counts(found));
+    std::vector<TrackRow> shown = rows_in_tab(found, status_.selected());
     shown_ = static_cast<int>(shown.size());
     table_.set_rows(std::move(shown));
     show_result_line();

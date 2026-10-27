@@ -7,6 +7,7 @@
 
 #include <windows.h>
 
+#include "platform/TextNormalizer.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/FontSet.h"
 #include "ui/framework/Label.h"
@@ -21,11 +22,12 @@ namespace westie::ui {
 
 class TrackPanel final : public framework::Panel {
 public:
-    TrackPanel(HWND parent, std::function<void()> on_selection_change);
+    TrackPanel(HWND parent, const platform::TextNormalizer& normalizer, std::function<void()> on_selection_change);
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total);
     std::vector<TrackRow> selected_rows() const;
+    void focus_search();
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -43,6 +45,7 @@ private:
     void show_rows();
     void show_result_line();
 
+    const platform::TextNormalizer& normalizer_;
     std::function<void()> on_selection_change_;
     FilterBar filter_;
     StatusFilter status_;
@@ -51,7 +54,7 @@ private:
     // The scope's playlist, or nothing for All tracks
     std::optional<std::string> playlist_;
     std::optional<std::wstring> playlist_name_;
-    // Every row of the scope, before the source and the tab narrow them
+    // Every row of the scope, before the search, the source and the tab narrow them
     std::vector<TrackRow> scope_rows_;
     int shown_ = 0;
     int library_total_ = 0;

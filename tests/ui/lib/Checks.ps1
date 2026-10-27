@@ -543,6 +543,31 @@ function Get-FilterBar($hwnd) { (Get-DirectChildren (Get-TrackPanel $hwnd) 'West
 
 function Get-SourceBox($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'ComboBox'))[0] }
 
+function Get-SearchField($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Edit'))[0] }
+
+function Wait-PopupMenu($app) {
+	for ($i = 0; $i -lt 30; $i++) {
+		$popup = [W]::WindowOfProcess($app.Process.Id, '#32768')
+		if ($popup -ne [IntPtr]::Zero) { return $popup }
+		Start-Sleep -Milliseconds 100
+	}
+	[IntPtr]::Zero
+}
+
+# A popup menu's items, separators as "-", then the grayed ones
+function Get-PopupItems($popup) {
+	$menu = [W]::SendMessageW($popup, 0x1E1, [IntPtr]::Zero, [IntPtr]::Zero)
+	$grayed = @(0..([W]::GetMenuItemCount($menu) - 1) | Where-Object { [W]::GetMenuItemID($menu, $_) -ne 0 -and ([W]::GetMenuState($menu, [uint32]$_, 0x400) -band 0x1) } |
+		ForEach-Object { [W]::ItemText($menu, $_) })
+	"$([W]::PopupText($menu)) | grayed: $($grayed -join ', ')"
+}
+
+# The popup menu's loop takes keys posted to any window of the app's thread
+function Close-PopupMenu($app, $popup) {
+	[void][W]::PostMessageW($app.Hwnd, 0x100, [IntPtr]0x1B, [IntPtr]1)
+	Wait-Closed $popup
+}
+
 # Chooses All (0), YouTube Music (1) or Spotify (2). CB_SETCURSEL doesn't notify; a choice by the user does.
 function Choose-Source($hwnd, [int]$index) {
 	$source = Get-SourceBox $hwnd

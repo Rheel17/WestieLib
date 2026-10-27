@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <optional>
+#include <string>
 
 #include <windows.h>
 
@@ -24,9 +25,11 @@ public:
     int height() const;
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     bool is_default() const;
+    std::wstring search() const;
     std::optional<core::SourceType> source() const;
     void clear();
     void set_clear_enabled(bool enabled);
+    void focus_search();
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

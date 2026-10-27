@@ -262,29 +262,6 @@ function Check-Cards($hwnd) {
 	Press-ListKey $hwnd 0x28
 }
 
-function Wait-PopupMenu($app) {
-	for ($i = 0; $i -lt 30; $i++) {
-		$popup = [W]::WindowOfProcess($app.Process.Id, '#32768')
-		if ($popup -ne [IntPtr]::Zero) { return $popup }
-		Start-Sleep -Milliseconds 100
-	}
-	[IntPtr]::Zero
-}
-
-# A popup menu's items, separators as "-", then the grayed ones
-function Get-PopupItems($popup) {
-	$menu = [W]::SendMessageW($popup, 0x1E1, [IntPtr]::Zero, [IntPtr]::Zero)
-	$grayed = @(0..([W]::GetMenuItemCount($menu) - 1) | Where-Object { [W]::GetMenuItemID($menu, $_) -ne 0 -and ([W]::GetMenuState($menu, [uint32]$_, 0x400) -band 0x1) } |
-		ForEach-Object { [W]::ItemText($menu, $_) })
-	"$([W]::PopupText($menu)) | grayed: $($grayed -join ', ')"
-}
-
-# The popup menu's loop takes keys posted to any window of the app's thread
-function Close-PopupMenu($app, $popup) {
-	[void][W]::PostMessageW($app.Hwnd, 0x100, [IntPtr]0x1B, [IntPtr]1)
-	Wait-Closed $popup
-}
-
 $PlaylistMenuItems = '&Sync, &Open in browser, &Copy URL, -, &Remove playlist...'
 
 # A right-click on a row selects it first and opens the playlist menu where it was clicked, with every item enabled.

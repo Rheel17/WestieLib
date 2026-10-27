@@ -94,7 +94,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;
-        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync);
+        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync, normalizer);
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         // Started before the window shows, so its first paint already knows of the run
         tools.run(settings.auto_update_tools);

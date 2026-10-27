@@ -21,6 +21,7 @@ constexpr std::array Shortcuts = {
     shortcut(FCONTROL, 'Q', CommandId::Exit),
     shortcut(0, VK_F5, CommandId::SyncAll),
     shortcut(FCONTROL, 'L', CommandId::ToggleLog),
+    shortcut(FCONTROL, 'F', CommandId::FocusSearch),
     shortcut(FCONTROL | FALT, 'S', CommandId::Settings),
 };
 

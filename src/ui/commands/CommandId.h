@@ -29,9 +29,10 @@ enum class CommandId : WORD {
     RelocateLibrary,
     OpenLogFolder,
     About,
-    // Not in the menu bar: the playlist card's link and the playlist context menu
+    // Not in the menu bar: the playlist card's link, the playlist context menu and Ctrl+F
     OpenPlaylistPage,
     CopyPlaylistLink,
+    FocusSearch,
 };
 
 }

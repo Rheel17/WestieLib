@@ -28,6 +28,7 @@
 #include "core/tools/ToolStatus.h"
 #include "core/tools/ToolsChecked.h"
 #include "core/tools/ToolsRunChanged.h"
+#include "platform/TextNormalizer.h"
 #include "ui/TrackCounts.h"
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
@@ -67,7 +68,8 @@ public:
             CoreEventQueue& events,
             core::ToolManager& tools,
             core::PlaylistLookup& lookup,
-            core::SyncEngine& sync
+            core::SyncEngine& sync,
+            const platform::TextNormalizer& normalizer
     );
 
     void show(int show_command) override;
@@ -143,6 +145,7 @@ private:
     core::ToolManager& tools_;
     core::PlaylistLookup& lookup_;
     core::SyncEngine& sync_;
+    const platform::TextNormalizer& normalizer_;
     ToolBoard tool_board_;
     SyncBoard sync_board_;
     WindowPlacement placement_;

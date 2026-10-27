@@ -49,7 +49,8 @@ MainWindow::MainWindow(
         CoreEventQueue& events,
         core::ToolManager& tools,
         core::PlaylistLookup& lookup,
-        core::SyncEngine& sync
+        core::SyncEngine& sync,
+        const platform::TextNormalizer& normalizer
 ) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
@@ -59,6 +60,7 @@ MainWindow::MainWindow(
         tools_(tools),
         lookup_(lookup),
         sync_(sync),
+        normalizer_(normalizer),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
@@ -77,7 +79,7 @@ MainWindow::MainWindow(
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
-        tracks_(hwnd(), [this] { show_inspector(); }),
+        tracks_(hwnd(), normalizer, [this] { show_inspector(); }),
         welcome_(
                 hwnd(),
                 settings_store.defaults().library_path,
@@ -222,7 +224,7 @@ void MainWindow::show_scope() {
     std::shared_ptr<const core::State> state = state_.snapshot();
     std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(*state, *selected_playlist_) : std::nullopt;
     show_track_counts(*state);
-    tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_), track_counts_.total);
+    tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_, normalizer_), track_counts_.total);
     show_inspector();
 }
 
@@ -350,7 +352,8 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::Settings:             show_settings(); return;
     case CommandId::CheckForUpdates:      tools_.run(true); return;
     case CommandId::About:                show_about_dialog(hwnd()); return;
-    default:                              return;
+    case CommandId::FocusSearch:          tracks_.focus_search(); return;
+    default:                             return;
     }
 }
 

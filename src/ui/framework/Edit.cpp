@@ -6,11 +6,14 @@
 #include <commctrl.h>
 
 #include "platform/win32/Win32Error.h"
+#include "ui/framework/EditKeys.h"
 
 namespace westie::ui::framework {
 
 namespace {
 
+constexpr WPARAM EnterChar = L'\r';
+constexpr WPARAM EscapeChar = 0x1B;
 constexpr int HeightDips = 23;
 constexpr int TextHeightPaddingDips = 7;
 constexpr int TextMarginDips = 4;
@@ -27,7 +30,8 @@ Edit::Edit(HWND parent, const EditOptions& options) :
             .ex_style = WS_EX_CLIENTEDGE,
             .parent = parent,
         }),
-        leading_dips_(options.leading_dips) {
+        leading_dips_(options.leading_dips),
+        escape_clears_(options.escape_clears) {
     if (options.cue_banner) {
         platform::win32::check(SendMessageW(hwnd(), EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(options.cue_banner)), "EM_SETCUEBANNER");
     }
@@ -49,6 +53,21 @@ void Edit::apply_dpi(Dpi dpi, const MessageFont& font) {
 }
 
 LRESULT Edit::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (handle_edit_key(hwnd(), message, wparam)) {
+        return 0;
+    }
+    // A single-line edit beeps at the characters of Enter and Esc
+    if (message == WM_CHAR && wparam == EnterChar) {
+        return 0;
+    }
+    if (message == WM_CHAR && wparam == EscapeChar) {
+        if (escape_clears_ && GetWindowTextLengthW(hwnd()) > 0) {
+            select_all();
+            SendMessageW(hwnd(), EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(L""));
+        }
+        return 0;
+    }
+
     LRESULT result = Control::handle_message(message, wparam, lparam);
     // A single-line edit puts its text near the top of its client area, so the client area starts lower to center it
     if (message == WM_NCCALCSIZE) {
@@ -69,6 +88,10 @@ std::wstring Edit::text() const {
 
 void Edit::set_text(const std::wstring& text) {
     platform::win32::check(SetWindowTextW(hwnd(), text.c_str()), "SetWindowTextW");
+}
+
+void Edit::select_all() {
+    SendMessageW(hwnd(), EM_SETSEL, 0, -1);
 }
 
 }

@@ -12,6 +12,7 @@
 #include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
 #include "ui/tracks/TrackEntries.h"
+#include "ui/tracks/TrackSearch.h"
 
 namespace westie::ui {
 
@@ -95,7 +96,7 @@ std::vector<Listing> first_entries(const core::State& state) {
 
 }
 
-std::vector<TrackRow> track_rows(const core::State& state, const std::optional<std::string>& playlist) {
+std::vector<TrackRow> track_rows(const core::State& state, const std::optional<std::string>& playlist, const platform::TextNormalizer& normalizer) {
     std::vector<Listing> shown;
     if (playlist) {
         if (auto listed = state.playlists.find(*playlist); listed != state.playlists.end()) {
@@ -129,6 +130,7 @@ std::vector<TrackRow> track_rows(const core::State& state, const std::optional<s
         row.artists = join_utf8(metadata.artists);
         row.album = platform::win32::to_utf16(metadata.album);
         row.duration = metadata.duration;
+        row.search_text = search_text(normalizer, metadata);
         row.playlists = join(names[track->first]);
         if (auto [original, first] = originals.try_emplace(track->first, listing.position); playlist && !first) {
             row.duplicate_of = RowOriginal{.position = original->second};

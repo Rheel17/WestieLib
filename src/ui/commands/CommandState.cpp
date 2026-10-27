@@ -7,6 +7,8 @@ bool CommandState::enabled(CommandId command) const {
     case CommandId::RemovePlaylist:
     case CommandId::OpenPlaylistPage:
     case CommandId::CopyPlaylistLink:     return playlist_selected;
+    // The welcome screen has no search
+    case CommandId::FocusSearch:          return has_playlists;
     case CommandId::SyncAll:              return has_playlists && !syncing;
     case CommandId::SyncSelectedPlaylist: return playlist_selected && !syncing;
     case CommandId::CancelSync:           return syncing;

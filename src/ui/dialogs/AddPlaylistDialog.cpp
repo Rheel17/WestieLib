@@ -7,6 +7,7 @@
 #include "platform/win32/Win32Error.h"
 #include "ui/dialogs/LinkLine.h"
 #include "ui/dialogs/LinkLinePainter.h"
+#include "ui/framework/EditKeys.h"
 
 namespace westie::ui {
 
@@ -68,6 +69,7 @@ INT_PTR AddPlaylistDialog::handle_message(UINT message, WPARAM wparam, LPARAM lp
 }
 
 void AddPlaylistDialog::on_init_dialog() {
+    framework::add_edit_keys(platform::win32::check(GetDlgItem(hwnd(), IDC_PLAYLIST_LINK), "GetDlgItem"));
     CheckDlgButton(hwnd(), IDC_SYNC_NOW, BST_CHECKED);
     check_link();
 }
