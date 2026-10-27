@@ -37,7 +37,7 @@ struct StatusIconSpec {
 };
 
 // A position only means something inside a playlist, so # shows only in a playlist scope, always first
-constexpr ColumnSpec NumberColumn{.column = TrackColumn::Number, .title = L"#", .width_dips = 34, .right_aligned = true};
+constexpr ColumnSpec NumberColumn{.column = TrackColumn::Number, .title = L"#", .width_dips = 48, .right_aligned = true};
 
 // In their default order
 constexpr std::array Columns = {

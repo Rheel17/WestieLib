@@ -150,7 +150,7 @@ function Check-Columns($hwnd) {
 	Check '  and again: reversed twice' (Get-Columns $hwnd) ($AllTracksColumns -replace ' \^', '' -replace "Album $(S 132)", "Album $(S 132) v")
 
 	Click-PlaylistRow $hwnd 1
-	$playlistColumns = "# $(S 34) ^ | $($AllTracksColumns -replace ' \^', '')"
+	$playlistColumns = "# $(S 48) ^ | $($AllTracksColumns -replace ' \^', '')"
 	Check '  playlist 1 selected' (Get-Columns $hwnd) $playlistColumns
 	Check '  result line' ([W]::TextOf((Get-ResultLine $hwnd))) 'Showing 0 of 0 in Spotify playlist'
 	Click-Header $hwnd 3
