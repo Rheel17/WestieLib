@@ -49,8 +49,7 @@ std::wstring joined(const std::vector<std::string>& parts) {
     return platform::win32::to_utf16(text);
 }
 
-std::optional<TrackMatch> match_of(const core::State& state, const core::Track& track) {
-    const std::string* key = core::first_source_of(track, core::SourceType::Spotify);
+std::optional<TrackMatch> match_of(const core::State& state, const std::string* key) {
     if (key == nullptr) {
         return std::nullopt;
     }
@@ -69,17 +68,32 @@ std::optional<TrackMatch> match_of(const core::State& state, const core::Track& 
     };
 }
 
-std::optional<TrackVideo> video_of(const core::State& state, const core::Track& track) {
-    std::optional<core::ResolvedVideo> resolved = core::resolved_video(state, track);
-    if (!resolved) {
-        return std::nullopt;
-    }
-    bool chosen_by_playlist = core::source_type_of_key(resolved->source) == core::SourceType::YouTubeMusic;
-    return TrackVideo{
-        .id = platform::win32::to_utf16(resolved->video_id),
-        .url = platform::win32::to_utf16(std::format("https://music.youtube.com/watch?v={}", resolved->video_id)),
-        .chosen_by = chosen_by_playlist ? VideoChooser::Playlist : VideoChooser::Matcher,
+TrackVideo video(const std::string& id, VideoChooser chosen_by) {
+    return {
+        .id = platform::win32::to_utf16(id),
+        .url = platform::win32::to_utf16(std::format("https://music.youtube.com/watch?v={}", id)),
+        .chosen_by = chosen_by,
     };
+}
+
+void show_entry_video(const core::State& state, const core::Track& track, const std::string& entry, TrackDetails& details) {
+    // How the entry itself got its video, so a duplicate shows what the Matcher did with it
+    const std::string* first_spotify = core::first_source_of(track, core::SourceType::Spotify);
+    if (std::optional<std::string> own = core::own_video(entry)) {
+        details.video = video(*own, VideoChooser::Playlist);
+        details.match = match_of(state, first_spotify);
+        return;
+    }
+    if (auto source = state.sources.find(entry); source != state.sources.end() && source->second.match) {
+        details.video = video(source->second.match->video_id, VideoChooser::Matcher);
+        details.match = match_of(state, &entry);
+        return;
+    }
+    if (std::optional<core::ResolvedVideo> resolved = core::resolved_video(state, track)) {
+        bool chosen_by_playlist = core::source_type_of_key(resolved->source) == core::SourceType::YouTubeMusic;
+        details.video = video(resolved->video_id, chosen_by_playlist ? VideoChooser::Playlist : VideoChooser::Matcher);
+    }
+    details.match = match_of(state, first_spotify);
 }
 
 std::wstring last_lines(std::string_view text) {
@@ -96,7 +110,7 @@ std::wstring last_lines(std::string_view text) {
 }
 
 std::optional<TrackDetails> track_details(const core::State& state, const TrackRow& row) {
-    auto track = state.tracks.find(row.key);
+    auto track = state.tracks.find(row.track);
     if (track == state.tracks.end()) {
         return std::nullopt;
     }
@@ -108,12 +122,11 @@ std::optional<TrackDetails> track_details(const core::State& state, const TrackR
         }
     }
     for (PlaylistRow& playlist : playlist_rows(state)) {
-        if (lists_track(state, state.playlists.at(playlist.key), row.key)) {
+        if (lists_track(state, state.playlists.at(playlist.key), row.track)) {
             details.playlists.push_back({.key = std::move(playlist.key), .name = std::move(playlist.name)});
         }
     }
-    details.video = video_of(state, track->second);
-    details.match = match_of(state, track->second);
+    show_entry_video(state, track->second, row.key, details);
     if (track->second.status == core::TrackStatus::Failed) {
         details.failure = track->second.failure;
         details.error = last_lines(track->second.error);

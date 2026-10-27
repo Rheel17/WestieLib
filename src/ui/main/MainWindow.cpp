@@ -221,8 +221,8 @@ void MainWindow::select_playlist(std::optional<std::string> key) {
 void MainWindow::show_scope() {
     std::shared_ptr<const core::State> state = state_.snapshot();
     std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(*state, *selected_playlist_) : std::nullopt;
-    tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_), static_cast<int>(state->tracks.size()));
     show_track_counts(*state);
+    tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_), track_counts_.total);
     show_inspector();
 }
 

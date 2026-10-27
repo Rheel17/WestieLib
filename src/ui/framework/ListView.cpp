@@ -3,6 +3,7 @@
 #include <utility>
 
 #include <windows.h>
+#include <windowsx.h>
 #include <commctrl.h>
 #include <uxtheme.h>
 
@@ -14,6 +15,7 @@ namespace {
 
 // A hairline stays one pixel at every scale
 constexpr int HairlinePixels = 1;
+constexpr UINT_PTR CellTipTool = 1;
 constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
 
 }
@@ -25,7 +27,8 @@ ListView::ListView(HWND parent) :
             .style = WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS,
             .parent = parent,
         }),
-        dpi_(Dpi::of(hwnd())) {
+        dpi_(Dpi::of(hwnd())),
+        tooltip_(hwnd()) {
     platform::win32::check_hresult(SetWindowTheme(hwnd(), L"Explorer", nullptr), "SetWindowTheme");
     DWORD styles = LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_HEADERDRAGDROP | LVS_EX_INFOTIP;
     SendMessageW(hwnd(), LVM_SETEXTENDEDLISTVIEWSTYLE, styles, styles);
@@ -113,6 +116,13 @@ void ListView::set_sort_arrow(std::optional<ListSortArrow> arrow) {
 void ListView::set_item_count(int count) {
     // Without NOSCROLL a new count scrolls the list back to the top
     platform::win32::check(SendMessageW(hwnd(), LVM_SETITEMCOUNT, count, LVSICF_NOSCROLL), "LVM_SETITEMCOUNT");
+    // The cell under the mouse may hold another item now
+    forget_cell_tip();
+}
+
+void ListView::set_cell_tip(std::function<std::wstring(int item, int column_index)> cell_tip) {
+    cell_tip_ = std::move(cell_tip);
+    forget_cell_tip();
 }
 
 void ListView::scroll_to_top() {
@@ -161,6 +171,15 @@ void ListView::select_items(std::span<const int> items, std::optional<int> focus
 
 LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     LRESULT result = Control::handle_message(message, wparam, lparam);
+    switch (message) {
+    case WM_MOUSEMOVE: show_cell_tip(lparam); return result;
+    // The rows move under the mouse
+    case WM_VSCROLL:
+    case WM_HSCROLL:
+    case WM_MOUSEWHEEL:
+    case WM_MOUSEHWHEEL: forget_cell_tip(); return result;
+    default:             break;
+    }
     if (message != WM_NOTIFY || reinterpret_cast<const NMHDR*>(lparam)->hwndFrom != header()) {
         return result;
     }
@@ -187,6 +206,34 @@ LRESULT ListView::on_header_draw(const NMCUSTOMDRAW& draw, LRESULT result) const
 
 HWND ListView::header() const {
     return reinterpret_cast<HWND>(SendMessageW(hwnd(), LVM_GETHEADER, 0, 0));
+}
+
+void ListView::show_cell_tip(LPARAM point) {
+    if (!cell_tip_) {
+        return;
+    }
+    LVHITTESTINFO hit{};
+    hit.pt = {GET_X_LPARAM(point), GET_Y_LPARAM(point)};
+    SendMessageW(hwnd(), LVM_SUBITEMHITTEST, 0, reinterpret_cast<LPARAM>(&hit));
+    std::optional<std::pair<int, int>> cell;
+    if (hit.iItem >= 0 && (hit.flags & LVHT_ONITEM)) {
+        cell = std::pair(hit.iItem, hit.iSubItem);
+    }
+    if (cell == tip_cell_) {
+        return;
+    }
+    tip_cell_ = cell;
+    std::wstring text = cell ? cell_tip_(cell->first, cell->second) : std::wstring();
+    if (text.empty()) {
+        tooltip_.remove_tool(CellTipTool);
+        return;
+    }
+    tooltip_.set_tool(CellTipTool, Rect::from_rect(cell_rect(cell->first, cell->second)), text);
+}
+
+void ListView::forget_cell_tip() {
+    tip_cell_.reset();
+    tooltip_.remove_tool(CellTipTool);
 }
 
 void ListView::click_column(int index) const {

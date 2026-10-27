@@ -20,6 +20,7 @@ public:
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     StatusTab selected() const noexcept;
     void set_counts(const StatusCounts& counts);
+    void show_duplicates(bool shown);
     void reset();
     void on_selection_change();
 
@@ -29,6 +30,7 @@ private:
     framework::TabStrip tabs_;
     StatusCounts counts_;
     StatusTab selected_ = StatusTab::All;
+    bool duplicates_shown_ = false;
     std::vector<StatusTab> shown_;
 };
 

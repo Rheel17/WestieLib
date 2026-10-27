@@ -309,10 +309,13 @@ the table itself, through `BufferedPaint`.
   of the order, or deletes it, and goes back to the scope's default sort. `LVN_COLUMNCLICK` sorts by the clicked
   column, or turns the order round when it's sorted by that column already, and moves the header's arrow. Source,
   Match and File are in the table but hidden: the header menu that shows them comes later.
-- `track_rows` (`TrackRows.cpp`) turns a snapshot into the scope's `TrackRow`s: all tracks, in key order, or the
-  playlist's, by where it first lists each. A row has the track's status as a `StatusTab`, the title, artists and
-  length of its first source, the names of the playlists that list it (in the order they were added), its position,
-  and the kinds of source it has.
+- `track_rows` (`TrackRows.cpp`) turns a snapshot into the scope's `TrackRow`s (see `plan/ui.md`, Tracks, sources and
+  entries). All tracks has a row per track, for its first entry in `track_entries` order (`TrackEntries.cpp`: the
+  playlists in the left panel's order, each source once at its first position, then the sources of tracks no playlist
+  lists). A playlist has a row per entry: each source it lists, once, at its first position; an entry whose track the
+  playlist lists earlier is a duplicate, and keeps that earlier position. A row's key is its source key, beside its
+  track's key. It has the track's status as a `StatusTab` and its effective metadata, the names of the playlists that
+  list one of the track's sources (in the order they were added), its position and the kind of its source.
 - `TrackPanel` keeps the scope's rows and narrows them in `show_rows`: `rows_from_source` by the filter bar's
   `source()`, then `rows_in_tab` by the selected tab (Synced takes Needs review in too). The tabs count the rows
   before the tab narrows them, so each shows what it would list. The source, a tab, Clear and new rows all show the
@@ -326,8 +329,13 @@ the table itself, through `BufferedPaint`.
   another scope (`show_tracks`) clears the selection first, so nothing carries over.
 - `TrackTable::set_rows` keeps the rows and hands the list their count. The list asks for each cell in
   `LVN_GETDISPINFOW` by the column's index, which `column_subitem` turns into the `TrackColumn`. The Status column has
-  no text: `NM_CUSTOMDRAW` draws the status's 16 DIP icon in the cell after the row is painted (`ListView::cell_rect`).
-  So far Waiting, Synced and Needs review have icons. Its tooltip comes with the other statuses.
+  no text: `NM_CUSTOMDRAW` draws the status's 16 DIP icon in the cell after the row is painted (`ListView::cell_rect`),
+  or the duplicate icon for a duplicate. So far Waiting, Synced, Needs review, Failed and Duplicate have icons. Its
+  tooltip comes from `ListView::set_cell_tip`: on `WM_MOUSEMOVE` the list hit-tests the cell
+  (`LVM_SUBITEMHITTEST`) and, when the cell changes, asks for its text and puts a `Tooltip` tool (id 1) over it, or
+  takes the tool away for no text; a new item count or a scroll forgets it. `TrackTable::cell_tip` answers only for
+  Status, with `row_status_tip` (`RowStatusText.cpp`). `LVN_GETINFOTIP` can't serve it: the list asks that only for
+  column 0, which is Title.
 - `MainWindow::show_scope` hands `TrackPanel::show_tracks` the selected playlist's row (or nothing for All tracks),
   the rows and the library's track count, then shows the counts and the inspector. A playlist that isn't the one
   before goes back to the default sort; the same one, with new rows after a fetch, keeps its sort. The status tabs

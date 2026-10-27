@@ -45,8 +45,9 @@ struct TrackDetails {
     std::vector<TrackSource> sources{};
     // In the left panel's order
     std::vector<TrackPlaylist> playlists{};
+    // How the entry got it
     std::optional<TrackVideo> video{};
-    // The first Spotify source's
+    // The entry's own match, or for a YouTube Music entry its track's first Spotify source's
     std::optional<TrackMatch> match{};
     core::TrackFailure failure = core::TrackFailure::None;
     // Its last lines

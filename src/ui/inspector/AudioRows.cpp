@@ -30,7 +30,7 @@ AudioRows::AudioRows(HWND card, std::function<void(const std::wstring&)> on_open
         artists_(card, L""),
         length_key_(key_label(card, L"Length")),
         length_(card),
-        video_key_(key_label(card, L"Video")),
+        video_key_(key_label(card, L"ID")),
         video_(card, [this](std::size_t) { on_open_url_(video_url_); }),
         no_video_(card, L"", {.color = framework::TextColor::Gray}),
         chosen_key_(key_label(card, L"Chosen by")),
@@ -72,7 +72,7 @@ void AudioRows::set_contents(const TrackDetails& track) {
         artists_.set_text(track.match->artists);
         length_.set_lengths(track.match->duration, track.match->source_duration);
         confidence_.set_confidence(track.match->confidence);
-        spotify_match_.set_text(std::format(L"Same video · {}%", std::lround(track.match->confidence * PercentPerWhole)));
+        spotify_match_.set_text(std::format(L"Same ID · {}%", std::lround(track.match->confidence * PercentPerWhole)));
     }
 }
 

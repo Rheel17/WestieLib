@@ -1,7 +1,10 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <windows.h>
@@ -11,6 +14,7 @@
 #include "ui/framework/Control.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/MessageFont.h"
+#include "ui/framework/Tooltip.h"
 
 namespace westie::ui::framework {
 
@@ -49,6 +53,7 @@ public:
     std::vector<int> selected_items() const;
     std::optional<int> focused_item() const;
     void select_items(std::span<const int> items, std::optional<int> focused);
+    void set_cell_tip(std::function<std::wstring(int item, int column_index)> cell_tip);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -57,9 +62,15 @@ private:
     HWND header() const;
     LRESULT on_header_draw(const NMCUSTOMDRAW& draw, LRESULT result) const;
     void click_column(int index) const;
+    void show_cell_tip(LPARAM point);
+    void forget_cell_tip();
 
     Dpi dpi_;
     platform::win32::UniqueImageList row_height_;
+    std::function<std::wstring(int item, int column_index)> cell_tip_;
+    Tooltip tooltip_;
+    // The cell the tooltip is for, as an item and a column index
+    std::optional<std::pair<int, int>> tip_cell_;
 };
 
 }

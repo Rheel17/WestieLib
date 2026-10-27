@@ -38,6 +38,7 @@ $Glyphs = [ordered]@{
 	close = @{ Small = $true }
 	removed = @{}
 	kept = @{}
+	duplicate = @{}
 	note = @{ Cover = $true }
 }
 

@@ -14,6 +14,7 @@
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/DurationText.h"
+#include "ui/tracks/RowStatusText.h"
 
 namespace westie::ui {
 
@@ -32,7 +33,8 @@ struct ColumnSpec {
 };
 
 struct StatusIconSpec {
-    StatusTab status = StatusTab::Waiting;
+    // None for a duplicate
+    std::optional<StatusTab> status{};
     int resource_id = 0;
 };
 
@@ -58,6 +60,7 @@ constexpr std::array StatusIcons = {
     StatusIconSpec{StatusTab::Waiting, IDI_WAITING},
     StatusIconSpec{StatusTab::NeedsReview, IDI_WARN},
     StatusIconSpec{StatusTab::Failed, IDI_FAILED},
+    StatusIconSpec{std::nullopt, IDI_DUPLICATE},
 };
 
 framework::ListColumn list_column(const ColumnSpec& spec, framework::Dpi dpi) {
@@ -104,6 +107,7 @@ TrackTable::TrackTable(HWND parent, std::function<void()> on_selection_change) :
     }
     list_.set_column_order(order);
     show_sort();
+    list_.set_cell_tip([this](int item, int column_index) { return cell_tip(item, column_index); });
 }
 
 HWND TrackTable::hwnd() const noexcept {
@@ -252,6 +256,14 @@ void TrackTable::show_cell(LVITEMW& item) const {
     item.pszText[length] = L'\0';
 }
 
+std::wstring TrackTable::cell_tip(int item, int column_index) const {
+    // The Status column shows only an icon, so its tooltip gives the word
+    if (item < 0 || std::cmp_greater_equal(item, rows_.size()) || list_.column_subitem(column_index) != std::to_underlying(TrackColumn::Status)) {
+        return {};
+    }
+    return row_status_tip(rows_[item]);
+}
+
 LRESULT TrackTable::on_custom_draw(const NMLVCUSTOMDRAW& draw) const {
     switch (draw.nmcd.dwDrawStage) {
     case CDDS_PREPAINT:      return CDRF_NOTIFYITEMDRAW;
@@ -266,7 +278,9 @@ void TrackTable::draw_status(HDC dc, int item) const {
     if (!column || item < 0 || std::cmp_greater_equal(item, rows_.size())) {
         return;
     }
-    auto found = std::ranges::find(status_icons_, rows_[item].status, &StatusIcon::status);
+    const TrackRow& row = rows_[item];
+    std::optional<StatusTab> status = row.duplicate_of ? std::nullopt : std::optional(row.status);
+    auto found = std::ranges::find(status_icons_, status, &StatusIcon::status);
     if (found == status_icons_.end()) {
         return;
     }

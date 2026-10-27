@@ -20,6 +20,7 @@ void count(TrackCounts& counts, const core::Track& track) {
 }
 
 TrackCounts count_tracks(const core::State& state, const std::optional<std::string>& playlist) {
+    // As the track table has rows: the library's tracks, a playlist's entries with a duplicate under its track's status
     TrackCounts counts;
     if (!playlist) {
         for (const core::Track& track : state.tracks | std::views::values) {
@@ -32,15 +33,14 @@ TrackCounts count_tracks(const core::State& state, const std::optional<std::stri
     if (listed == state.playlists.end()) {
         return counts;
     }
-    // A track the playlist lists twice, or through two sources, counts once
-    std::set<std::string> keys;
-    for (const std::string& source : listed->second.sources) {
-        if (auto entry = state.sources.find(source); entry != state.sources.end()) {
-            keys.insert(entry->second.track);
+    // A source the playlist lists twice counts once
+    std::set<std::string> sources(listed->second.sources.begin(), listed->second.sources.end());
+    for (const std::string& key : sources) {
+        auto source = state.sources.find(key);
+        if (source == state.sources.end()) {
+            continue;
         }
-    }
-    for (const std::string& key : keys) {
-        if (auto track = state.tracks.find(key); track != state.tracks.end()) {
+        if (auto track = state.tracks.find(source->second.track); track != state.tracks.end()) {
             count(counts, track->second);
         }
     }

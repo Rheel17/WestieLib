@@ -67,6 +67,7 @@ void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::ve
         playlist_ = std::move(key);
         table_.show_scope(playlist_.has_value());
         table_.clear_selection();
+        status_.show_duplicates(playlist_.has_value());
     }
     playlist_name_ = playlist ? std::optional(playlist->name) : std::nullopt;
     scope_rows_ = std::move(rows);

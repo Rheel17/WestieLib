@@ -13,11 +13,11 @@ namespace westie::ui {
 namespace {
 
 constexpr std::array Tabs = {
-    StatusTab::All, StatusTab::Synced, StatusTab::Waiting, StatusTab::NeedsReview, StatusTab::Failed, StatusTab::Removed, StatusTab::Kept,
+    StatusTab::All, StatusTab::Synced, StatusTab::Waiting, StatusTab::NeedsReview, StatusTab::Failed, StatusTab::Duplicates, StatusTab::Removed, StatusTab::Kept,
 };
 
 bool always_shown(StatusTab tab) {
-    return tab != StatusTab::Removed && tab != StatusTab::Kept;
+    return tab != StatusTab::Removed && tab != StatusTab::Kept && tab != StatusTab::Duplicates;
 }
 
 }
@@ -47,6 +47,14 @@ void StatusFilter::set_counts(const StatusCounts& counts) {
     show();
 }
 
+void StatusFilter::show_duplicates(bool shown) {
+    duplicates_shown_ = shown;
+    if (!shown && selected_ == StatusTab::Duplicates) {
+        selected_ = StatusTab::All;
+    }
+    show();
+}
+
 void StatusFilter::reset() {
     selected_ = StatusTab::All;
     show();
@@ -63,6 +71,9 @@ void StatusFilter::on_selection_change() {
 void StatusFilter::show() {
     shown_.clear();
     std::ranges::copy_if(Tabs, std::back_inserter(shown_), [this](StatusTab tab) {
+        if (tab == StatusTab::Duplicates) {
+            return duplicates_shown_;
+        }
         return always_shown(tab) || status_count(counts_, tab) != 0 || tab == selected_;
     });
     std::vector<std::wstring> texts;

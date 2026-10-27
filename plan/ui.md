@@ -67,9 +67,11 @@ The UI uses its own words for the core statuses.
 | `match.review`     | Needs review                         | amber warning triangle             |
 | `orphaned`         | Removed                              | orange circle with slash           |
 | `kept`             | Kept                                 | gray pin                           |
+| (a playlist's later entry of a track) | Duplicate         | two overlapping gray squares, nearly square-cornered |
 
 In the Status column, Needs review wins over Synced and shows ⚠, because review is the state the user can act
-on.
+on. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a duplicate
+counts under its track's status everywhere else.
 
 **Waiting for tools.** Work that needs a tool waits while that tool isn't installed, and only then; work that doesn't
 need it goes ahead. Waiting isn't failing: the hourglass is gray and still, unlike ✕ for a failed download and ⚠ for
@@ -90,11 +92,14 @@ A track that waits shows the hourglass in the Status column, with `Waiting for f
 ffmpeg`) as its tooltip and in the inspector. A playlist whose fetch waits shows it on line 5 (see Left panel). The
 Add playlist dialog shows it on its detection line (see Dialogs).
 
-**Tracks and sources.** A row in the UI is a *track*: one file in the library. A track has one or more *sources*,
-which are YouTube Music videos or Spotify tracks. The same song in a YouTube Music playlist and a Spotify playlist
-is merged into one track, as long as the Matcher picked the video the YouTube Music playlist lists (see
-`arch.md`, Merging). A track with a YouTube Music source never needs review, because the playlist owner chose
-its video.
+**Tracks, sources and entries.** A *track* is one file in the library. A track has one or more *sources*, which
+are YouTube Music videos or Spotify tracks. Sources with the same video are merged into one track (see `arch.md`,
+Merging): the same song in a YouTube Music and a Spotify playlist, or one recording a Spotify playlist lists under
+several ids (single, album, compilation). All tracks shows a row per track. A playlist shows a row per *entry*: one
+source it lists. So a merge never takes a row out of a playlist: when a playlist lists several sources of one track,
+the first is the original and the later ones are *duplicates*, which download nothing of their own and share its
+file. Entries in different playlists are never duplicates of each other. A track with a YouTube Music source never
+needs review, because the playlist owner chose its video.
 
 ## Menu bar and toolbar
 
@@ -329,15 +334,17 @@ The bar has 8 px of padding at the top and sides and 4 px under it, with 8 px be
 A strip of flat buttons with counts. Exactly one button is selected. The counts take the scope, the search and
 the source into account, so each button shows how many rows it would list:
 
-`All │ Synced │ Waiting │ Needs review │ Failed │ Removed │ Kept`
+`All │ Synced │ Waiting │ Needs review │ Failed │ Duplicates │ Removed │ Kept`
 
 - Each button reads its word and its count, as in `Needs review 3`. The buttons are 22 px tall with 8 px at the
   sides of the text. The strip has 4 px above it, 8 px at the sides and 2 px under it. The selected button has the
   pressed button colors, a button under the mouse the hover color (border `#CCE8FF`), and a 1×14 px `#C9C9C9` line
   separates the buttons.
 - `Removed` and `Kept` appear only when their count is not zero, or while they are selected.
+- `Duplicates` lists the playlist's duplicates. It shows in every playlist scope, also at 0, and never in All tracks,
+  which has none.
 - All = Synced + Waiting + Failed + Removed + Kept.
-- Needs review is a subset of Synced.
+- Needs review is a subset of Synced, and Duplicates of All: a duplicate also counts under its track's status.
 
 ### Result line
 
@@ -353,13 +360,13 @@ when you click their header. Right-click the header to show, hide or reorder col
 | Column    | Default | Content |
 |-----------|---------|---------|
 | #         | playlist scope only | the entry's position in the playlist. It keeps its value when rows are filtered out, so a search can show 2, 5, 8. All tracks has no # column, because a position only means something inside a playlist |
-| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead. Hovering the cell shows the word as a tooltip (`Synced`, `Needs review`, `Downloading 62%`, …) |
+| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead, and a duplicate the duplicate icon. Hovering the cell shows the word as a tooltip (`Synced`, `Needs review`, `Downloading 62%`, …); a duplicate's reads `Duplicate of track #3 · <its track's word>`, with the original's position |
 | Title     | on      | |
 | Artists   | on      | joined with `, ` |
-| Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time, unless a Spotify source merged in has one. Title, Artists, Album and Time show the effective metadata (`arch.md`) |
+| Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time, unless a Spotify source merged in has one. Title, Artists, Album and Time show the track's effective metadata (`arch.md`), so a duplicate reads like its original |
 | Playlists | on      | names of every playlist that lists one of the track's sources, joined with `, `, ending in an ellipsis when cut |
 | Time      | on      | m:ss |
-| Source    | off     | logo of each source |
+| Source    | off     | logo of the row's source: the entry's, or in All tracks the track's first entry's |
 | Match     | off     | confidence %, `Override` or `Direct` |
 | File      | off     | file name |
 
@@ -373,9 +380,11 @@ menu is the Track menu.
 The selection stays with its tracks while the rows are sorted, filtered by source or refreshed by a sync; a track that
 is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
 
-A row is a file, so a playlist that lists one recording more than once shows it once, at its first position: a repeat
-of an entry, and also the same song under several Spotify ids (single, album, compilation) whose matches found one
-video. Its row count can be lower than the playlist's entries on Spotify.
+All tracks shows a row per track, for its first entry: in the left panel's playlist order, then by position. A
+playlist scope shows a row per entry: each source the playlist lists, at its first position (a source it lists twice
+shows once). A row whose track the playlist lists earlier through another source is a duplicate (see Vocabulary).
+The status tabs, the result line, the playlist rows' counts and the selection card count rows, a duplicate under its
+track's status; the library's counts count tracks.
 
 A refresh, such as each fetched page or match of a sync, keeps the table where it is scrolled. Another scope, status
 tab, search or source starts it at the top.
@@ -410,10 +419,11 @@ tab, search or source starts it at the top.
   - for matched tracks: `Matched` (the video title), `Artists` (the video's, as YouTube Music's search lists them),
     and `Length`, the video's length next to the source length; it shows in amber when the two differ by more than
     5 s, which often gives away a live version or a cover;
-  - `Video`, as a link; `No match found` in red when the Matcher found nothing;
+  - `ID`, the YouTube Music id as a link; `No match found` in red when the Matcher found nothing;
   - `Chosen by`: `Playlist`, `Matcher` or `Override`;
   - `Confidence`, as a bar + %; the bar uses the paused (yellow) state when review is needed;
-  - for a merged track, `Spotify match: Same video · 96%` replaces the matcher rows.
+  - for a YouTube Music entry whose track merged with a Spotify source, `Spotify match: Same ID · 96%` replaces
+    the matcher rows.
 - **File**: the file name and `Show in folder`.
 
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
@@ -446,7 +456,7 @@ features, and so do the selection card's bulk actions.
 │ Key       ytm:5aM1xdk8lRw       │   │                                 │
 │                                 │   │                                 │
 │ Audio ───────────────────────── │   │                                 │
-│ Video     Chosen when it downl… │   │                                 │
+│ ID        Chosen when it downl… │   │                                 │
 │                                 │   │                                 │
 │ File ────────────────────────── │   │                                 │
 │ Not downloaded yet.             │   │                                 │
@@ -471,6 +481,10 @@ The track card, from the top, in DIPs:
   | Failed       | The last attempt failed. It's retried on the next sync. A failed match says "No usable video was found. Choose one yourself." instead |
   | Removed      | No longer in any playlist. The file is still in the library. |
   | Kept         | Kept after it left every playlist. |
+  | Duplicate    | Duplicate of track #12 in this playlist. (The original's position) |
+
+  A duplicate's status line shows the duplicate icon and `Duplicate` whatever its track's status; a failure's reason
+  and box still follow, since they are the track's.
 
   A failed track's reason follows 8 px below in red, on a 16 px line, then 4 px below the box: a 1 px `#C5C5C5`
   border, 4 px padding at the top and bottom and 6 px at the sides, and the last two lines of the error in Consolas
@@ -484,15 +498,17 @@ The track card, from the top, in DIPs:
   - `Playlists`: the track's playlists, in the left panel's order, as links with `, ` between them. A click selects
     that playlist, as a click on its row does. A link that doesn't fit ends in an ellipsis, and the ones after it
     don't show. A track in no playlist reads `None` in gray;
-  - `Key`: the track key.
-- **Audio** holds rows like Source's, by where the track's video comes from (`arch.md`, Video resolution):
-  - none: `Video` reads `Chosen when it downloads` in gray, or `No match found` in red after a failed match;
-  - the Matcher: `Matched`, `Artists`, `Length`, `Video`, `Chosen by` `Matcher`, `Confidence`;
-  - a YouTube Music source: `Video`, `Chosen by` `Playlist`, and `Spotify match` `Same video · 96%` when the
-    track's Spotify source was matched to that video.
+  - `Key`: the row's source key.
+- **Audio** holds rows like Source's, by how the row's source got its video, so a duplicate shows what the Matcher
+  did with it:
+  - a Spotify entry with a match: `Matched`, `Artists`, `Length`, `ID`, `Chosen by` `Matcher`, `Confidence`;
+  - a YouTube Music entry: `ID`, `Chosen by` `Playlist`, and `Spotify match` `Same ID · 96%` when the
+    track's first Spotify source was matched to that video;
+  - otherwise by where the track's video comes from (`arch.md`, Video resolution), and with none, `ID` reads
+    `Chosen when it downloads` in gray, or `No match found` in red after a failed match.
 
   `Length` is the video's length (`m:ss`), in amber when it differs from the Spotify length by more than 5 s, then
-  ` · Spotify 3:32` in gray. `Video` is the video id as a link to `https://music.youtube.com/watch?v=<id>`.
+  ` · Spotify 3:32` in gray. `ID` is the YouTube Music id (the video id) as a link to `https://music.youtube.com/watch?v=<id>`.
   `Confidence` is a 110 px bar, 6 px tall and centered on the line, filled in green as far as the confidence, then
   6 px and the percentage; a narrower card shortens the bar.
 - **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file.

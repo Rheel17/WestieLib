@@ -111,6 +111,17 @@ function Get-TrackRows($hwnd) {
 	@(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) } }) -join ' / '
 }
 
+# The tooltip of row $index's Status cell, the column at display position $position, once the mouse moves onto it
+# (HDM_ORDERTOINDEX, HDM_GETITEMRECT, LVM_GETITEMRECT)
+function Get-StatusTip($hwnd, [int]$index, [int]$position = 0) {
+	$list = Get-TrackTable $hwnd
+	$header = [W]::SendMessageW($list, 0x101F, [IntPtr]::Zero, [IntPtr]::Zero)
+	$column = [W]::SendForRect($header, 0x1207, [W]::SendMessageW($header, 0x120F, [IntPtr]$position, [IntPtr]::Zero))
+	$row = [W]::SendForRect($list, 0x100E, [IntPtr]$index)
+	[void][W]::SendMessageW($list, 0x200, [IntPtr]::Zero, (LParam ([int](($column.Left + $column.Right) / 2)) ([int](($row.Top + $row.Bottom) / 2))))
+	[W]::TooltipText($list, 1)
+}
+
 # The first row in view (LVM_GETTOPINDEX)
 function Get-TopRow($hwnd) { [int][W]::SendMessageW((Get-TrackTable $hwnd), 0x1027, [IntPtr]::Zero, [IntPtr]::Zero) }
 
@@ -235,12 +246,12 @@ Check '  the rows sync controls tooltips' "$([W]::TooltipText((Get-PlaylistList 
 Select-TrackRow $h 5
 Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Shared Song / Both / Album is read when it downloads / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / YouTube Music $MiddleDot Open / Playlists / $TracksName, $SharedName / " +
-	"Key / ytm:trackSHARE5 / Audio / Video / trackSHARE5 / Chosen by / Playlist / File / Not downloaded yet.")
+	"Key / ytm:trackSHARE5 / Audio / ID / trackSHARE5 / Chosen by / Playlist / File / Not downloaded yet.")
 Select-TrackRow $h 1
 Check 'Late Night Swing selected: its card' (Wait-TrackCard $h 'spotify:spTrackLateNight000001') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / $SpotifyName / " +
 	"Key / spotify:spTrackLateNight000001 / Audio / Matched / Late Night Swing / Artists / Ana, Ben / Length / 4:01 $MiddleDot Spotify 4:01 / " +
-	"Video / ytspTrackLateNight000001 / Chosen by / Matcher / Confidence / 100% / File / Not downloaded yet.")
+	"ID / ytspTrackLateNight000001 / Chosen by / Matcher / Confidence / 100% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-track.png") }
 $card = Get-InspectorCard $h
 $cover =[W]::RectIn(([W]::Children($card, 'WestieLib.CoverArt'))[0], $card)
@@ -261,12 +272,12 @@ if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-sel
 
 Click-PlaylistRow $h 1
 Check 'Playlist 1: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowA / 2 | $RowB / 3 | $RowC / 4 | $RowShared"
-Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Synced 0 | Waiting 4 | Needs review 0 | Failed 0 | Showing 4 of 7 in $TracksName"
+Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Synced 0 | Waiting 4 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 4 of 7 in $TracksName"
 Check '  card' ((Get-CardTexts $h) -replace 'today \d\d:\d\d', 'today HH:MM') ("Playlist card: $TracksName / YouTube Music playlist / Playlist / Link / PLtracks1 / " +
 	"Tracks / 4 / Synced / 0/4 / Waiting / 4 / Shared / 1 track is also in other playlists / Last sync / today HH:MM / Sync playlist / Remove playlist$Ellipsis")
 Click-PlaylistRow $h 2
 Check 'The Spotify playlist: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowLate / 2 | $RowSenorita"
-Check '  tabs | result line' (Get-TrackSummary $h) "All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Showing 2 of 7 in $SpotifyName"
+Check '  tabs | result line' (Get-TrackSummary $h) "All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 7 in $SpotifyName"
 $runs = Get-FetchRuns
 $queries = Get-SpotifyQueries
 Send-Command $h 'Sync &selected playlist'
@@ -317,7 +328,7 @@ Send-Command $h 'Sync &selected playlist'
 Wait-Fetches $h $runs 1
 $script:TallRows = 1, 2, 3, 5
 Check 'Sync selected: its rows' (Get-TrackRows $h) "1 | $RowSlow"
-Check '  tabs | result line' (Get-TrackSummary $h) "All 1 | Synced 0 | Waiting 1 | Needs review 0 | Failed 0 | Showing 1 of 8 in $SlowName"
+Check '  tabs | result line' (Get-TrackSummary $h) "All 1 | Synced 0 | Waiting 1 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 1 of 8 in $SlowName"
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-sync.png") }
 
 # Removing a playlist deletes the tracks it alone listed, which have no file yet
@@ -502,6 +513,8 @@ $sources = @(
 		'"track": "spotify:spCrazy0000000000000002"}'),
 	('"spotify:spMerged000000000000003": {"title": "Merged Song", "artists": ["Both"], "album": "Shared", "durationMs": 200000, ' +
 		'"match": {"videoId": "vidMerged01", "confidence": 0.96, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
+	('"spotify:spMergedAgain000000006": {"title": "Merged Song", "artists": ["Both"], "album": "Shared (Deluxe)", "durationMs": 200000, ' +
+		'"match": {"videoId": "vidMerged01", "confidence": 0.9, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
 	'"spotify:spNoResults00000000004": {"title": "No Results", "artists": ["The Late Hours"], "album": "Sway", "durationMs": 228000, "track": "spotify:spNoResults00000000004"}',
 	'"spotify:spOffline0000000000005": {"title": "Offline", "artists": ["Nobody"], "album": "Unplugged", "durationMs": 150000, "track": "spotify:spOffline0000000000005"}',
 	'"ytm:vidAlone001": {"title": "Alone Here", "artists": ["Lone"], "durationMs": 180000, "track": "ytm:vidAlone001"}',
@@ -515,29 +528,30 @@ $tracks = @(
 	("`"spotify:spOffline0000000000005`": {`"sources`": [`"spotify:spOffline0000000000005`"], `"status`": `"failed`", `"failure`": `"search`", " +
 		"`"error`": `"$SearchError`", `"addedAt`": `"2026-01-02T12:00:00Z`"}"),
 	'"ytm:vidAlone001": {"sources": ["ytm:vidAlone001"], "status": "pending", "addedAt": "2026-01-01T12:00:00Z"}',
-	'"ytm:vidMerged01": {"sources": ["ytm:vidMerged01", "spotify:spMerged000000000000003"], "status": "pending", "addedAt": "2026-01-01T12:00:00Z"}'
+	('"ytm:vidMerged01": {"sources": ["ytm:vidMerged01", "spotify:spMerged000000000000003", "spotify:spMergedAgain000000006"], "status": "pending", ' +
+		'"addedAt": "2026-01-01T12:00:00Z"}')
 )
 $playlists = '"ytm:PLmatch1": {"url": "https://music.youtube.com/playlist?list=PLmatch1", "name": "WCS", "addedAt": "2026-01-01T12:00:00Z", ' +
 	'"sources": ["ytm:vidAlone001", "ytm:vidMerged01"]}, ' +
 	"`"$MatchSpotifyKey`": {`"url`": `"https://open.spotify.com/playlist/4matchmatchmatchmatchm`", `"name`": `"Her playlist`", " +
 	'"addedAt": "2026-01-02T12:00:00Z", "sources": ["spotify:spBestPart000000000001", "spotify:spCrazy0000000000000002", ' +
-	'"spotify:spMerged000000000000003", "spotify:spNoResults00000000004", "spotify:spOffline0000000000005"]}'
+	'"spotify:spMerged000000000000003", "spotify:spNoResults00000000004", "spotify:spOffline0000000000005", "spotify:spMergedAgain000000006"]}'
 [IO.File]::WriteAllText($StateFile, "{`"version`": 1, `"playlists`": {$playlists}, `"sources`": {$($sources -join ', ')}, `"tracks`": {$($tracks -join ', ')}}")
 Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
 $seeded = Get-SavedState
 $app = Start-App
 $h = $app.Hwnd
-Check 'Rows: two failed' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Showing 6 of 6'
+Check 'All tracks: a row per track, two failed' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Showing 6 of 6'
 
 Select-TrackRow $h 0
 Check 'Only on YouTube Music: the playlist chose its video' (Wait-TrackCard $h 'ytm:vidAlone001') ("Track card:  / Alone Here / Lone / Album is read when it downloads / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / YouTube Music $MiddleDot Open / Playlists / WCS / Key / ytm:vidAlone001 / " +
-	"Audio / Video / vidAlone001 / Chosen by / Playlist / File / Not downloaded yet.")
+	"Audio / ID / vidAlone001 / Chosen by / Playlist / File / Not downloaded yet.")
 Select-TrackRow $h 1
 Check 'Matched: what the Matcher chose' (Wait-TrackCard $h 'spotify:spBestPart000000000001') ("Track card:  / Best Part / Daniel Caesar, H.E.R. / Freudian / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spBestPart000000000001 / Audio / Matched / Best Part (feat. H.E.R.) / Artists / Daniel Caesar / Length / 3:30 $MiddleDot Spotify 3:29 / " +
-	"Video / zNhtz0Lygik / Chosen by / Matcher / Confidence / 94% / File / Not downloaded yet.")
+	"ID / zNhtz0Lygik / Chosen by / Matcher / Confidence / 94% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-matched.png") }
 # The bar is 110 long, 94% of it green, then 6 to the percentage
 $confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'))[0]
@@ -547,19 +561,21 @@ Select-TrackRow $h 2
 Check 'A live version: lengths 33 s apart' (Wait-TrackCard $h 'spotify:spCrazy0000000000000002') ("Track card:  / Crazy / Gnarls Barkley / St. Elsewhere / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spCrazy0000000000000002 / Audio / Matched / Crazy (Live at Coachella 2006) / Artists / Gnarls Barkley / Length / 3:31 $MiddleDot Spotify 2:58 / " +
-	"Video / liveCrazy01 / Chosen by / Matcher / Confidence / 61% / File / Not downloaded yet.")
+	"ID / liveCrazy01 / Chosen by / Matcher / Confidence / 61% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-live.png") }
+# The merged track has one row, for its first entry: WCS's, the first playlist
 Select-TrackRow $h 3
-Check 'On both: the playlist chose, the match agrees' (Wait-TrackCard $h 'ytm:vidMerged01') ("Track card:  / Merged Song / Both / Shared / " +
+Check 'On both: one row, the playlist chose, the match agrees' (Wait-TrackCard $h 'ytm:vidMerged01') ("Track card:  / Merged Song / Both / Shared / " +
 	"Status / Waiting / Downloads on the next sync. / Sources / Listed on / YouTube Music $MiddleDot Open /  / Spotify $MiddleDot Open track / " +
-	"Playlists / WCS, Her playlist / Key / ytm:vidMerged01 / Audio / Video / vidMerged01 / Chosen by / Playlist / " +
-	"Spotify match / Same video $MiddleDot 96% / File / Not downloaded yet.")
+	"Playlists / WCS, Her playlist / Key / ytm:vidMerged01 / Audio / ID / vidMerged01 / Chosen by / Playlist / " +
+	"Spotify match / Same ID $MiddleDot 96% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-merged.png") }
+Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 3) 'Waiting'
 Select-TrackRow $h 4
 Check 'No match: the reason and the last two lines' (Wait-TrackCard $h 'spotify:spNoResults00000000004') ("Track card:  / No Results / The Late Hours / Sway / " +
 	"Status / Failed / No usable video was found. It's searched again on the next sync. / No match on YouTube Music / " +
 	"$($NoMatchError -replace '\\"', '"' -replace '\\n', "`n") / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
-	"Key / spotify:spNoResults00000000004 / Audio / Video / No match found / File / Not downloaded yet.")
+	"Key / spotify:spNoResults00000000004 / Audio / ID / No match found / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-nomatch.png") }
 $card = Get-InspectorCard $h
 $labels = @(Get-DirectChildren $card 'WestieLib.Label' | Where-Object { [W]::IsWindowVisible($_) })
@@ -575,7 +591,30 @@ Select-TrackRow $h 5
 Check 'The search failed: its error' (Wait-TrackCard $h 'spotify:spOffline0000000000005') ("Track card:  / Offline / Nobody / Unplugged / " +
 	"Status / Failed / The last attempt failed. It's retried on the next sync. / Couldn't search YouTube Music / $SearchError / " +
 	"Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / Key / spotify:spOffline0000000000005 / " +
-	"Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
+	"Audio / ID / Chosen when it downloads / File / Not downloaded yet.")
+
+# Her playlist lists the merged track twice, through two Spotify releases: the second is a duplicate of the first. The
+# first isn't one, although WCS lists the track before it.
+$script:TallRows = 1, 2
+Click-PlaylistRow $h 2
+$merged = "Merged Song | Both | Shared | WCS, Her playlist | 3:20"
+Check 'Her playlist: a row per entry, Playlists naming WCS too' (Get-TrackRows $h) ("1 |  | Best Part | Daniel Caesar, H.E.R. | Freudian | Her playlist | 3:29 / " +
+	"2 |  | Crazy | Gnarls Barkley | St. Elsewhere | Her playlist | 2:58 / 3 |  | $merged / 4 |  | No Results | The Late Hours | Sway | Her playlist | 3:48 / " +
+	"5 |  | Offline | Nobody | Unplugged | Her playlist | 2:30 / 6 |  | $merged")
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Duplicates 1 | Showing 6 of 6 in Her playlist'
+Check '  Status tooltips: #3 | #6' "$(Get-StatusTip $h 2 1) | $(Get-StatusTip $h 5 1)" "Waiting | Duplicate of track #3 $MiddleDot Waiting"
+Select-TrackRow $h 5
+Check '  #6 a duplicate: its card' (Wait-TrackCard $h 'spotify:spMergedAgain000000006') ("Track card:  / Merged Song / Both / Shared / " +
+	"Status / Duplicate / Duplicate of track #3 in this playlist. / " +
+	"Sources / Listed on / YouTube Music $MiddleDot Open /  / Spotify $MiddleDot Open track / Playlists / WCS, Her playlist / " +
+	"Key / spotify:spMergedAgain000000006 / Audio / Matched / Merged Song / Artists / Both / Length / 3:21 $MiddleDot Spotify 3:20 / " +
+	"ID / vidMerged01 / Chosen by / Matcher / Confidence / 90% / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-duplicate.png") }
+Click-Tab $h 5
+Check '  the Duplicates tab: #6 alone' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
+	"6 |  | $merged | All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Duplicates 1 | Showing 1 of 6 in Her playlist")
+Click-AllTracks $h
+Check '  All tracks: no Duplicates tab, back to All' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Showing 6 of 6'
 
 # Adding a playlist saves the state, which keeps the matches and failures as they were
 Click-AllTracks $h
@@ -638,8 +677,9 @@ Check '  tracks: Way Down We Go on both is one track' (Get-SavedTracks) ('spBrok
 	'spLiveLoses00000000002 pending [spLiveLoses00000000002] True / spNoResults00000000003 failed [spNoResults00000000003] True / ' +
 	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / ' +
 	'AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True')
-Check '  its row: the album from Spotify' (@((Get-TrackRows $h) -split ' / ' | Where-Object { $_ -like '*Way Down We Go*' }) -join ' / ') (
+Check '  its row: one, both playlists, the album from Spotify' (@((Get-TrackRows $h) -split ' / ' | Where-Object { $_ -like '*Way Down We Go*' }) -join ' / ') (
 	" | Way Down We Go | KALEO | A/B | $TracksName, Matches | 3:34")
+Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 9) 'Waiting'
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 10 | Synced 0 | Waiting 7 | Needs review 0 | Failed 3 | Showing 10 of 10'
 
 # The playlist with the video Only Here was matched to: its source joins that track. Only the failed tracks are
@@ -655,7 +695,14 @@ Check '  Only Here: the YouTube Music source joined the Spotify track' (@((Get-S
 Check '  failures as before' (Get-SavedFailures) $MatchFailures
 Check '  the added playlist selected: Only Here among its rows' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
 	"1 | $RowShared / 2 |  | Only Here | Solo | Here | Matches, $SharedName | 1:05 | " +
-	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Showing 2 of 10 in $SharedName")
+	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 10 in $SharedName")
+# Matches lists the track too, but that is another playlist: here it is no duplicate
+Check '  Only Here there: no duplicate' (Get-StatusTip $h 1 1) 'Waiting'
+Select-TrackRow $h 1
+Check '  its card' (Wait-TrackCard $h 'ytm:trackDDDDD6') ("Track card:  / Only Here / Solo / Here / Status / Waiting / " +
+	"Downloads on the next sync. / Sources / Listed on / YouTube Music $MiddleDot Open /  / " +
+	"Spotify $MiddleDot Open track / Playlists / Matches, $SharedName / Key / ytm:trackDDDDD6 / Audio / ID / trackDDDDD6 / Chosen by / Playlist / " +
+	"Spotify match / Same ID $MiddleDot 100% / File / Not downloaded yet.")
 
 # Cancel while a track is searched leaves it as it was
 [void]$Web.YtmGate.Reset()

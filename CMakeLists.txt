@@ -186,8 +186,10 @@ add_executable(WestieLib WIN32
 	src/ui/tools/ToolStatusText.cpp
 	src/ui/tracks/FilterBar.cpp
 	src/ui/tracks/ResultLineText.cpp
+	src/ui/tracks/RowStatusText.cpp
 	src/ui/tracks/StatusFilter.cpp
 	src/ui/tracks/StatusTabText.cpp
+	src/ui/tracks/TrackEntries.cpp
 	src/ui/tracks/TrackPanel.cpp
 	src/ui/tracks/TrackRows.cpp
 	src/ui/tracks/TrackSort.cpp

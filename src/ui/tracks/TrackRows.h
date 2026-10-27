@@ -11,18 +11,28 @@
 
 namespace westie::ui {
 
+struct RowOriginal {
+    // In the same playlist
+    int position = 0;
+};
+
 struct TrackRow {
+    // The source key of the entry, or in All tracks of the track's first entry
     std::string key{};
+    std::string track{};
+    // Its track's status, a duplicate's too
     StatusTab status = StatusTab::Waiting;
     std::wstring title{};
     std::wstring artists{};
     std::wstring album{};
     std::wstring playlists{};
     std::chrono::milliseconds duration{};
-    // Where the scope's playlist first lists the track, from 1; 0 in All tracks
+    // Where the scope's playlist first lists the entry, from 1; 0 in All tracks
     int position = 0;
-    // Each kind of source the track has, once
-    std::vector<core::SourceType> sources{};
+    // The kind of source the row is for: the entry's, or in All tracks the track's first entry's
+    std::optional<core::SourceType> source{};
+    // Set when the playlist lists the same track earlier, through another source
+    std::optional<RowOriginal> duplicate_of{};
 };
 
 std::vector<TrackRow> track_rows(const core::State& state, const std::optional<std::string>& playlist);

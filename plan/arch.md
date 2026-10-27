@@ -270,7 +270,14 @@ Each time, if another track already has that video, the two tracks merge:
 - When the merge changes the effective metadata or cover, the file is re-tagged and renamed.
 - The engine emits `TracksMerged`.
 
-Sources stay attached to their track until the track is removed.
+Sources stay attached to their track until the track is removed, with one exception: choosing another video for one
+entry of a merged track (Choose video, `setVideoOverride` on a duplicate, with manual matching) moves that source out
+into a track of its own, which gets the override. So a merge is never final.
+
+All tracks shows a row per track, but a playlist shows a row per source it lists (an *entry*), so a merge doesn't
+take a row out of a playlist: when it lists several sources of one track, the later ones show as duplicates (ui.md ›
+Tracks, sources and entries). `track_entries` (`src/ui/tracks/TrackEntries`) lists every entry in the left panel's
+order, which picks the source All tracks shows a track by.
 
 So far no track has a file, and a merge (`merge_tracks`, `src/core/state/MergeTracks`) only moves the sources: there
 is nothing to recycle, re-tag or rename yet.

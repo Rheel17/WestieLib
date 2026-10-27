@@ -28,6 +28,7 @@
 #define IDI_NOTE                  49
 // The sync control's 12 steps of a turn are IDI_SPIN_0 to IDI_SPIN_0 + 11
 #define IDI_SPIN_0                50
+#define IDI_DUPLICATE             62
 #define IDD_SETTINGS              100
 #define IDC_LIBRARY_FOLDER        1000
 #define IDC_CHANGE_LIBRARY_FOLDER 1001

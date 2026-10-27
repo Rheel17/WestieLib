@@ -5,11 +5,12 @@
 #include <utility>
 #include <vector>
 
+#include "ResourceIds.h"
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/inspector/CardLayout.h"
 #include "ui/inspector/TrackStatusText.h"
-#include "ui/tracks/StatusTabText.h"
+#include "ui/tracks/RowStatusText.h"
 
 namespace westie::ui {
 
@@ -85,8 +86,13 @@ void TrackCard::set_contents(const TrackDetails& track) {
     title_.set_text(track.row.title);
     artists_.set_text(track.row.artists);
     album_.set_text(track.row.album.empty() ? L"Album is read when it downloads" : track.row.album);
-    status_.set(status_icon(track.row.status), status_word(track.row.status));
-    explanation_.set_text(status_explanation(track.row.status, track.failure));
+    if (track.row.duplicate_of) {
+        status_.set(IDI_DUPLICATE, row_status_word(track.row));
+        explanation_.set_text(duplicate_explanation(*track.row.duplicate_of));
+    } else {
+        status_.set(status_icon(track.row.status), row_status_word(track.row));
+        explanation_.set_text(status_explanation(track.row.status, track.failure));
+    }
     reason_.set_text(failure_reason(track.failure));
     output_.set_text(track.error);
 
@@ -123,7 +129,7 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
 
     layout.section(status_section_.hwnd());
     layout.block(status_.hwnd(), dpi.scale(StatusGapDips), status_.height());
-    if (track_.row.status == StatusTab::NeedsReview) {
+    if (track_.row.status == StatusTab::NeedsReview && !track_.row.duplicate_of) {
         layout.hide(explanation_.hwnd());
     } else {
         layout.block(explanation_.hwnd(), dpi.scale(ExplanationGapDips), explanation_.height_for(width));

@@ -12,6 +12,7 @@ const wchar_t* status_word(StatusTab tab) {
     case StatusTab::Failed:      return L"Failed";
     case StatusTab::Removed:     return L"Removed";
     case StatusTab::Kept:        return L"Kept";
+    case StatusTab::Duplicates:  return L"Duplicates";
     default:                     return L"All";
     }
 }
@@ -24,6 +25,7 @@ int status_count(const StatusCounts& counts, StatusTab tab) {
     case StatusTab::Failed:      return counts.failed;
     case StatusTab::Removed:     return counts.removed;
     case StatusTab::Kept:        return counts.kept;
+    case StatusTab::Duplicates:  return counts.duplicates;
     default:                     return counts.all;
     }
 }

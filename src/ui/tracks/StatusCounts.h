@@ -2,7 +2,7 @@
 
 namespace westie::ui {
 
-enum class StatusTab { All, Synced, Waiting, NeedsReview, Failed, Removed, Kept };
+enum class StatusTab { All, Synced, Waiting, NeedsReview, Failed, Removed, Kept, Duplicates };
 
 struct StatusCounts {
     int all = 0;
@@ -12,6 +12,8 @@ struct StatusCounts {
     int failed = 0;
     int removed = 0;
     int kept = 0;
+    // Not a status: a duplicate counts under its track's status too
+    int duplicates = 0;
 };
 
 }

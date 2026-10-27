@@ -33,7 +33,8 @@ public:
 
 private:
     struct StatusIcon {
-        StatusTab status = StatusTab::Waiting;
+        // None for a duplicate
+        std::optional<StatusTab> status{};
         framework::IconResource icon;
     };
 
@@ -50,6 +51,7 @@ private:
     Selection selection() const;
     void restore(const Selection& selection);
     void show_cell(LVITEMW& item) const;
+    std::wstring cell_tip(int item, int column_index) const;
     LRESULT on_custom_draw(const NMLVCUSTOMDRAW& draw) const;
     void draw_status(HDC dc, int item) const;
 
