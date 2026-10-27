@@ -44,6 +44,7 @@ public:
     void set_column_order(std::span<const int> order);
     void set_sort_arrow(std::optional<ListSortArrow> arrow);
     void set_item_count(int count);
+    void scroll_to_top();
     RECT cell_rect(int item, int column_index) const;
     std::vector<int> selected_items() const;
     std::optional<int> focused_item() const;

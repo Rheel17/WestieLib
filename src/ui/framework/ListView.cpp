@@ -111,7 +111,14 @@ void ListView::set_sort_arrow(std::optional<ListSortArrow> arrow) {
 }
 
 void ListView::set_item_count(int count) {
-    platform::win32::check(SendMessageW(hwnd(), LVM_SETITEMCOUNT, count, 0), "LVM_SETITEMCOUNT");
+    // Without NOSCROLL a new count scrolls the list back to the top
+    platform::win32::check(SendMessageW(hwnd(), LVM_SETITEMCOUNT, count, LVSICF_NOSCROLL), "LVM_SETITEMCOUNT");
+}
+
+void ListView::scroll_to_top() {
+    if (SendMessageW(hwnd(), LVM_GETITEMCOUNT, 0, 0) > 0) {
+        SendMessageW(hwnd(), LVM_ENSUREVISIBLE, 0, FALSE);
+    }
 }
 
 RECT ListView::cell_rect(int item, int column_index) const {

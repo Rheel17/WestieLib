@@ -373,6 +373,9 @@ menu is the Track menu.
 The selection stays with its tracks while the rows are sorted, filtered by source or refreshed by a sync; a track that
 is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
 
+A refresh, such as each fetched page or match of a sync, keeps the table where it is scrolled. Another scope, status
+tab, search or source starts it at the top.
+
 ## Inspector
 
 **One track selected**, top to bottom:

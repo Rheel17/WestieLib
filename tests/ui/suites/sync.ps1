@@ -111,6 +111,9 @@ function Get-TrackRows($hwnd) {
 	@(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) } }) -join ' / '
 }
 
+# The first row in view (LVM_GETTOPINDEX)
+function Get-TopRow($hwnd) { [int][W]::SendMessageW((Get-TrackTable $hwnd), 0x1027, [IntPtr]::Zero, [IntPtr]::Zero) }
+
 # Selects row $index (from 0) of the table with Home and Down. A sent click would do, but the list sees the real cursor
 # away from it and starts a drag, which then takes the next click on the header.
 function Select-TrackRow($hwnd, [int]$index) {
@@ -446,6 +449,18 @@ Check '  the failures' (@((Get-SavedPlaylistSync) -split ' / ' | Where-Object { 
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 150 | Synced 0 | Waiting 150 | Needs review 0 | Failed 0 | Showing 150 of 150'
 Check '  infobar: the first failure' (Get-InfobarText $h) (
 	"True Couldn$([char]0x2019)t fetch $([char]0x201C)Named $MissingSpotifyId$([char]0x201D). It may be private or deleted.")
+
+# A sync refreshes the rows without scrolling the table; another tab starts it at the top
+$list = Get-TrackTable $h
+[void][W]::SendMessageW($list, 0x1013, [IntPtr]120, [IntPtr]0)
+$top = Get-TopRow $h
+$queries = Get-SpotifyQueries
+Send-Command $h 'Sync &all'
+Wait-Fetches $h $queries 3 -Spotify
+Check 'Scrolled down, then a sync: the table stays there' "$(Get-TopRow $h) $($top -gt 0)" "$top True"
+Click-Tab $h 2
+Check '  the Waiting tab: at the top' (Get-TopRow $h) 0
+Click-Tab $h 0
 
 # The playlist changes: 110 new tracks, then the first 40 it had. Between the pages, its earlier tracks stay after the
 # new ones, so none leaves; at the end, the ones it dropped go.

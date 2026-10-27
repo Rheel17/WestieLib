@@ -26,6 +26,7 @@ public:
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
     void show_scope(bool playlist);
     void set_rows(std::vector<TrackRow> rows);
+    void scroll_to_top();
     void clear_selection();
     std::vector<TrackRow> selected_rows() const;
     LRESULT on_notify(NMHDR& header);

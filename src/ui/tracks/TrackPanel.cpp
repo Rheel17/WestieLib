@@ -61,8 +61,9 @@ void TrackPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) 
 
 void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total) {
     std::optional<std::string> key = playlist ? std::optional(playlist->key) : std::nullopt;
-    // Another scope starts at its default sort, with nothing selected; new tracks in the same one keep both
-    if (key != playlist_) {
+    // Another scope starts at its default sort and the top, with nothing selected; new tracks in the same one keep all three
+    bool other_scope = key != playlist_;
+    if (other_scope) {
         playlist_ = std::move(key);
         table_.show_scope(playlist_.has_value());
         table_.clear_selection();
@@ -71,6 +72,9 @@ void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::ve
     scope_rows_ = std::move(rows);
     library_total_ = library_total;
     show_rows();
+    if (other_scope) {
+        table_.scroll_to_top();
+    }
 }
 
 std::vector<TrackRow> TrackPanel::selected_rows() const {
@@ -150,16 +154,21 @@ LRESULT TrackPanel::on_notify(NMHDR& header) {
 }
 
 void TrackPanel::show_tab_change(StatusTab before) {
-    if (status_.selected() != before) {
+    bool other_tab = status_.selected() != before;
+    if (other_tab) {
         table_.clear_selection();
     }
     update_clear();
     show_rows();
+    if (other_tab) {
+        table_.scroll_to_top();
+    }
 }
 
 void TrackPanel::on_filter_change() {
     update_clear();
     show_rows();
+    table_.scroll_to_top();
 }
 
 void TrackPanel::update_clear() {

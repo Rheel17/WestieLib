@@ -139,6 +139,10 @@ void TrackTable::set_rows(std::vector<TrackRow> rows) {
     platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
+void TrackTable::scroll_to_top() {
+    list_.scroll_to_top();
+}
+
 void TrackTable::clear_selection() {
     list_.select_items({}, std::nullopt);
 }
