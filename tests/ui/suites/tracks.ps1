@@ -131,11 +131,19 @@ function Check-Clear($hwnd) {
 	Check '  Needs review clicked, then All' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
 }
 
-# Ctrl+Backspace (the WM_CHAR 0x7F it types) and Ctrl+Delete delete words, or the selection; undo is off; Esc empties the
-# search; Ctrl+F puts the focus in it with its text selected. The messages are sent, so each is handled before the
-# next check reads the text.
-function Check-EditKeys($app) {
-	$hwnd = $app.Hwnd
+function Send-EditChars($edit, [int[]]$chars) {
+	foreach ($char in $chars) { [void][W]::SendMessageW($edit, 0x102, [IntPtr]$char, [IntPtr]1) }
+}
+
+function Get-EditSelection($edit) {
+	$selection = [int64][W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero)
+	"$($selection -band 0xFFFF)-$($selection -shr 16)"
+}
+
+# Ctrl+Backspace (the WM_CHAR 0x7F it types) and Ctrl+Delete delete words, or the selection; Ctrl+Z (0x1A) and Ctrl+Y
+# (0x19) walk the history, where typing or deleting in a run is one change; Esc empties the search; Ctrl+F puts the
+# focus in it with its text selected. The messages are sent, so each is handled before the next check reads the text.
+function Check-EditKeys($hwnd) {
 	$edit = Get-SearchField $hwnd
 	[W]::SetEditText($edit, 'C:\Music\Westie')
 	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]15, [IntPtr]15)
@@ -154,24 +162,39 @@ function Check-EditKeys($app) {
 	[void][W]::SendMessageW($edit, 0xB1, [IntPtr]0, [IntPtr]2)
 	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x7F, [IntPtr]1)
 	Check 'Ctrl+Backspace with a selection: the selection' "'$([W]::EditText($edit))'" "'ing'"
-	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x1A, [IntPtr]1)
+	Send-EditChars $edit 0x1A
+	Check 'Ctrl+Z: the text and selection before the change' "'$([W]::EditText($edit))' $(Get-EditSelection $edit)" "'Swing' 0-2"
+	$undos = foreach ($i in 1..3) {
+		Send-EditChars $edit 0x1A
+		"'$([W]::EditText($edit))'"
+	}
+	Check '  three more: each change, then nothing left' ($undos -join ' ') "'Late Swing' 'Late Night  Swing' 'Late Night  Swing'"
+	Send-EditChars $edit 0x19
+	Check 'Ctrl+Y: the first change again' "'$([W]::EditText($edit))' $(Get-EditSelection $edit)" "'Late Swing' 5-5"
+	Send-EditChars $edit 0x61, 0x62
+	Send-EditChars $edit 0x19
+	Check '  two characters typed, then Ctrl+Y: nothing to redo' "'$([W]::EditText($edit))'" "'Late abSwing'"
+	Send-EditChars $edit 0x1A
+	Check '  Ctrl+Z: both characters' "'$([W]::EditText($edit))'" "'Late Swing'"
+	Send-EditChars $edit 0x08, 0x08
+	Check '  two Backspaces' "'$([W]::EditText($edit))'" "'LatSwing'"
+	Send-EditChars $edit 0x1A
+	Check '  Ctrl+Z: both' "'$([W]::EditText($edit))'" "'Late Swing'"
 	[void][W]::SendMessageW($edit, 0x304, [IntPtr]::Zero, [IntPtr]::Zero)
 	[void][W]::SendMessageW($edit, 0xC7, [IntPtr]::Zero, [IntPtr]::Zero)
 	$can_undo = [int64][W]::SendMessageW($edit, 0xC6, [IntPtr]::Zero, [IntPtr]::Zero)
-	Check '  Ctrl+Z, WM_UNDO, EM_UNDO: nothing undone | EM_CANUNDO' "'$([W]::EditText($edit))' | $can_undo" "'ing' | 0"
-	[void][W]::PostMessageW($edit, 0x7B, $edit, [IntPtr]-1)
-	$popup = Wait-PopupMenu $app
-	# The edit's items are in Windows' language, and their ids are the messages they send
-	$menu = [W]::SendMessageW($popup, 0x1E1, [IntPtr]::Zero, [IntPtr]::Zero)
-	Check '  its context menu: Undo grayed' ([W]::GetMenuState($menu, [uint32]0x304, 0) -band 0x1) '1'
-	Close-PopupMenu $app $popup
+	Check '  the edit''s own undo: WM_UNDO, EM_UNDO do nothing | EM_CANUNDO' "'$([W]::EditText($edit))' | $can_undo" "'Late Swing' | 0"
 
-	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x0D, [IntPtr]1)
-	Check 'Enter types nothing' "'$([W]::EditText($edit))'" "'ing'"
-	[void][W]::SendMessageW($edit, 0x102, [IntPtr]0x1B, [IntPtr]1)
+	Send-EditChars $edit 0x0D
+	Check 'Enter types nothing' "'$([W]::EditText($edit))'" "'Late Swing'"
+	Send-EditChars $edit 0x1B
 	Check 'Esc empties the search' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
+	Send-EditChars $edit 0x1A
+	Check '  Ctrl+Z: the search back' (Get-Filters $hwnd) "'Late Swing' source 0 tab 0 | Clear True"
 
 	[W]::SetEditText($edit, 'bruno')
+	Send-EditChars $edit 0x1A
+	Check 'Text the app sets: nothing to undo' "'$([W]::EditText($edit))'" "'bruno'"
 	$table = Get-TrackTable $hwnd
 	[W]::Focus($table)
 	[W]::PostCtrlKey($table, 0x46)
@@ -230,7 +253,7 @@ Check 'Status tabs | selected' "$([W]::TabTexts((Get-StatusTabs $h))) | $(Get-Se
 Check '  width beyond each text' (Get-TabPadding $h) ((1..5 | ForEach-Object { 2 * (S 8) }) -join ' ')
 Check 'Result line' ([W]::TextOf((Get-ResultLine $h))) 'Showing 0 of 0'
 Check-Clear $h
-Check-EditKeys $app
+Check-EditKeys $h
 Check-Columns $h
 Check-RowHeight $h
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-tracks.png") }

@@ -150,8 +150,13 @@ Ctrl+Delete the word after it; with a selection, both delete the selection. A wo
 run of other characters, and the spaces next to it go with it: in `C:\Music\Westie`, Ctrl+Backspace takes `Westie`,
 then `\`, then `Music`. Enter in a field outside a dialog doesn't beep.
 
-Undo is off for now: Ctrl+Z, Alt+Backspace and the context menu's Undo do nothing. The edit's own undo keeps only the
-last change, and a second Ctrl+Z redoes it; a real undo and redo history comes later.
+Each field keeps its own history: Ctrl+Z undoes the last change and Ctrl+Y redoes it. The history is a line, so a
+change after an undo drops the changes that could have been redone. Characters typed one after another are one change,
+as are Backspaces or Deletes one after another; moving the caret, or any other kind of change, starts a new one. An undo
+puts back the text and the selection from before the change. Text the app sets, as when it loads the library folder or
+Clear all empties the search, starts a new history. The shortcuts are the only way in: Alt+Backspace does nothing.
+
+Text fields have no context menu; a right-click or the Menu key does nothing.
 
 ## Infobar
 
@@ -788,7 +793,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
 | Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the synced bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
 | Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a video results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
-| Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also swallows `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO`, Ctrl+Z and Alt+Backspace |
+| Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also keeps the undo history (`EditHistory`), taking Ctrl+Z and Ctrl+Y (`WM_CHAR` `0x1A` and `0x19`) and swallowing the edit's own one-step undo: `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO` and Alt+Backspace. It swallows `WM_CONTEXTMENU` too |
 
 The UI uses the Windows 10 palette:
 

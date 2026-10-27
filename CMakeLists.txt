@@ -115,6 +115,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
 	src/ui/framework/Edit.cpp
+	src/ui/framework/EditHistory.cpp
 	src/ui/framework/EditKeys.cpp
 	src/ui/framework/FocusMemory.cpp
 	src/ui/framework/FontSet.cpp

@@ -32,6 +32,7 @@ Edit::Edit(HWND parent, const EditOptions& options) :
         }),
         leading_dips_(options.leading_dips),
         escape_clears_(options.escape_clears) {
+    add_edit_keys(hwnd());
     if (options.cue_banner) {
         platform::win32::check(SendMessageW(hwnd(), EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(options.cue_banner)), "EM_SETCUEBANNER");
     }
@@ -53,9 +54,6 @@ void Edit::apply_dpi(Dpi dpi, const MessageFont& font) {
 }
 
 LRESULT Edit::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
-    if (handle_edit_key(hwnd(), message, wparam)) {
-        return 0;
-    }
     // A single-line edit beeps at the characters of Enter and Esc
     if (message == WM_CHAR && wparam == EnterChar) {
         return 0;
