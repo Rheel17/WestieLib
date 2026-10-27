@@ -272,6 +272,9 @@ Each time, if another track already has that video, the two tracks merge:
 
 Sources stay attached to their track until the track is removed.
 
+So far no track has a file, and a merge (`merge_tracks`, `src/core/state/MergeTracks`) only moves the sources: there
+is nothing to recycle, re-tag or rename yet.
+
 **Tracks that leave every playlist.** After a fetch and after `removePlaylist`, a track none of whose sources is in a
 playlist anymore is looked at again (`prune_tracks`, `src/core/state/`):
 - A track without a file (`pending`, `failed`) is deleted with its sources: there is nothing in the library to decide
@@ -313,12 +316,12 @@ The cover art comes from the first of:
 
 | Service          | Implementation                                                                       |
 |------------------|--------------------------------------------------------------------------------------|
-| `HttpClient`     | WinHTTP (`WinHttpClient`). `get` sends the request headers it is given and returns a body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HttpError`, which keeps the status and reads `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
+| `HttpClient`     | WinHTTP (`WinHttpClient`). `get` sends the request headers it is given and returns a body; `post` does the same with a request body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HttpError`, which keeps the status and reads `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
 | `ProcessRunner`  | `Win32ProcessRunner`. `run(program, arguments, stop)` starts the program with `CreateProcessW`, without a console window, and returns its exit code, stdout and stderr. Arguments and output are UTF-8; the arguments are quoted by the C runtime's rules. A child inherits only its own pipe ends and NUL as stdin (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so children started at the same time never hold each other's pipes open. It starts suspended, joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and only then runs. A `std::stop_token` cancels: its callback terminates the job, and the call throws `Cancelled`. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. So far it returns the whole output at the end; splitting it into lines as they arrive comes with the Downloader's progress. |
 | `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
 | `ArchiveExtractor` | miniz (`MinizArchiveExtractor`). Extracts the named files from a zip into a folder. miniz opens files by narrow name, so it gets a `FILE*` from `_wfopen`, and writes go through `CreateFileW`. A stop request ends it with `Cancelled`. |
-| `TextNormalizer` | `NormalizeString` (NFKD), combining marks dropped, case folded.                      |
+| `TextNormalizer` | `Win32TextNormalizer`, UTF-8 in and out: `NormalizeString` (NFKD), combining marks dropped (`GetStringTypeW`, `C3_NONSPACING`), lowercased with `LCMapStringEx` in the invariant locale. |
 
 Strings inside the core are UTF-8 `std::string`; paths are `std::filesystem::path`. Conversion to UTF-16 happens
 inside the platform services.
@@ -569,24 +572,43 @@ never refreshed.
 The Matcher turns a Spotify source into a YouTube Music `videoId`. It runs only for tracks that have no video
 override and no YouTube Music source (see Video resolution).
 
-1. **Queries.** The ISRC first (when present), then `"<artists> <title>"`.
-2. **Search.** `yt-dlp --flat-playlist -J --playlist-items 1:10 "https://music.youtube.com/search?q=<query>#songs"`.
-   Each candidate carries videoId, title, artist and duration.
-3. **Normalize** titles and artists with `TextNormalizer`, strip punctuation and bracketed suffixes such as
-   `(feat. ...)` and `- Remastered 2011`.
-4. **Score** each candidate as a weighted sum of title similarity, artist similarity and duration closeness. Words
-   such as `live`, `remix`, `cover`, `karaoke`, `sped up`, `slowed`, `instrumental` lower the score unless the
-   Spotify title contains the same word. A candidate whose video already belongs to a track gets a small bonus,
-   so the same song from both sources tends to end up as one track.
+1. **Queries.** `"<artists> <title>"`, then, when that finds nothing usable, `"<first artist> <bare title>"`, the
+   title without bracketed parts, a ` - ` suffix or a `feat.` tail (skipped when it is the same query). The Spotify
+   fetch has no ISRC, so there is no ISRC query.
+2. **Search.** YouTube Music's own search, not yt-dlp: yt-dlp's flat search results carry only the video id and
+   title, and extracting each candidate in full costs about 2 s. `search_youtube_music_songs`
+   (`src/core/matching/YouTubeMusicSearch`) sends `POST <api>/youtubei/v1/search?prettyPrint=false` with
+   `context.client` (`WEB_REMIX`, a compiled-in `clientVersion`, `hl: en`), the query, and the songs filter's `params`.
+   One answer, about 0.5 to 1.7 s, holds some 20 songs. Each `musicResponsiveListItemRenderer` in a
+   `musicShelfRenderer` gives `playlistItemData.videoId`, the title (column 0's runs), and column 1's runs, which
+   ` • ` splits into the artists (separated by `, ` and ` & ` runs), the album, and the length (`m:ss`). An answer
+   without a shelf has no results. `WESTIELIB_YTMUSIC_API` replaces `https://music.youtube.com`; the UI checks point
+   it at their fake server.
+3. **Normalize** titles and artists with `TextNormalizer` (`MatchText`): punctuation becomes spaces, apostrophes go,
+   `&` reads `and`. The words compared leave out bracketed parts, a ` - ` suffix such as `- Remastered 2011`, and a
+   `feat.` tail; the version words below are looked for in the whole title.
+4. **Score** each candidate (`match_score`) as a weighted sum of title similarity (0.45), artist similarity (0.35)
+   and length closeness (0.20). The words are compared as Dice coefficients. The artists score is how well the
+   first Spotify artist matches one of the candidate's, or a little less for another Spotify artist; a name that
+   starts the other (`Prince`, `Prince & The Revolution`) scores 0.9, but one somewhere inside it doesn't, since that
+   is more often a tribute (`The Hits Of Phil Collins`). The length scores fully within 2 s and nothing from 30 s.
+   Words such as `live`, `remix`, `cover`, `karaoke`, `sped up`, `slowed`, `instrumental`, `acoustic`, `demo`,
+   `in the style of`, `made famous by` and `tribute` halve the score when one title has them and the other doesn't. A candidate
+   whose video already belongs to a track gets a small bonus, so the same song from both sources tends to end up as
+   one track. Ties go to YouTube Music's order.
 5. **Choose** the highest score.
-   - The source's `match` stores the video id, the confidence, and the candidate's title, artist and duration.
-   - A confidence below the review threshold sets `match.review = true`. The track is downloaded with its best
-     candidate, and it stays flagged until a video override is set or the match is confirmed.
+   - The source's `match` stores the video id, the score as the confidence, and the candidate's title, artists and
+     duration.
+   - So far every match is used as it is. The review threshold, `match.review` and Needs review come with manual
+     matching: a confidence below the threshold will set `review: true`, and the track stays flagged until a video
+     override is set or the match is confirmed.
    - If the chosen video already belongs to another track, the two tracks merge instead of downloading.
-   - When the searches return nothing, or no candidate reaches the minimum score, the track fails with
-     `failure: noMatch` and the searched queries in `error`.
+   - When the searches return nothing, or no candidate reaches the minimum score (0.7, which a matching title and
+     length alone don't reach, as with a cover by another artist), the track fails with
+     `failure: noMatch` and the searched queries in `error`. A search that fails (no network, an HTTP error) fails
+     the track with `failure: search` and the reason in `error`. Either way the next sync tries again.
 
-The Matcher is pure logic on top of `ProcessRunner` output and is unit-tested with recorded yt-dlp JSON.
+`Matcher` (`src/core/matching/`) runs the queries; `MatchText` and `MatchScore` are pure logic.
 
 **Video search.** `searchVideos(query, filter)` serves the UI's Choose a video dialog. It runs the same yt-dlp
 search with `#songs`, `#videos`, or no fragment (for both), and returns up to 20 results. Each result has
@@ -705,13 +727,15 @@ A `kept` or `orphaned` track that one of its sources brings back into a playlist
 **Cancellation** sets the run's `CancelToken` and terminates the Job Object. In-flight tracks return to `pending`
 and their work folders are cleaned.
 
-**So far** (`src/core/sync/`), a run only fetches, YouTube Music and Spotify playlists alike.
+**So far** (`src/core/sync/`), a run fetches, YouTube Music and Spotify playlists alike, and then matches; nothing
+downloads yet.
 - `sync(keys)` queues the playlists that aren't queued yet and emits `SyncQueued`. Without a run it starts one on a
   worker thread (`std::jthread`); during a run they join its queue. The queue is behind a mutex, so a run that finds
   it empty and ends can't miss a `sync` that comes at the same moment.
 - Per playlist the run emits `PlaylistFetching` and fetches. `apply_fetch` (`ApplyFetch.cpp`) puts the result in
   the state: the playlist's `name` and `sources`, `lastSync`, no `fetchError`, the source values from the playlist,
-  a `pending` track for each new source (keyed like the source), then `prune_tracks`. A playlist removed during
+  a `pending` track for each new source (keyed like the source), then `prune_tracks`. A new YouTube Music source
+  whose video a track already has (a Spotify track matched to it) joins that track instead. A playlist removed during
   the fetch is left alone. Then the run emits `PlaylistFetched`.
 - A Spotify fetch also hands over the tracks read so far after every page but the last. `apply_fetch_page` puts them
   in the state: the playlist's `name`, and as its `sources` the ones read so far followed by its earlier sources that
@@ -721,8 +745,20 @@ and their work folders are cleaned.
   Spotify fetch read before it failed stay, beside the playlist's earlier sources.
 - Without yt-dlp, a YouTube Music fetch emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs it
   (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
+- Once no playlist is left to fetch, the run matches. `tracks_to_match` (`TracksToMatch.cpp`) lists the tracks that
+  are `pending` or `failed`, have no YouTube Music source and whose first Spotify source has no match, in playlist
+  order (playlists by `addedAt`, then their sources), each once. The run emits `TracksQueued` with the ones it hasn't
+  queued yet, and matches them one at a time, saving after each:
+  - `apply_match` (`ApplyMatch.cpp`) stores the match, clears a failure (a failed track waits again), and merges the
+    track into the one that already has that video (`track_with_video`, `merge_tracks`). The run emits
+    `TracksMerged`, or `TrackStatusChanged`.
+  - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
+  - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped. A track is tried
+    once a run.
+  - A playlist queued meanwhile is fetched before the next track, and the tracks it brings join the queue.
 - `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, apart from the pages a
-  Spotify fetch already read (as for a failure); the queue is dropped, and nothing more is written.
+  Spotify fetch already read (as for a failure); a track being matched stays as it was; the queue is dropped, and
+  nothing more is written.
 - Every run ends with `SyncFinished`, cancelled or not.
 
 ## Core API
@@ -758,7 +794,8 @@ and their work folders are cleaned.
 | `PlaylistPageFetched`          | so far: playlist key, after each page of a Spotify fetch but the last |
 | `PlaylistFetched`              | playlist id, name, track count                  |
 | `PlaylistFetchFailed`          | playlist id, error                              |
-| `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for |
+| `TracksQueued`                 | so far: track keys the run will match           |
+| `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for (so far without the tools) |
 | `TrackProgress`                | track key, percent                              |
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |
@@ -803,13 +840,14 @@ src/
         events/     CoreEvent, EventSink
         github/     the latest release of a repository, from GitHub's API
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
+        matching/   the Matcher: YouTube Music's search, comparable text, scores
         playlists/  playlist links, the playlist look-up, addPlaylist
         settings/   Settings, SettingsStore
         sources/    SourceType, each source's playlist name, the Spotify embed page, the YouTube Music and Spotify fetches
         state/      State, StateStore, prune_tracks
         sync/       SyncEngine, apply_fetch and the sync events
         tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore, ToolFolder, YtDlp and the tool types
-                    later areas get folders of their own: Matcher, Downloader, Tagger,
+                    later areas get folders of their own: Downloader, Tagger,
                     Library, SelfUpdater, RemoteConfig
     platform/       service interfaces
     platform/win32/ Win32 implementations of the platform services

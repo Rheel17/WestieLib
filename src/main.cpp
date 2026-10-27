@@ -25,6 +25,7 @@
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32FileOps.h"
 #include "platform/win32/Win32ProcessRunner.h"
+#include "platform/win32/Win32TextNormalizer.h"
 #include "platform/win32/WinHttpClient.h"
 #include "ui/FatalError.h"
 #include "ui/events/CoreEventQueue.h"
@@ -37,8 +38,8 @@
 
 namespace {
 
-// The UI checks point the app at a folder, a GitHub and a Spotify of their own, so they never touch the user's files or
-// the network
+// The UI checks point the app at a folder, a GitHub, a Spotify and a YouTube Music of their own, so they never touch the
+// user's files or the network
 std::filesystem::path data_folder() {
     if (std::optional<std::wstring> folder = westie::platform::win32::environment_variable(L"WESTIELIB_DATA_DIR"); folder && !folder->empty()) {
         return *folder;
@@ -63,6 +64,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         westie::platform::win32::BCryptHasher hasher;
         westie::platform::win32::MinizArchiveExtractor archives;
         westie::platform::win32::Win32ProcessRunner processes;
+        westie::platform::win32::Win32TextNormalizer normalizer;
         std::filesystem::path data = data_folder();
         westie::core::SettingsStore settings_store(
                 files, data / L"settings.json", {.library_path = westie::platform::win32::known_folder(FOLDERID_Music) / L"WestieLib"}
@@ -86,7 +88,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
             .api = service_url(L"WESTIELIB_SPOTIFY_API", "https://api-partner.spotify.com"),
         };
         westie::core::PlaylistLookup lookup(yt_dlp, http, spotify.web, events);
-        westie::core::SyncEngine sync(yt_dlp, tool_folder, http, spotify, state, events);
+        westie::core::SyncEngine sync(
+                yt_dlp, tool_folder, http, normalizer, spotify, service_url(L"WESTIELIB_YTMUSIC_API", "https://music.youtube.com"), state, events
+        );
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;

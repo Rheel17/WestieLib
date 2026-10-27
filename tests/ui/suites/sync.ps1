@@ -48,6 +48,22 @@ function Get-SavedTracks {
 	}) -join ' / '
 }
 
+# Each Spotify source with a match as "id videoId confidence"
+function Get-SavedMatches {
+	@((Get-SavedState).sources.PSObject.Properties | Where-Object { $_.Value.match } | ForEach-Object {
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.videoId) $($_.Value.match.confidence)"
+	}) -join ' / '
+}
+
+# Each failed track as "id failure [error, its lines separated by |]"
+function Get-SavedFailures {
+	@((Get-SavedState).tracks.PSObject.Properties | Where-Object { $_.Value.failure } | ForEach-Object {
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.failure) [$($_.Value.error -replace "`n", ' | ')]"
+	}) -join ' / '
+}
+
+function Get-YtmQueriesSince([int]$count) { @($Web.YtmQueries() | Select-Object -Skip $count) -join ' / ' }
+
 function Get-FetchRuns {
 	if (-not (Test-Path $FakeYtDlpRuns)) { return 0 }
 	@(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Where-Object { $_ -notlike '*--playlist-items*' }).Count
@@ -201,6 +217,7 @@ Check '  sources: Topic dropped, a private video, an episode and a local file le
 	'CCCCC4 No Length [Somebody] 0 > CCCCC4 / DDDDD6 Only Here [Solo] 65000 > DDDDD6 / SHARE5 Shared Song [Both] 200000 > SHARE5')
 Check '  tracks' (Get-SavedTracks) ('spTrackLateNight000001 pending [spTrackLateNight000001] True / spTrackSenorita0000002 pending [spTrackSenorita0000002] True / ' +
 	'AAAAA1 pending [AAAAA1] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / DDDDD6 pending [DDDDD6] True / SHARE5 pending [SHARE5] True')
+Check '  the Spotify tracks searched on YouTube Music, once each' ($Web.YtmQueries() -join ' / ') "Ana Ben Late Night Swing / Earth, Wind & Fire $Senorita"
 Check '  All tracks: rows, by title' (Get-TrackRows $h) "$RowB / $RowLate / $RowC / $RowD / $RowSenorita / $RowShared / $RowA"
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Synced 0 | Waiting 7 | Needs review 0 | Failed 0 | Showing 7 of 7'
 Check '  Library card' (Get-CardTexts $h) "Library card: All tracks / Library / Folder / $DefaultLibrary / Tracks / 7 tracks $MiddleDot 0 synced / Open library folder"
@@ -219,7 +236,8 @@ Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track 
 Select-TrackRow $h 1
 Check 'Late Night Swing selected: its card' (Wait-TrackCard $h 'spotify:spTrackLateNight000001') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / $SpotifyName / " +
-	"Key / spotify:spTrackLateNight000001 / Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
+	"Key / spotify:spTrackLateNight000001 / Audio / Matched / Late Night Swing / Artists / Ana, Ben / Length / 4:01 $MiddleDot Spotify 4:01 / " +
+	"Video / ytspTrackLateNight000001 / Chosen by / Matcher / Confidence / 100% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-track.png") }
 $card = Get-InspectorCard $h
 $cover =[W]::RectIn(([W]::Children($card, 'WestieLib.CoverArt'))[0], $card)
@@ -551,4 +569,82 @@ for ($i = 0; $i -lt 50 -and -not (Get-SavedState).playlists.$SyncSpotifyKey; $i+
 $saved = Get-SavedState
 Check 'Saved again: sources and tracks unchanged' "$(($saved.sources | ConvertTo-Json -Compress -Depth 5) -eq ($seeded.sources | ConvertTo-Json -Compress -Depth 5)) $(
 	($saved.tracks | ConvertTo-Json -Compress -Depth 5) -eq ($seeded.tracks | ConvertTo-Json -Compress -Depth 5))" 'True True'
+Stop-App $app
+
+"--- Run 6: matching"
+# A Spotify playlist whose tracks YouTube Music's search finds: the right song second, a live version before the
+# studio one, nothing at all, a search that fails, the video of a YouTube Music track, and a video that a YouTube Music
+# playlist added later lists
+$MatchId = '5matchesmatchesmatches'
+$Web.SpotifyNames[$MatchId] = 'Matches'
+$Web.SpotifyItems[$MatchId] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Track('spClearMatch0000000001', 'Best Part', @('Daniel Caesar', 'H.E.R.'), 'Freudian', 209433),
+	[FakeWeb]::Track('spLiveLoses00000000002', 'Crazy', @('Gnarls Barkley'), 'St. Elsewhere', 178000),
+	[FakeWeb]::Track('spNoResults00000000003', 'Sway With Me (WCS Edit)', @('The Late Hours'), 'Sway', 228000),
+	[FakeWeb]::Track('spBrokenSearch00000004', 'Offline', @('Nobody'), 'Unplugged', 150000),
+	[FakeWeb]::Track('spMergesYtm00000000005', 'Way Down We Go', @('KALEO'), 'A/B', 214000),
+	[FakeWeb]::Track('spJoinedLater000000006', 'Only Here', @('Solo'), 'Here', 65000)
+)
+$Web.YtmResults['Daniel Caesar H.E.R. Best Part'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('9cHbvRUALrc', 'Pink + White', @('Frank Ocean'), 'Blonde', '3:05'),
+	[FakeWeb]::Song('zNhtz0Lygik', 'Best Part (feat. H.E.R.)', @('Daniel Caesar', 'H.E.R.'), 'Freudian', '3:30')
+)
+$Web.YtmResults['Gnarls Barkley Crazy'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('liveCrazy01', 'Crazy (Live at Coachella 2006)', @('Gnarls Barkley'), 'Live', '3:31'),
+	[FakeWeb]::Song('studioCrazy', 'Crazy', @('Gnarls Barkley'), 'St. Elsewhere', '2:58')
+)
+$Web.YtmResults['The Late Hours Sway With Me (WCS Edit)'] = New-Object Collections.Generic.List[string]
+[void]$Web.YtmBrokenQueries.Add('Nobody Offline')
+$Web.YtmResults['KALEO Way Down We Go'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackAAAAA1', 'Way Down We Go', @('KALEO'), 'A/B', '3:34'))
+$Web.YtmResults['Solo Only Here'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackDDDDD6', 'Only Here', @('Solo'), 'Here', '1:05'))
+$MatchFailures = 'spBrokenSearch00000004 search [HTTP 500 from 127.0.0.1] / spNoResults00000000003 noMatch [Searched "The Late Hours Sway With Me ' +
+	'(WCS Edit)": no results | Searched "The Late Hours Sway With Me": no results]'
+$FailedQueries = 'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline'
+
+Install-FakeTools
+Write-SyncPlaylists 'ytm:PLtracks1', "spotify:$MatchId"
+Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
+$app = Start-App
+$h = $app.Hwnd
+$runs = Get-FetchRuns
+$searches = @($Web.YtmQueries()).Count
+Send-Command $h 'Sync &all'
+Wait-Fetches $h $runs 1
+Check 'Sync all: the Spotify tracks searched, in playlist order' (Get-YtmQueriesSince $searches) ('Daniel Caesar H.E.R. Best Part / Gnarls Barkley Crazy / ' +
+	"$FailedQueries / KALEO Way Down We Go / Solo Only Here")
+Check '  matches: the best result, not the first; the studio version' (Get-SavedMatches) ('spClearMatch0000000001 zNhtz0Lygik 1 / ' +
+	'spJoinedLater000000006 trackDDDDD6 1 / spLiveLoses00000000002 studioCrazy 1 / spMergesYtm00000000005 trackAAAAA1 1')
+Check '  failures: no results, and a search that failed' (Get-SavedFailures) $MatchFailures
+Check '  tracks: Way Down We Go on both is one track' (Get-SavedTracks) ('spBrokenSearch00000004 failed [spBrokenSearch00000004] True / ' +
+	'spClearMatch0000000001 pending [spClearMatch0000000001] True / spJoinedLater000000006 pending [spJoinedLater000000006] True / ' +
+	'spLiveLoses00000000002 pending [spLiveLoses00000000002] True / spNoResults00000000003 failed [spNoResults00000000003] True / ' +
+	'AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True')
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 9 | Synced 0 | Waiting 7 | Needs review 0 | Failed 2 | Showing 9 of 9'
+
+# The playlist with the video Only Here was matched to: its source joins that track. Only the failed tracks are
+# searched again.
+[void](Add-Playlist $h 'https://music.youtube.com/playlist?list=PLshared1')
+$runs = Get-FetchRuns
+$searches = @($Web.YtmQueries()).Count
+Send-Command $h 'Sync &all'
+Wait-Fetches $h $runs 2
+Check 'Sync all again: only the failed tracks searched' (Get-YtmQueriesSince $searches) $FailedQueries
+Check '  Only Here: the YouTube Music source joined the Spotify track' (@((Get-SavedTracks) -split ' / ' | Where-Object { $_ -like 'spJoinedLater*' })) (
+	'spJoinedLater000000006 pending [spJoinedLater000000006,DDDDD6] True')
+Check '  failures as before' (Get-SavedFailures) $MatchFailures
+Check '  the added playlist selected: Only Here among its rows' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
+	"1 | $RowShared / 2 |  | Only Here | Solo | Here | Matches, $SharedName | 1:05 | " +
+	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Showing 2 of 9 in $SharedName")
+
+# Cancel while a track is searched leaves it as it was
+[void]$Web.YtmGate.Reset()
+$searches = @($Web.YtmQueries()).Count
+Send-Command $h 'Sync &all'
+for ($i = 0; $i -lt 100 -and @($Web.YtmQueries()).Count -le $searches; $i++) { Start-Sleep -Milliseconds 100 }
+Check 'A search held: syncing' (Test-Syncing $h) 'True'
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-matching.png") }
+Send-Command $h '&Cancel'
+for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
+[void]$Web.YtmGate.Set()
+Check '  Cancel: the run ends, the failures as they were' "$(Test-Syncing $h) | $(Get-SavedFailures)" "False | $MatchFailures"
 Stop-App $app

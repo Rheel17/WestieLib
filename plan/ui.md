@@ -213,8 +213,8 @@ With no playlists, the list reads `No playlists yet.` in gray.
 The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
 with `0/0`, and `○ Never synced ↻`.
 
-**So far** a sync only fetches playlists, YouTube Music and Spotify alike: their tracks show as Waiting, and nothing
-downloads. Meanwhile:
+**So far** a sync fetches playlists, YouTube Music and Spotify alike, and then matches the Spotify tracks: their
+tracks show as Waiting, a track whose match fails as Failed, and nothing downloads. Meanwhile:
 
 - the playlist being fetched reads `Syncing…`, without `6 of 22`, which counts downloads;
 - a YouTube Music playlist whose fetch waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of
@@ -222,7 +222,9 @@ downloads. Meanwhile:
 - a Spotify playlist's tracks show 100 at a time while it is fetched: the row's counts, the table and the cards
   update with every page. A fetch that fails or is cancelled halfway keeps the tracks it read, beside the ones the
   playlist had; the next fetch that succeeds settles the list;
-- a fetch that succeeds sets the last sync, so a playlist whose tracks all wait reads `○ Synced today 14:03 ↻`.
+- a fetch that succeeds sets the last sync, so a playlist whose tracks all wait reads `○ Synced today 14:03 ↻`;
+- each match updates the table, the cards and the rows' counts as it ends. A matched track that merges into one
+  with the same video leaves the table; when it was selected, the selection is gone with it.
 
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
 so their left edge is where the All tracks name starts.
@@ -558,7 +560,7 @@ a card that only changes (a sync reports progress) keeps its place.
 
 | Part    | Content |
 |---------|---------|
-| Run     | `Ready · last sync today 14:05` (`Ready` before any sync), or `Syncing 6 of 25` with an embedded 120 px progress bar against the part's right edge, or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools. So far a sync only fetches, so it counts playlists: `Syncing 1 of 2` while the first is fetched |
+| Run     | `Ready · last sync today 14:05` (`Ready` before any sync), or `Syncing 6 of 25` with an embedded 120 px progress bar against the part's right edge, or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools. So far nothing downloads, so it counts playlists while they are fetched (`Syncing 1 of 2` while the first is), then the tracks it matches (`Syncing 6 of 25`) |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
 | Tools   | `Tools ✓` or `Tools ⚠`, or while the tools are at work, `Tools ◔ installing ffmpeg 35%` with the progress ring: the word, 7 px, a 12 px icon, and then 7 px and what is going on (see below) |

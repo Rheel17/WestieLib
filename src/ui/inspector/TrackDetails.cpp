@@ -19,7 +19,7 @@ namespace {
 constexpr std::string_view ArtistSeparator = ", ";
 constexpr int ErrorLines = 2;
 
-std::optional<TrackSource> first_source_of(const core::Track& track, core::SourceType type) {
+std::optional<TrackSource> source_link_of(const core::Track& track, core::SourceType type) {
     for (const std::string& key : track.sources) {
         if (core::source_type_of_key(key) != type) {
             continue;
@@ -50,10 +50,8 @@ std::wstring joined(const std::vector<std::string>& parts) {
 }
 
 std::optional<TrackMatch> match_of(const core::State& state, const core::Track& track) {
-    auto key = std::ranges::find(track.sources, std::optional(core::SourceType::Spotify), [](const std::string& source) {
-        return core::source_type_of_key(source);
-    });
-    if (key == track.sources.end()) {
+    const std::string* key = core::first_source_of(track, core::SourceType::Spotify);
+    if (key == nullptr) {
         return std::nullopt;
     }
     auto source = state.sources.find(*key);
@@ -105,7 +103,7 @@ std::optional<TrackDetails> track_details(const core::State& state, const TrackR
 
     TrackDetails details{.row = row};
     for (core::SourceType type : core::AllSourceTypes) {
-        if (std::optional<TrackSource> source = first_source_of(track->second, type)) {
+        if (std::optional<TrackSource> source = source_link_of(track->second, type)) {
             details.sources.push_back(std::move(*source));
         }
     }

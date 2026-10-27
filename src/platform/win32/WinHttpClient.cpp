@@ -72,8 +72,14 @@ WinHttpClient::WinHttpClient(const std::wstring& user_agent) :
 
 std::string WinHttpClient::get(const std::string& url, const std::vector<HttpHeader>& headers, const std::stop_token& stop) {
     std::string body;
-    request(url, headers, [&body](std::span<const char> data) { body.append(data.begin(), data.end()); }, stop);
+    request(url, headers, {}, [&body](std::span<const char> data) { body.append(data.begin(), data.end()); }, stop);
     return body;
+}
+
+std::string WinHttpClient::post(const std::string& url, const std::vector<HttpHeader>& headers, const std::string& body, const std::stop_token& stop) {
+    std::string answer;
+    request(url, headers, {.verb = L"POST", .body = body}, [&answer](std::span<const char> data) { answer.append(data.begin(), data.end()); }, stop);
+    return answer;
 }
 
 void WinHttpClient::download(
@@ -85,7 +91,7 @@ void WinHttpClient::download(
     }
     std::uint64_t received = 0;
     request(
-            url, {},
+            url, {}, {},
             [&](std::span<const char> data) {
                 DWORD written = 0;
                 check(WriteFile(output.get(), data.data(), static_cast<DWORD>(data.size()), &written, nullptr), "WriteFile");
@@ -98,7 +104,8 @@ void WinHttpClient::download(
 }
 
 void WinHttpClient::request(
-        const std::string& url, const std::vector<HttpHeader>& headers, const std::function<void(std::span<const char>)>& on_data, const std::stop_token& stop
+        const std::string& url, const std::vector<HttpHeader>& headers, const Method& method, const std::function<void(std::span<const char>)>& on_data,
+        const std::stop_token& stop
 ) {
     std::wstring wide_url = to_utf16(url);
     URL_COMPONENTS parts{};
@@ -116,7 +123,7 @@ void WinHttpClient::request(
         fail(stop, host);
     }
     DWORD flags = parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0;
-    UniqueInternet request(WinHttpOpenRequest(connection.get(), L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags));
+    UniqueInternet request(WinHttpOpenRequest(connection.get(), method.verb, path.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags));
     if (!request) {
         fail(stop, host);
     }
@@ -127,7 +134,10 @@ void WinHttpClient::request(
     std::stop_callback cancel(stop, [&request] { request.reset(); });
     std::wstring header_lines = header_text(headers);
     LPCWSTR header_data = header_lines.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : header_lines.c_str();
-    if (!WinHttpSendRequest(handle, header_data, static_cast<DWORD>(header_lines.size()), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+    // WinHTTP only reads the body, but takes it through a pointer to non-const
+    LPVOID body = method.body.empty() ? WINHTTP_NO_REQUEST_DATA : const_cast<char*>(method.body.data());
+    auto body_size = static_cast<DWORD>(method.body.size());
+    if (!WinHttpSendRequest(handle, header_data, static_cast<DWORD>(header_lines.size()), body, body_size, body_size, 0) ||
         !WinHttpReceiveResponse(handle, nullptr)) {
         fail(stop, host);
     }

@@ -1,8 +1,13 @@
-// A local stand-in for open.spotify.com and Spotify's query API, and for GitHub's API when it has a yt-dlp to serve, so
-// the checks never reach the network. Embed pages for the ids in SpotifyNames hold that name and an access token; other
-// ids get Spotify's error page. The query API answers with the playlist's SpotifyItems, a page at a time, when it gets
-// that token; with Spotify's errors for ErrorQueryIds; and with NotFound for ids without items. Each query is logged in
-// SpotifyQueries, the pages after the first wait for SpotifyPageGate, and SpotifyFailures makes pages fail with HTTP 500.
+// A local stand-in for open.spotify.com and Spotify's query API, for YouTube Music's search, and for GitHub's API when
+// it has a yt-dlp to serve, so the checks never reach the network. Embed pages for the ids in SpotifyNames hold that
+// name and an access token; other ids get Spotify's error page. The query API answers with the playlist's SpotifyItems,
+// a page at a time, when it gets that token; with Spotify's errors for ErrorQueryIds; and with NotFound for ids without
+// items. Each query is logged in SpotifyQueries, the pages after the first wait for SpotifyPageGate, and SpotifyFailures
+// makes pages fail with HTTP 500.
+//
+// The search answers a query with the songs YtmResults lists for it, HTTP 500 for YtmBrokenQueries, and otherwise, when
+// the query is "<artists> <title>" of a track that Track built, with that song as video "yt<track id>"; anything else
+// has no results. Each search is logged in YtmQueries and waits for YtmGate.
 
 using System;
 using System.Collections.Generic;
@@ -29,6 +34,14 @@ public class FakeWeb {
 	public readonly ManualResetEvent AssetGate = new ManualResetEvent(false);
 	// Every page of a Spotify query after the first waits for it, so a check can look at the app between pages
 	public readonly ManualResetEvent SpotifyPageGate = new ManualResetEvent(true);
+	readonly List<string> ytmQueries = new List<string>();
+	// Songs as Song builds them, by the query that finds them; an empty list for no results
+	public readonly Dictionary<string, List<string>> YtmResults = new Dictionary<string, List<string>>();
+	public readonly HashSet<string> YtmBrokenQueries = new HashSet<string>();
+	// Every search waits for it, so a check can look at the app while it matches
+	public readonly ManualResetEvent YtmGate = new ManualResetEvent(true);
+	// The song each track Track built is found as, by "<artists> <title>"
+	static readonly Dictionary<string, string> TrackSongs = new Dictionary<string, string>();
 	public byte[] YtDlp;
 	public int Port;
 	public string Url { get { return "http://127.0.0.1:" + Port; } }
@@ -44,6 +57,7 @@ public class FakeWeb {
 	public void Stop() {
 		AssetGate.Set();
 		SpotifyPageGate.Set();
+		YtmGate.Set();
 		listener.Stop();
 	}
 
@@ -52,8 +66,35 @@ public class FakeWeb {
 		lock (spotifyQueries) return spotifyQueries.ToArray();
 	}
 
+	// The search queries, in the order they came
+	public string[] YtmQueries() {
+		lock (ytmQueries) return ytmQueries.ToArray();
+	}
+
+	// A song as YouTube Music's search lists it: the title, then "<artists> • <album> • <length>", then the plays
+	public static string Song(string video, string title, string[] artists, string album, string length) {
+		var runs = new List<string>();
+		for (int i = 0; i < artists.Length; i++) {
+			if (i > 0) runs.Add("{\"text\":\"" + (i == artists.Length - 1 ? " & " : ", ") + "\"}");
+			runs.Add("{\"text\":" + Json(artists[i]) + ",\"navigationEndpoint\":{\"browseEndpoint\":{\"browseId\":\"UCfake" + i + "\"}}}");
+		}
+		runs.Add("{\"text\":\" " + (char)0x2022 + " \"}");
+		runs.Add("{\"text\":" + Json(album) + ",\"navigationEndpoint\":{\"browseEndpoint\":{\"browseId\":\"MPREfake\"}}}");
+		runs.Add("{\"text\":\" " + (char)0x2022 + " \"}");
+		runs.Add("{\"text\":\"" + length + "\"}");
+		return "{\"musicResponsiveListItemRenderer\":{\"playlistItemData\":{\"videoId\":\"" + video + "\"},\"flexColumns\":[" +
+			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[{\"text\":" + Json(title) + ",\"navigationEndpoint\":{\"watchEndpoint\":{" +
+			"\"videoId\":\"" + video + "\"}}}]}}}," +
+			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[" + string.Join(",", runs) + "]}}}," +
+			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[{\"text\":\"1.2M plays\"}]}}}]}}";
+	}
+
 	// Playlist items as the query API has them, with fields the app doesn't read too
 	public static string Track(string id, string title, string[] artists, string album, long milliseconds) {
+		long seconds = milliseconds / 1000;
+		lock (TrackSongs) {
+			TrackSongs[string.Join(" ", artists) + " " + title] = Song("yt" + id, title, artists, album, (seconds / 60) + ":" + (seconds % 60).ToString("00"));
+		}
 		string artistItems = string.Join(",", artists.Select(a => "{\"profile\":{\"name\":" + Json(a) + "},\"uri\":\"spotify:artist:" + id + "\"}"));
 		return "{\"addedAt\":{\"isoString\":\"2026-07-09T14:06:14.326Z\"},\"addedBy\":null,\"itemV2\":{\"__typename\":\"TrackResponseWrapper\",\"data\":{" +
 			"\"__typename\":\"Track\",\"albumOfTrack\":{\"artists\":{\"items\":[" + artistItems + "]},\"coverArt\":{\"sources\":[{\"height\":640," +
@@ -91,7 +132,7 @@ public class FakeWeb {
 		try {
 			using (client)
 			using (var stream = client.GetStream()) {
-				var reader = new StreamReader(stream, Encoding.ASCII);
+				var reader = new StreamReader(stream, new UTF8Encoding(false));
 				string path = reader.ReadLine().Split(' ')[1];
 				var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 				string line;
@@ -99,8 +140,10 @@ public class FakeWeb {
 					int colon = line.IndexOf(':');
 					if (colon > 0) headers[line.Substring(0, colon).Trim()] = line.Substring(colon + 1).Trim();
 				}
+				string length;
+				string request = headers.TryGetValue("Content-Length", out length) ? ReadBody(reader, int.Parse(length)) : "";
 				int status = 200;
-				byte[] body = Answer(path, headers, ref status);
+				byte[] body = Answer(path, headers, request, ref status);
 				byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 " + status + " Fake\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
 				stream.Write(head, 0, head.Length);
 				stream.Write(body, 0, body.Length);
@@ -108,9 +151,64 @@ public class FakeWeb {
 		} catch { }
 	}
 
-	byte[] Answer(string path, Dictionary<string, string> headers, ref int status) {
+	// Content-Length counts bytes, and the reader gives characters
+	static string ReadBody(StreamReader reader, int bytes) {
+		var body = new StringBuilder();
+		while (Encoding.UTF8.GetByteCount(body.ToString()) < bytes) {
+			int c = reader.Read();
+			if (c < 0) break;
+			body.Append((char)c);
+		}
+		return body.ToString();
+	}
+
+	// The string value of "key" in JSON as the app writes it, without spaces
+	static string JsonValue(string json, string key) {
+		string start = "\"" + key + "\":\"";
+		int at = json.IndexOf(start);
+		if (at < 0) return null;
+		var value = new StringBuilder();
+		for (int i = at + start.Length; i < json.Length; i++) {
+			char c = json[i];
+			if (c == '"') return value.ToString();
+			if (c != '\\' || i + 1 >= json.Length) { value.Append(c); continue; }
+			char escaped = json[++i];
+			if (escaped == 'u' && i + 4 < json.Length) {
+				value.Append((char)Convert.ToInt32(json.Substring(i + 1, 4), 16));
+				i += 4;
+			} else {
+				value.Append(escaped == 'n' ? '\n' : escaped == 't' ? '\t' : escaped);
+			}
+		}
+		return null;
+	}
+
+	string SearchAnswer(string request, ref int status) {
+		string query = JsonValue(request, "query");
+		lock (ytmQueries) ytmQueries.Add(query);
+		YtmGate.WaitOne();
+		if (JsonValue(request, "clientName") != "WEB_REMIX" || JsonValue(request, "params") != "EgWKAQIIAWoMEA4QChADEAQQCRAF" || query == null) {
+			status = 400;
+			return "";
+		}
+		if (YtmBrokenQueries.Contains(query)) { status = 500; return ""; }
+		List<string> songs;
+		string song;
+		if (!YtmResults.TryGetValue(query, out songs)) {
+			lock (TrackSongs) songs = TrackSongs.TryGetValue(query, out song) ? new List<string> { song } : new List<string>();
+		}
+		// Without results, YouTube Music answers with a message and no shelf
+		string shelf = songs.Count == 0 ? "" : ",{\"musicShelfRenderer\":{\"title\":{\"runs\":[{\"text\":\"Songs\"}]},\"contents\":[" + string.Join(",", songs) + "]}}";
+		return "{\"responseContext\":{},\"contents\":{\"tabbedSearchResultsRenderer\":{\"tabs\":[{\"tabRenderer\":{\"title\":\"YT Music\",\"selected\":true," +
+			"\"content\":{\"sectionListRenderer\":{\"contents\":[{\"itemSectionRenderer\":{\"contents\":[]}}" + shelf + "]}}}}]}}}";
+	}
+
+	byte[] Answer(string path, Dictionary<string, string> headers, string request, ref int status) {
 		const string Embed = "/embed/playlist/";
 		const string Query = "/pathfinder/v1/query?";
+		if (path == "/youtubei/v1/search?prettyPrint=false") {
+			return Encoding.UTF8.GetBytes(SearchAnswer(request, ref status));
+		}
 		if (path.StartsWith(Embed)) {
 			string id = path.Substring(Embed.Length);
 			if (SlowIds.Contains(id)) Thread.Sleep(1500);

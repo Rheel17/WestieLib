@@ -6,6 +6,7 @@
 #include <span>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "platform/HttpClient.h"
@@ -18,13 +19,20 @@ public:
     explicit WinHttpClient(const std::wstring& user_agent);
 
     std::string get(const std::string& url, const std::vector<HttpHeader>& headers, const std::stop_token& stop) override;
+    std::string post(const std::string& url, const std::vector<HttpHeader>& headers, const std::string& body, const std::stop_token& stop) override;
     void download(
             const std::string& url, const std::filesystem::path& file, const std::function<void(std::uint64_t received)>& progress, const std::stop_token& stop
     ) override;
 
 private:
+    struct Method {
+        const wchar_t* verb = L"GET";
+        std::string_view body{};
+    };
+
     void request(
-            const std::string& url, const std::vector<HttpHeader>& headers, const std::function<void(std::span<const char>)>& on_data, const std::stop_token& stop
+            const std::string& url, const std::vector<HttpHeader>& headers, const Method& method,
+            const std::function<void(std::span<const char>)>& on_data, const std::stop_token& stop
     );
 
     UniqueInternet session_;

@@ -1,11 +1,13 @@
 #include "core/sync/ApplyFetch.h"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "core/state/PruneTracks.h"
+#include "core/state/TrackVideos.h"
 
 namespace westie::core {
 
@@ -21,6 +23,14 @@ void add_source(State& state, SourceTrack&& listed, std::chrono::system_clock::t
     source.duration = listed.duration;
     if (state.tracks.contains(source.track)) {
         return;
+    }
+    // A YouTube Music video that a Spotify track was matched to is that track's
+    if (std::optional<std::string> video = own_video(listed.key)) {
+        if (std::optional<std::string> owner = track_with_video(state, *video)) {
+            source.track = *owner;
+            state.tracks.at(*owner).sources.push_back(listed.key);
+            return;
+        }
     }
 
     // A new source makes a track of its own, keyed like it

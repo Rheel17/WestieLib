@@ -16,12 +16,20 @@ void SyncBoard::apply(const core::PlaylistFetching& fetching) {
     waiting_for_ = fetching.waiting_for;
 }
 
+void SyncBoard::apply(const core::TracksQueued& queued) {
+    tracks_total_ += static_cast<int>(queued.tracks.size());
+}
+
 void SyncBoard::finish_playlist(const std::string& playlist) {
     if (current_ == playlist) {
         current_.reset();
         waiting_for_.clear();
     }
     ++finished_;
+}
+
+void SyncBoard::finish_track() {
+    ++tracks_finished_;
 }
 
 void SyncBoard::finish() {
@@ -31,6 +39,8 @@ void SyncBoard::finish() {
     waiting_for_.clear();
     finished_ = 0;
     total_ = 0;
+    tracks_finished_ = 0;
+    tracks_total_ = 0;
 }
 
 bool SyncBoard::running() const noexcept {
@@ -49,12 +59,16 @@ std::span<const core::ToolPackage> SyncBoard::waiting_for() const noexcept {
     return waiting_for_;
 }
 
+bool SyncBoard::matching() const noexcept {
+    return tracks_total_ > 0 && !current_ && queue_.empty();
+}
+
 int SyncBoard::finished() const noexcept {
-    return finished_;
+    return matching() ? tracks_finished_ : finished_;
 }
 
 int SyncBoard::total() const noexcept {
-    return total_;
+    return matching() ? tracks_total_ : total_;
 }
 
 }

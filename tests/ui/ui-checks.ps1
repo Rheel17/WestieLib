@@ -7,11 +7,12 @@
 #   add-playlist  the Add playlist dialog and its look-ups
 #   playlists     adding, keeping, selecting, showing, removing and scrolling playlists, and state.json
 #   tracks        the track panel: filter bar, status tabs, result line and the table's columns
-#   sync          syncing YouTube Music playlists into state.json and the track table
+#   sync          syncing YouTube Music and Spotify playlists into state.json and the track table, and matching
 #   painting      painting and blinking during splitter drags
 #   dpi           moving to a monitor with another DPI, and restoring there
 #
-# A fake yt-dlp and a local stand-in for Spotify and GitHub answer the look-ups, so nothing reaches the network.
+# A fake yt-dlp and a local stand-in for Spotify, YouTube Music's search and GitHub answer the look-ups, so nothing
+# reaches the network.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe <WestieLib.exe> [-Suite <name>,...] [-Screenshot <png>]
 #

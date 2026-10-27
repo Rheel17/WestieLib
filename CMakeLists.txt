@@ -31,6 +31,10 @@ add_executable(WestieLib WIN32
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
+	src/core/matching/MatchScore.cpp
+	src/core/matching/MatchText.cpp
+	src/core/matching/Matcher.cpp
+	src/core/matching/YouTubeMusicSearch.cpp
 	src/core/playlists/AddPlaylist.cpp
 	src/core/playlists/PlaylistLink.cpp
 	src/core/playlists/PlaylistLookup.cpp
@@ -43,11 +47,14 @@ add_executable(WestieLib WIN32
 	src/core/sources/YouTubeMusicPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylistName.cpp
 	src/core/sources/YtDlpError.cpp
+	src/core/state/MergeTracks.cpp
 	src/core/state/PruneTracks.cpp
 	src/core/state/StateStore.cpp
 	src/core/state/TrackVideos.cpp
 	src/core/sync/ApplyFetch.cpp
+	src/core/sync/ApplyMatch.cpp
 	src/core/sync/SyncEngine.cpp
+	src/core/sync/TracksToMatch.cpp
 	src/core/tools/ToolFolder.cpp
 	src/core/tools/ToolInstaller.cpp
 	src/core/tools/ToolManager.cpp
@@ -74,6 +81,7 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32FileOps.cpp
 	src/platform/win32/Win32ProcessRunner.cpp
+	src/platform/win32/Win32TextNormalizer.cpp
 	src/platform/win32/WinHttpClient.cpp
 	src/ui/DurationText.cpp
 	src/ui/FatalError.cpp
@@ -202,4 +210,4 @@ target_compile_definitions(WestieLib PRIVATE
 	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE glaze::glaze miniz comctl32 uxtheme gdiplus shell32 ole32 uuid winhttp bcrypt)
+target_link_libraries(WestieLib PRIVATE glaze::glaze miniz comctl32 uxtheme gdiplus shell32 ole32 uuid winhttp bcrypt normaliz)

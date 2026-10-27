@@ -21,6 +21,9 @@
 #include "core/sync/SyncEngine.h"
 #include "core/sync/SyncFinished.h"
 #include "core/sync/SyncQueued.h"
+#include "core/sync/TrackStatusChanged.h"
+#include "core/sync/TracksMerged.h"
+#include "core/sync/TracksQueued.h"
 #include "core/tools/ToolManager.h"
 #include "core/tools/ToolStatus.h"
 #include "core/tools/ToolsChecked.h"
@@ -116,6 +119,9 @@ private:
     void apply_event(const core::PlaylistPageFetched& event);
     void apply_event(const core::PlaylistFetched& event);
     void apply_event(const core::PlaylistFetchFailed& event);
+    void apply_event(const core::TracksQueued& event);
+    void apply_event(const core::TrackStatusChanged& event);
+    void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_activate(WORD state);

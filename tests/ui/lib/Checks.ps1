@@ -29,6 +29,7 @@ $FakeYtDlpRuns = Join-Path $ToolsDir 'yt-dlp-runs.txt'
 $Web = New-Object FakeWeb
 $env:WESTIELIB_SPOTIFY_URL = $Web.Url
 $env:WESTIELIB_SPOTIFY_API = $Web.Url
+$env:WESTIELIB_YTMUSIC_API = $Web.Url
 $Ellipsis = [char]0x2026
 $script:failures = 0
 $script:dpi = 96
@@ -416,6 +417,7 @@ function Reset-Checks {
 	$env:WESTIELIB_GITHUB_API = 'http://127.0.0.1:9'
 	$Web.YtDlp = $null
 	[void]$Web.AssetGate.Reset()
+	[void]$Web.YtmGate.Set()
 	$script:dpi = 96
 	$script:TallRows = @()
 }

@@ -507,6 +507,21 @@ void MainWindow::apply_event(const core::PlaylistFetchFailed& event) {
     show_playlists();
 }
 
+void MainWindow::apply_event(const core::TracksQueued& event) {
+    sync_board_.apply(event);
+    show_playlists();
+}
+
+void MainWindow::apply_event(const core::TrackStatusChanged&) {
+    sync_board_.finish_track();
+    show_playlists();
+}
+
+void MainWindow::apply_event(const core::TracksMerged&) {
+    sync_board_.finish_track();
+    show_playlists();
+}
+
 void MainWindow::apply_event(const core::SyncFinished&) {
     sync_board_.finish();
     show_playlists();
