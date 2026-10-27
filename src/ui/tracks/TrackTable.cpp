@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <format>
 #include <optional>
@@ -14,6 +13,7 @@
 
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
+#include "ui/DurationText.h"
 
 namespace westie::ui {
 
@@ -22,7 +22,6 @@ namespace {
 constexpr int RowHeightDips = 22;
 constexpr int StatusIconDips = 16;
 constexpr int StatusIconLeftDips = 9;
-constexpr int SecondsPerMinute = 60;
 
 struct ColumnSpec {
     TrackColumn column = TrackColumn::Title;
@@ -58,6 +57,7 @@ constexpr std::array StatusIcons = {
     StatusIconSpec{StatusTab::Synced, IDI_SYNCED},
     StatusIconSpec{StatusTab::Waiting, IDI_WAITING},
     StatusIconSpec{StatusTab::NeedsReview, IDI_WARN},
+    StatusIconSpec{StatusTab::Failed, IDI_FAILED},
 };
 
 framework::ListColumn list_column(const ColumnSpec& spec, framework::Dpi dpi) {
@@ -73,11 +73,6 @@ TrackSort default_sort(bool playlist) {
     return {.column = playlist ? TrackColumn::Number : TrackColumn::Title};
 }
 
-std::wstring time_text(std::chrono::milliseconds duration) {
-    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
-    return std::format(L"{}:{:02}", seconds / SecondsPerMinute, seconds % SecondsPerMinute);
-}
-
 // The Status column shows only its icon
 std::wstring cell_text(const TrackRow& row, TrackColumn column) {
     switch (column) {
@@ -86,7 +81,7 @@ std::wstring cell_text(const TrackRow& row, TrackColumn column) {
     case TrackColumn::Artists:   return row.artists;
     case TrackColumn::Album:     return row.album;
     case TrackColumn::Playlists: return row.playlists;
-    case TrackColumn::Time:      return time_text(row.duration);
+    case TrackColumn::Time:      return duration_text(row.duration);
     default:                     return {};
     }
 }

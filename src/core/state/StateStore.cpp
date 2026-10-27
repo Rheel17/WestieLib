@@ -45,17 +45,35 @@ struct PlaylistJson {
     std::vector<std::string> sources{};
 };
 
+struct FailureName {
+    TrackFailure failure = TrackFailure::None;
+    std::string_view name{};
+};
+
+constexpr std::array FailureNames = {FailureName{TrackFailure::NoMatch, "noMatch"}, FailureName{TrackFailure::Search, "search"}};
+
+struct MatchJson {
+    std::string video_id{};
+    double confidence = 0.0;
+    std::string title{};
+    std::vector<std::string> artists{};
+    std::int64_t duration_ms = 0;
+};
+
 struct SourceJson {
     std::string title{};
     std::vector<std::string> artists{};
     std::optional<std::string> album{};
     std::int64_t duration_ms = 0;
+    std::optional<MatchJson> match{};
     std::string track{};
 };
 
 struct TrackJson {
     std::vector<std::string> sources{};
     std::string status{};
+    std::optional<std::string> failure{};
+    std::optional<std::string> error{};
     std::string added_at{};
 };
 
@@ -81,6 +99,20 @@ TrackStatus status_named(std::string_view name) {
     auto found = std::ranges::find(StatusNames, name, &StatusName::name);
     // A status from a later version makes the track wait for another try rather than losing it
     return found == StatusNames.end() ? TrackStatus::Pending : found->status;
+}
+
+std::optional<std::string> failure_name(TrackFailure failure) {
+    auto found = std::ranges::find(FailureNames, failure, &FailureName::failure);
+    return found == FailureNames.end() ? std::nullopt : std::optional<std::string>(found->name);
+}
+
+TrackFailure failure_named(const std::optional<std::string>& name) {
+    auto found = std::ranges::find(FailureNames, name.value_or(""), &FailureName::name);
+    return found == FailureNames.end() ? TrackFailure::None : found->failure;
+}
+
+std::optional<std::string> optional_text(const std::string& text) {
+    return text.empty() ? std::nullopt : std::optional(text);
 }
 
 std::optional<std::chrono::system_clock::time_point> parse_optional_time(const std::optional<std::string>& text) {
@@ -110,9 +142,29 @@ PlaylistJson json_of(const Playlist& playlist) {
         .name = playlist.name,
         .added_at = format_iso_time(playlist.added_at),
         .last_sync = format_optional_time(playlist.last_sync),
-        .fetch_error = playlist.fetch_error.empty() ? std::nullopt : std::optional(playlist.fetch_error),
+        .fetch_error = optional_text(playlist.fetch_error),
         .fetch_error_at = format_optional_time(playlist.fetch_error_at),
         .sources = playlist.sources,
+    };
+}
+
+Match match_of(MatchJson&& json) {
+    return {
+        .video_id = std::move(json.video_id),
+        .confidence = json.confidence,
+        .title = std::move(json.title),
+        .artists = std::move(json.artists),
+        .duration = std::chrono::milliseconds(json.duration_ms),
+    };
+}
+
+MatchJson json_of(const Match& match) {
+    return {
+        .video_id = match.video_id,
+        .confidence = match.confidence,
+        .title = match.title,
+        .artists = match.artists,
+        .duration_ms = match.duration.count(),
     };
 }
 
@@ -130,15 +182,24 @@ struct glz::meta<westie::core::PlaylistJson> {
 };
 
 template<>
+struct glz::meta<westie::core::MatchJson> {
+    using T = westie::core::MatchJson;
+    constexpr static auto value =
+            glz::object("videoId", &T::video_id, "confidence", &T::confidence, "title", &T::title, "artists", &T::artists, "durationMs", &T::duration_ms);
+};
+
+template<>
 struct glz::meta<westie::core::SourceJson> {
     using T = westie::core::SourceJson;
-    constexpr static auto value = glz::object("title", &T::title, "artists", &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "track", &T::track);
+    constexpr static auto value =
+            glz::object("title", &T::title, "artists", &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "match", &T::match, "track", &T::track);
 };
 
 template<>
 struct glz::meta<westie::core::TrackJson> {
     using T = westie::core::TrackJson;
-    constexpr static auto value = glz::object("sources", &T::sources, "status", &T::status, "addedAt", &T::added_at);
+    constexpr static auto value =
+            glz::object("sources", &T::sources, "status", &T::status, "failure", &T::failure, "error", &T::error, "addedAt", &T::added_at);
 };
 
 template<>
@@ -183,6 +244,7 @@ State StateStore::load() const {
             .artists = std::move(source.artists),
             .album = std::move(source.album).value_or(""),
             .duration = std::chrono::milliseconds(source.duration_ms),
+            .match = source.match ? std::optional(match_of(std::move(*source.match))) : std::nullopt,
             .track = std::move(source.track),
         };
     }
@@ -190,6 +252,8 @@ State StateStore::load() const {
         state.tracks[key] = {
             .sources = std::move(track.sources),
             .status = status_named(track.status),
+            .failure = failure_named(track.failure),
+            .error = std::move(track.error).value_or(""),
             .added_at = parse_iso_time(track.added_at).value_or(std::chrono::system_clock::time_point{}),
         };
     }
@@ -205,13 +269,20 @@ void StateStore::save(const State& state) {
         json.sources[key] = {
             .title = source.title,
             .artists = source.artists,
-            .album = source.album.empty() ? std::nullopt : std::optional(source.album),
+            .album = optional_text(source.album),
             .duration_ms = source.duration.count(),
+            .match = source.match ? std::optional(json_of(*source.match)) : std::nullopt,
             .track = source.track,
         };
     }
     for (const auto& [key, track] : state.tracks) {
-        json.tracks[key] = {.sources = track.sources, .status = std::string(status_name(track.status)), .added_at = format_iso_time(track.added_at)};
+        json.tracks[key] = {
+            .sources = track.sources,
+            .status = std::string(status_name(track.status)),
+            .failure = failure_name(track.failure),
+            .error = optional_text(track.error),
+            .added_at = format_iso_time(track.added_at),
+        };
     }
 
     glz::expected<std::string, glz::error_ctx> contents = glz::write<PrettyJsonWriteOptions>(json);

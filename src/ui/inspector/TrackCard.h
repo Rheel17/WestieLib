@@ -10,9 +10,11 @@
 #include "ui/framework/Label.h"
 #include "ui/framework/LinkLabel.h"
 #include "ui/framework/Panel.h"
+#include "ui/inspector/AudioRows.h"
 #include "ui/inspector/CoverArt.h"
 #include "ui/inspector/IconText.h"
 #include "ui/inspector/InspectorEvents.h"
+#include "ui/inspector/OutputBox.h"
 #include "ui/inspector/SectionTitle.h"
 #include "ui/inspector/SourceLink.h"
 #include "ui/inspector/TrackDetails.h"
@@ -44,6 +46,8 @@ private:
     SectionTitle status_section_;
     IconText status_;
     framework::Label explanation_;
+    framework::Label reason_;
+    OutputBox output_;
     SectionTitle source_section_;
     framework::Label first_source_key_;
     SourceLink first_source_;
@@ -54,9 +58,7 @@ private:
     framework::Label no_playlists_;
     framework::Label key_key_;
     framework::Label key_;
-    SectionTitle audio_section_;
-    framework::Label video_key_;
-    framework::Label video_;
+    AudioRows audio_;
     SectionTitle file_section_;
     framework::Label file_;
     TrackDetails track_;

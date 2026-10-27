@@ -482,7 +482,7 @@ function buildBase() {
 			t.conf = x.review ?? x.conf ?? (0.86 + r() * 0.13);
 			t.review = !!x.review;
 			t.mt = x.mt || title;
-			t.mc = x.mc || artists[0];
+			t.mc = x.mc || artists.join(', ');
 			t.md = x.md ? secs(x.md) : t.dur + Math.round(r() * 4 - 2);
 			if (t.status === 'pending') { t.videoId = null; t.mt = null; t.conf = null; }
 		}
@@ -491,7 +491,7 @@ function buildBase() {
 		if (t.status === 'downloaded' || t.status === 'kept') t.file = fileName(artists, title);
 		if (t.status === 'failed' && x.noMatch) {
 			Object.assign(t, { noMatch: true, videoId: null, mt: null, conf: null, errTitle: 'No match on YouTube Music',
-				error: `Searched ISRC ${t.isrc}: no results\nSearched "The Late Hours Sway With Me": no usable results` });
+				error: `Searched "The Late Hours Sway With Me (WCS Edit)": no usable results\nSearched "The Late Hours Sway With Me": no usable results` });
 		} else if (t.status === 'failed') {
 			Object.assign(t, { errTitle: 'yt-dlp exited with code 1', error: errorLines(t.videoId) });
 		}
@@ -779,14 +779,13 @@ function trackInspector(s, t, cfg) {
 	} else if (!t.videoId) {
 		audio.push(['Video', '<span class="gray">Chosen when it downloads</span>']);
 	} else if (t.merged) {
-		const ytPl = pls.find(p => p.src === 'ytm');
 		audio.push(['Video', `<span class="link">${t.videoId}</span>`],
-			['Chosen by', `Playlist · ${esc(ytPl ? ytPl.name : 'YouTube Music')}`],
+			['Chosen by', 'Playlist'],
 			['Spotify match', `Same video · ${pct(t.conf)}`]);
 	} else {
 		if (t.chosen === 'matcher') {
 			const off = Math.abs(t.md - t.dur) > 5;
-			audio.push(['Matched', esc(t.mt)], ['Channel', esc(t.mc)],
+			audio.push(['Matched', esc(t.mt)], ['Artists', esc(t.mc)],
 				['Length', `<span class="${off ? 'amber' : ''}">${mmss(t.md)}</span> <span class="gray">· Spotify ${mmss(t.dur)}</span>`]);
 		}
 		audio.push(['Video', `<span class="link">${t.videoId}</span>`]);

@@ -161,7 +161,7 @@ The state separates what playlists list from what is on disk:
       "isrc": "USxxx0000000",
       "coverUrl": "https://i.scdn.co/image/...",
       "match": { "videoId": "ccccccccccc", "confidence": 0.94, "review": false,
-                 "title": "Title", "artist": "Artist One", "durationMs": 243000 },
+                 "title": "Title", "artists": [ "Artist One" ], "durationMs": 243000 },
       "track": "spotify:6r8k1vznHrzlEKYxxxxxxx"
     },
     "spotify:7yq3vB0cNvb1Xxxxxxxxxx": {
@@ -220,7 +220,7 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | `title`, `artists`, `durationMs` | From the playlist                                                          |
 | `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
 | `isrc`, `coverUrl`               | Spotify only. The playlist response has the cover but no ISRC; where the ISRC comes from is decided with the Matcher |
-| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence`, `review`, and the video's `title`, `artist` and `durationMs`, so a review shows what was matched |
+| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence` (0 to 1), `review`, and the video's `title`, `artists` and `durationMs` as YouTube Music's search lists them, so a review shows what was matched |
 | `track`                          | Key of the track this source belongs to                                    |
 
 **Track fields.**
@@ -232,7 +232,7 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | `videoOverride`    | See Video resolution                                                            |
 | `edits`            | User edits from `editTrack`: any of `title`, `artists`, `album`, `year`, and `cover: true` for a custom cover in `covers\`. They win over source values, and syncs never overwrite them |
 | `status`           | See below                                                                       |
-| `failure`, `error` | Set with `failed`. Either `noMatch` (no usable candidate; `error` lists the searched queries) or `download` (a tool failed; `error` holds its last output lines) |
+| `failure`, `error` | Set with `failed`. One of `noMatch` (no usable candidate; `error` lists the searched queries), `search` (the search itself failed, for example without a network; `error` holds why), or `download` (a tool failed; `error` holds its last output lines) |
 | `file`             | File name in the library                                                        |
 | `addedAt`          | When the track entered the state                                                |
 
@@ -250,6 +250,8 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 1. its `videoOverride`;
 2. the video of its first YouTube Music source, because the playlist owner chose it;
 3. the Matcher's result for its first Spotify source.
+
+`resolved_video` (`src/core/state/TrackVideos`) gives the video and the source it comes from; there is no override yet.
 
 A track **needs review** when its video comes from a match with `review: true`. Resolution runs for tracks
 without a file, and again when the override changes. Setting `videoOverride` re-downloads the track (or merges
@@ -344,8 +346,9 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   long as it needs, unchanged. `update` holds a second mutex for its whole run, so changes never interleave, and swaps
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
-  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs` and `track`; and tracks with `sources`, `status` and
-  `addedAt`. The other fields arrive with their features.
+  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `match` (without
+  `review`) and `track`; and tracks with `sources`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
+  out, and a failure name from a later version reads as none. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
 
@@ -428,7 +431,8 @@ tools it needs (ui.md, Vocabulary › Waiting for tools):
 | Playlist look-up, YouTube Music        | yt-dlp         |
 | `SpotifySource` fetch                  | –              |
 | `YouTubeMusicSource` fetch             | yt-dlp         |
-| Matcher, `searchVideos`                | yt-dlp         |
+| Matcher                                | –              |
+| `searchVideos`                         | yt-dlp         |
 | Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg |
 
 A step whose tool isn't available stays queued, and the track stays `pending` with a `waitingFor` list of tool names

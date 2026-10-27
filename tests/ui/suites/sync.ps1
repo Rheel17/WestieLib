@@ -1,7 +1,8 @@
 # Syncing playlists: Sync all, Sync selected and Sync now fetch YouTube Music (from the fake yt-dlp) and Spotify (from
 # FakeWeb) playlists into state.json and the track table, a failed fetch keeps its error, Cancel stops a fetch, removing
 # a playlist takes its tracks along, a fetch waits for yt-dlp to be installed, and a Spotify fetch shows each page as it
-# comes and fails as Spotify does. Dot-sourced by ui-checks.ps1.
+# comes and fails as Spotify does. The track card shows the video of each track a state.json holds, and why a match
+# failed. Dot-sourced by ui-checks.ps1.
 
 # A state.json with these YouTube Music and Spotify playlists, never synced, added a day apart in this order
 function Write-SyncPlaylists([string[]]$keys) {
@@ -126,6 +127,16 @@ function Check-ListButton([string]$what, $hwnd, [int]$count) {
 	Check $what $button.Top ((Get-PlaylistRowTop $hwnd ($count + 1)) + (S 8))
 }
 
+# The card of the track with key $key. From one track's card to another's the card's name stays, so this waits for the
+# key; while the inspector swaps one card for another, for a moment neither shows.
+function Wait-TrackCard($hwnd, [string]$key) {
+	for ($i = 0; $i -lt 20; $i++) {
+		if ((Get-InspectorCard $hwnd) -and (Get-CardTexts $hwnd) -like "* / Key / $key / *") { break }
+		Start-Sleep -Milliseconds 50
+	}
+	Get-CardTexts $hwnd
+}
+
 function Get-TrackSummary($hwnd) { "$([W]::TabTexts((Get-StatusTabs $hwnd))) | $([W]::TextOf((Get-ResultLine $hwnd)))" }
 
 $Cafe = "Caf$([char]0xE9) Lights"
@@ -204,9 +215,9 @@ Check '  the rows sync controls tooltips' "$([W]::TooltipText((Get-PlaylistList 
 Select-TrackRow $h 5
 Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Shared Song / Both / Album is read when it downloads / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / YouTube Music $MiddleDot Open / Playlists / $TracksName, $SharedName / " +
-	"Key / ytm:trackSHARE5 / Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
+	"Key / ytm:trackSHARE5 / Audio / Video / trackSHARE5 / Chosen by / Playlist / File / Not downloaded yet.")
 Select-TrackRow $h 1
-Check 'Late Night Swing selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
+Check 'Late Night Swing selected: its card' (Wait-TrackCard $h 'spotify:spTrackLateNight000001') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / $SpotifyName / " +
 	"Key / spotify:spTrackLateNight000001 / Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-track.png") }
@@ -440,4 +451,104 @@ Wait-Fetches $h $queries 4 -Spotify
 Check 'HTTP 500 twice: the second page asked for twice' (@($Web.SpotifyQueries() | Select-Object -Skip $queries | ForEach-Object { ($_ -split ' ')[0..1] -join ' ' }) -join ' / ') (
 	"$BigSpotifyId 0 / $BigSpotifyId 100 / $BigSpotifyId 100 / $ErrorSpotifyId 0")
 Check '  the fetch failed, its tracks kept' (Get-BigPlaylist) "Big One 150 spBigTrack000000000151 spBigTrack000000000251 synced True error [HTTP 500 from 127.0.0.1]"
+Stop-App $app
+
+"--- Run 5: matches and failures in state.json"
+# A YouTube Music playlist and a Spotify one: a track only on YouTube Music, two the Matcher matched (one a live version
+# 33 s longer), one on both whose match is the YouTube Music video, one without a match, one whose search failed
+$MatchSpotifyKey = 'spotify:4matchmatchmatchmatchm'
+$NoMatchError = 'Searched \"The Late Hours No Results (WCS Edit)\": no results\nSearched \"The Late Hours No Results\": no usable results'
+$SearchError = 'Couldn''t reach music.youtube.com: The server name or address could not be resolved'
+# Each element in parentheses: a comma binds tighter than +
+$sources = @(
+	('"spotify:spBestPart000000000001": {"title": "Best Part", "artists": ["Daniel Caesar", "H.E.R."], "album": "Freudian", "durationMs": 209433, ' +
+		'"match": {"videoId": "zNhtz0Lygik", "confidence": 0.94, "title": "Best Part (feat. H.E.R.)", "artists": ["Daniel Caesar"], "durationMs": 210000}, ' +
+		'"track": "spotify:spBestPart000000000001"}'),
+	('"spotify:spCrazy0000000000000002": {"title": "Crazy", "artists": ["Gnarls Barkley"], "album": "St. Elsewhere", "durationMs": 178000, ' +
+		'"match": {"videoId": "liveCrazy01", "confidence": 0.61, "title": "Crazy (Live at Coachella 2006)", "artists": ["Gnarls Barkley"], "durationMs": 211000}, ' +
+		'"track": "spotify:spCrazy0000000000000002"}'),
+	('"spotify:spMerged000000000000003": {"title": "Merged Song", "artists": ["Both"], "album": "Shared", "durationMs": 200000, ' +
+		'"match": {"videoId": "vidMerged01", "confidence": 0.96, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
+	'"spotify:spNoResults00000000004": {"title": "No Results", "artists": ["The Late Hours"], "album": "Sway", "durationMs": 228000, "track": "spotify:spNoResults00000000004"}',
+	'"spotify:spOffline0000000000005": {"title": "Offline", "artists": ["Nobody"], "album": "Unplugged", "durationMs": 150000, "track": "spotify:spOffline0000000000005"}',
+	'"ytm:vidAlone001": {"title": "Alone Here", "artists": ["Lone"], "durationMs": 180000, "track": "ytm:vidAlone001"}',
+	'"ytm:vidMerged01": {"title": "Merged Song", "artists": ["Both"], "durationMs": 201000, "track": "ytm:vidMerged01"}'
+)
+$tracks = @(
+	'"spotify:spBestPart000000000001": {"sources": ["spotify:spBestPart000000000001"], "status": "pending", "addedAt": "2026-01-02T12:00:00Z"}',
+	'"spotify:spCrazy0000000000000002": {"sources": ["spotify:spCrazy0000000000000002"], "status": "pending", "addedAt": "2026-01-02T12:00:00Z"}',
+	('"spotify:spNoResults00000000004": {"sources": ["spotify:spNoResults00000000004"], "status": "failed", "failure": "noMatch", ' +
+		"`"error`": `"First line, left out\n$NoMatchError`", `"addedAt`": `"2026-01-02T12:00:00Z`"}"),
+	("`"spotify:spOffline0000000000005`": {`"sources`": [`"spotify:spOffline0000000000005`"], `"status`": `"failed`", `"failure`": `"search`", " +
+		"`"error`": `"$SearchError`", `"addedAt`": `"2026-01-02T12:00:00Z`"}"),
+	'"ytm:vidAlone001": {"sources": ["ytm:vidAlone001"], "status": "pending", "addedAt": "2026-01-01T12:00:00Z"}',
+	'"ytm:vidMerged01": {"sources": ["ytm:vidMerged01", "spotify:spMerged000000000000003"], "status": "pending", "addedAt": "2026-01-01T12:00:00Z"}'
+)
+$playlists = '"ytm:PLmatch1": {"url": "https://music.youtube.com/playlist?list=PLmatch1", "name": "WCS", "addedAt": "2026-01-01T12:00:00Z", ' +
+	'"sources": ["ytm:vidAlone001", "ytm:vidMerged01"]}, ' +
+	"`"$MatchSpotifyKey`": {`"url`": `"https://open.spotify.com/playlist/4matchmatchmatchmatchm`", `"name`": `"Her playlist`", " +
+	'"addedAt": "2026-01-02T12:00:00Z", "sources": ["spotify:spBestPart000000000001", "spotify:spCrazy0000000000000002", ' +
+	'"spotify:spMerged000000000000003", "spotify:spNoResults00000000004", "spotify:spOffline0000000000005"]}'
+[IO.File]::WriteAllText($StateFile, "{`"version`": 1, `"playlists`": {$playlists}, `"sources`": {$($sources -join ', ')}, `"tracks`": {$($tracks -join ', ')}}")
+Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
+$seeded = Get-SavedState
+$app = Start-App
+$h = $app.Hwnd
+Check 'Rows: two failed' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Showing 6 of 6'
+
+Select-TrackRow $h 0
+Check 'Only on YouTube Music: the playlist chose its video' (Wait-TrackCard $h 'ytm:vidAlone001') ("Track card:  / Alone Here / Lone / Album is read when it downloads / " +
+	"Status / Waiting / Downloads on the next sync. / Source / Source / YouTube Music $MiddleDot Open / Playlists / WCS / Key / ytm:vidAlone001 / " +
+	"Audio / Video / vidAlone001 / Chosen by / Playlist / File / Not downloaded yet.")
+Select-TrackRow $h 1
+Check 'Matched: what the Matcher chose' (Wait-TrackCard $h 'spotify:spBestPart000000000001') ("Track card:  / Best Part / Daniel Caesar, H.E.R. / Freudian / " +
+	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+	"Key / spotify:spBestPart000000000001 / Audio / Matched / Best Part (feat. H.E.R.) / Artists / Daniel Caesar / Length / 3:30 $MiddleDot Spotify 3:29 / " +
+	"Video / zNhtz0Lygik / Chosen by / Matcher / Confidence / 94% / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-matched.png") }
+# The bar is 110 long, 94% of it green, then 6 to the percentage
+$confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'))[0]
+$y = [int]((Get-ClientHeight $confidence) / 2)
+Check '  confidence bar: filled, empty end, gap' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 110) - 1), $y, ((S 110) + 1), $y)) -join ' ') '06b025 e6e6e6 ffffff'
+Select-TrackRow $h 2
+Check 'A live version: lengths 33 s apart' (Wait-TrackCard $h 'spotify:spCrazy0000000000000002') ("Track card:  / Crazy / Gnarls Barkley / St. Elsewhere / " +
+	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+	"Key / spotify:spCrazy0000000000000002 / Audio / Matched / Crazy (Live at Coachella 2006) / Artists / Gnarls Barkley / Length / 3:31 $MiddleDot Spotify 2:58 / " +
+	"Video / liveCrazy01 / Chosen by / Matcher / Confidence / 61% / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-live.png") }
+Select-TrackRow $h 3
+Check 'On both: the playlist chose, the match agrees' (Wait-TrackCard $h 'ytm:vidMerged01') ("Track card:  / Merged Song / Both / Album is read when it downloads / " +
+	"Status / Waiting / Downloads on the next sync. / Sources / Listed on / YouTube Music $MiddleDot Open /  / Spotify $MiddleDot Open track / " +
+	"Playlists / WCS, Her playlist / Key / ytm:vidMerged01 / Audio / Video / vidMerged01 / Chosen by / Playlist / " +
+	"Spotify match / Same video $MiddleDot 96% / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-merged.png") }
+Select-TrackRow $h 4
+Check 'No match: the reason and the last two lines' (Wait-TrackCard $h 'spotify:spNoResults00000000004') ("Track card:  / No Results / The Late Hours / Sway / " +
+	"Status / Failed / No usable video was found. It's searched again on the next sync. / No match on YouTube Music / " +
+	"$($NoMatchError -replace '\\"', '"' -replace '\\n', "`n") / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+	"Key / spotify:spNoResults00000000004 / Audio / Video / No match found / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-nomatch.png") }
+$card = Get-InspectorCard $h
+$labels = @(Get-DirectChildren $card 'WestieLib.Label' | Where-Object { [W]::IsWindowVisible($_) })
+$explanation = [W]::RectIn(($labels | Where-Object { [W]::TextOf($_) -like 'No usable*' })[0], $card)
+$reasonLabel = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match on YouTube Music' })[0]
+$reason = [W]::RectIn($reasonLabel, $card)
+$box = [W]::RectIn(([W]::Children($card, 'WestieLib.OutputBox'))[0], $card)
+Check '  reason 8 under the explanation, box 4 under it, full width' "$($reason.Top - $explanation.Bottom) $($box.Top - $reason.Bottom) $($box.Left) $($box.Right)" (
+	"$(S 8) $(S 4) 0 $(Get-ClientWidth $card)")
+$noVideo = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match found' })[0]
+Check '  reason and video in red' "$([W]::RedInk($h, $reasonLabel)) $([W]::RedInk($h, $noVideo))" 'True True'
+Select-TrackRow $h 5
+Check 'The search failed: its error' (Wait-TrackCard $h 'spotify:spOffline0000000000005') ("Track card:  / Offline / Nobody / Unplugged / " +
+	"Status / Failed / The last attempt failed. It's retried on the next sync. / Couldn't search YouTube Music / $SearchError / " +
+	"Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / Key / spotify:spOffline0000000000005 / " +
+	"Audio / Video / Chosen when it downloads / File / Not downloaded yet.")
+
+# Adding a playlist saves the state, which keeps the matches and failures as they were
+Click-AllTracks $h
+[void](Add-Playlist $h $SpotifyLink)
+for ($i = 0; $i -lt 50 -and -not (Get-SavedState).playlists.$SyncSpotifyKey; $i++) { Start-Sleep -Milliseconds 100 }
+$saved = Get-SavedState
+Check 'Saved again: sources and tracks unchanged' "$(($saved.sources | ConvertTo-Json -Compress -Depth 5) -eq ($seeded.sources | ConvertTo-Json -Compress -Depth 5)) $(
+	($saved.tracks | ConvertTo-Json -Compress -Depth 5) -eq ($seeded.tracks | ConvertTo-Json -Compress -Depth 5))" 'True True'
 Stop-App $app

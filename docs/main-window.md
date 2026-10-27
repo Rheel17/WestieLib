@@ -174,10 +174,12 @@ saved `Placement` and asks it for the current one.
   - `LibraryCard`, `PlaylistCard` and `TrackCard` are panels of `Label`s, `Button`s and small windows that paint
     themselves: `IconText` (a 16 px glyph and a line of text, with the gap and line height its style gives: the card
     titles, the track's status), `SectionTitle` (semibold text and the rule after it), `SyncedValue`
-    (`paint_sync_bar`, from `src/ui/SyncBar.cpp`, which the playlist rows use too, then the counts), `CoverArt` (the
-    track's cover, so far the placeholder), `SourceLink` (an `IconText` with the source's logo and name, and an
-    `Open` link), and `framework::LinkLabel`s. Every window's text is what it shows, so the checks read the cards with
-    `GetWindowTextW`.
+    (`paint_sync_bar`, from `src/ui/SyncBar.cpp`, which the playlist rows use too, then the counts), `ConfidenceValue`
+    (`paint_fraction_bar`, the same bar for a match's confidence, then the percentage), `LengthValue` (the video's
+    length, amber when it is more than 5 s off, then the Spotify length in gray), `OutputBox` (a bordered box of
+    Consolas text, `FontSet::code`, that wraps), `CoverArt` (the track's cover, so far the placeholder), `SourceLink`
+    (an `IconText` with the source's logo and name, and an `Open` link), and `framework::LinkLabel`s. Every window's
+    text is what it shows, so the checks read the cards with `GetWindowTextW`.
   - `CardLayout` holds the measures from `plan/ui.md` (Inspector › Nothing selected) and stacks a card's parts from
     the top: title, subtitle, section, key–value rows and a row of buttons that wraps. `row_if` hides a row that isn't
     there, such as the playlist card's `Waiting`, `Failed` (red), `To review` (amber) and `Shared`, which show only
@@ -187,9 +189,12 @@ saved `Placement` and asks it for the current one.
     scrolling moves the card window, not its children. Another card, or the same card for another track or
     playlist (`subject_`), starts at the top; a refresh of the same one keeps the scroll position.
   - `TrackCard` shows a `TrackDetails` (`track_details`): the table's `TrackRow`, the page of the first source of
-    each kind (`core::source_page_url`), and the playlists that list the track, in the left panel's order. Its links
-    go through `InspectorEvents`: a source's `Open` to `on_open_url`, a playlist to `on_select_playlist`, which
-    selects it as a click on its row does.
+    each kind (`core::source_page_url`), the playlists that list the track, in the left panel's order, its video
+    (`core::resolved_video`, and who chose it), the first Spotify source's match, and a failure with the last two
+    lines of its error. Its links go through `InspectorEvents`: a source's `Open` and the video to `on_open_url`, a
+    playlist to `on_select_playlist`, which selects it as a click on its row does. The Audio section is an
+    `AudioRows`: not a window, but the windows of its rows, which it creates on the card and places with the card's
+    `CardLayout`.
   - `SelectionCard` shows several selected tracks: their number, and a row per status that holds any of them, its
     count in an `IconText` with the status's icon.
   - The cards' buttons and the link send `CommandId`s (the link `OpenPlaylistPage`, which isn't in the menu bar) to

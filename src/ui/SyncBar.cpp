@@ -1,5 +1,8 @@
 #include "ui/SyncBar.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace westie::ui {
 
 namespace {
@@ -20,6 +23,11 @@ void paint_sync_bar(HDC dc, framework::Rect bar, const TrackCounts& counts) {
     if (counts.total > 0) {
         fill(dc, bar.take_left(bar.width() * counts.synced / counts.total), ProgressColor);
     }
+}
+
+void paint_fraction_bar(HDC dc, framework::Rect bar, double fraction) {
+    fill(dc, bar, BarColor);
+    fill(dc, bar.take_left(static_cast<int>(std::lround(bar.width() * std::clamp(fraction, 0.0, 1.0)))), ProgressColor);
 }
 
 }

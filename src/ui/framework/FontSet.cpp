@@ -2,7 +2,8 @@
 
 namespace westie::ui::framework {
 
-FontSet::FontSet(Dpi dpi) : regular_(dpi), semibold_(dpi, FontStyle::Semibold), title_(dpi, FontStyle::Title), heading_(dpi, FontStyle::Heading) {}
+FontSet::FontSet(Dpi dpi) :
+        regular_(dpi), semibold_(dpi, FontStyle::Semibold), title_(dpi, FontStyle::Title), heading_(dpi, FontStyle::Heading), code_(dpi, FontStyle::Code) {}
 
 const MessageFont& FontSet::regular() const noexcept {
     return regular_;
@@ -18,6 +19,10 @@ const MessageFont& FontSet::title() const noexcept {
 
 const MessageFont& FontSet::heading() const noexcept {
     return heading_;
+}
+
+const MessageFont& FontSet::code() const noexcept {
+    return code_;
 }
 
 }

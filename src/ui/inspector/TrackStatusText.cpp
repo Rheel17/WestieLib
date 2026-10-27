@@ -15,7 +15,11 @@ int status_icon(StatusTab status) {
     }
 }
 
-const wchar_t* status_explanation(StatusTab status) {
+const wchar_t* status_explanation(StatusTab status, core::TrackFailure failure) {
+    // Until Choose video exists, searching again is all there is to say
+    if (status == StatusTab::Failed && failure == core::TrackFailure::NoMatch) {
+        return L"No usable video was found. It's searched again on the next sync.";
+    }
     switch (status) {
     case StatusTab::Synced:  return L"The file is in the library and tagged.";
     case StatusTab::Failed:  return L"The last attempt failed. It's retried on the next sync.";
@@ -24,6 +28,14 @@ const wchar_t* status_explanation(StatusTab status) {
     // Needs review has a note instead, which comes with matching
     case StatusTab::NeedsReview: return L"";
     default:                     return L"Downloads on the next sync.";
+    }
+}
+
+const wchar_t* failure_reason(core::TrackFailure failure) {
+    switch (failure) {
+    case core::TrackFailure::NoMatch: return L"No match on YouTube Music";
+    case core::TrackFailure::Search:  return L"Couldn't search YouTube Music";
+    default:                          return L"";
     }
 }
 

@@ -6,12 +6,11 @@
 
 #include <windows.h>
 
+#include "ui/framework/TextColor.h"
 #include "ui/framework/TextEllipsis.h"
 #include "ui/framework/Window.h"
 
 namespace westie::ui::framework {
-
-enum class TextColor { Normal, Gray, Error, Warning };
 
 enum class LabelAlignment { Left, Center };
 

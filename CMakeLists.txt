@@ -45,6 +45,7 @@ add_executable(WestieLib WIN32
 	src/core/sources/YtDlpError.cpp
 	src/core/state/PruneTracks.cpp
 	src/core/state/StateStore.cpp
+	src/core/state/TrackVideos.cpp
 	src/core/sync/ApplyFetch.cpp
 	src/core/sync/SyncEngine.cpp
 	src/core/tools/ToolFolder.cpp
@@ -74,6 +75,7 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Win32FileOps.cpp
 	src/platform/win32/Win32ProcessRunner.cpp
 	src/platform/win32/WinHttpClient.cpp
+	src/ui/DurationText.cpp
 	src/ui/FatalError.cpp
 	src/ui/PlaylistTypeText.cpp
 	src/ui/RelativeDayText.cpp
@@ -126,6 +128,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Splitter.cpp
 	src/ui/framework/StatusBar.cpp
 	src/ui/framework/TabStrip.cpp
+	src/ui/framework/TextColor.cpp
 	src/ui/framework/Toolbar.cpp
 	src/ui/framework/Tooltip.cpp
 	src/ui/framework/VerticalScroll.cpp
@@ -134,11 +137,15 @@ add_executable(WestieLib WIN32
 	src/ui/framework/WindowIcon.cpp
 	src/ui/infobar/FetchFailureNotice.cpp
 	src/ui/infobar/Infobar.cpp
+	src/ui/inspector/AudioRows.cpp
 	src/ui/inspector/CardLayout.cpp
+	src/ui/inspector/ConfidenceValue.cpp
 	src/ui/inspector/CoverArt.cpp
 	src/ui/inspector/IconText.cpp
 	src/ui/inspector/InspectorPanel.cpp
+	src/ui/inspector/LengthValue.cpp
 	src/ui/inspector/LibraryCard.cpp
+	src/ui/inspector/OutputBox.cpp
 	src/ui/inspector/PlaylistCard.cpp
 	src/ui/inspector/SectionTitle.cpp
 	src/ui/inspector/SelectionCard.cpp

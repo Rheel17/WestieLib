@@ -82,7 +82,7 @@ failed shows in the status bar (see Status bar › Tools) and in Settings, not o
 | Look up a YouTube Music playlist (Add playlist) | yt-dlp    |
 | Fetch a Spotify playlist                  | –               |
 | Fetch a YouTube Music playlist            | yt-dlp          |
-| Match a Spotify track (search YouTube Music) | yt-dlp       |
+| Match a Spotify track (search YouTube Music) | –            |
 | Download a track: audio, thumbnail cover  | yt-dlp, ffmpeg  |
 | Choose a video: search                    | yt-dlp          |
 
@@ -378,8 +378,9 @@ is filtered out loses it. Selecting another status tab or another scope (All tra
 - **Header**: cover art (square, 144 px), **title**, artists, `Album · 2021`. The cover comes from the file;
   tracks without a file show a placeholder.
 - **Status**: the status icon and word, plus one line explaining it.
-  - Failed tracks add a red reason line and a box with the last two lines of output (Consolas). There are two
-    reasons: `yt-dlp exited with code 1`, or `No match on YouTube Music`.
+  - Failed tracks add a red reason line and a box with the last two lines of output (Consolas). There are three
+    reasons: `yt-dlp exited with code 1`, `No match on YouTube Music` (the box lists the searched queries), or
+    `Couldn't search YouTube Music` (the box holds the error).
   - Needs review tracks replace the explanation with an amber note: "Low-confidence match. Listen to the file,
     then confirm it or choose another video."
   - The **actions** that apply come right under that, so they stay above the fold:
@@ -397,11 +398,11 @@ is filtered out loses it. Selecting another status tab or another scope (All tra
   - the track key;
   - the ISRC.
 - **Audio**:
-  - for matched tracks: `Matched` (the video title), `Channel`, and `Length`, the video's length next to
-    the source length; it shows in amber when the two differ by more than 5 s, which often gives away a live
-    version or a cover;
-  - `Video`, as a link;
-  - `Chosen by`: `Playlist · <name>`, `Matcher` or `Override`;
+  - for matched tracks: `Matched` (the video title), `Artists` (the video's, as YouTube Music's search lists them),
+    and `Length`, the video's length next to the source length; it shows in amber when the two differ by more than
+    5 s, which often gives away a live version or a cover;
+  - `Video`, as a link; `No match found` in red when the Matcher found nothing;
+  - `Chosen by`: `Playlist`, `Matcher` or `Override`;
   - `Confidence`, as a bar + %; the bar uses the paused (yellow) state when review is needed;
   - for a merged track, `Spotify match: Same video · 96%` replaces the matcher rows.
 - **File**: the file name and `Show in folder`.
@@ -409,9 +410,10 @@ is filtered out loses it. Selecting another status tab or another scope (All tra
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
-So far a track has only what its playlists list, so the track card shows what the mockup shows for a waiting track,
-whatever its status: no cover, no year, `Video` and `File` not chosen yet. The status's explanation is there, but the
-Needs review note, the Failed reason and output, the ISRC, the matcher rows and every action button come with their
+So far no track has a file, so the track card shows no cover, no year, and `File` not downloaded yet. It shows the
+status with its explanation, a failed match's reason and output, and the Audio rows of a video that a YouTube Music
+source or the Matcher chose. Until Choose video exists, a failed match explains "No usable video was found. It's
+searched again on the next sync." The Needs review note, the ISRC and every action button come with their
 features, and so do the selection card's bulk actions.
 
 ```
@@ -461,6 +463,10 @@ The track card, from the top, in DIPs:
   | Removed      | No longer in any playlist. The file is still in the library. |
   | Kept         | Kept after it left every playlist. |
 
+  A failed track's reason follows 8 px below in red, on a 16 px line, then 4 px below the box: a 1 px `#C5C5C5`
+  border, 4 px padding at the top and bottom and 6 px at the sides, and the last two lines of the error in Consolas
+  at 11/12 of the message font's size, wrapped.
+
 - **Source** (**Sources** when the track has more than one kind of source) holds rows like the other cards':
   - one row per kind of source the track has, YouTube Music first. Its key is `Source`, or with two kinds `Listed on`
     on the first row and nothing on the second. Its value is the logo (16 px), 6 px, the name, ` · `, and a link,
@@ -470,7 +476,16 @@ The track card, from the top, in DIPs:
     that playlist, as a click on its row does. A link that doesn't fit ends in an ellipsis, and the ones after it
     don't show. A track in no playlist reads `None` in gray;
   - `Key`: the track key.
-- **Audio**: `Video` reads `Chosen when it downloads` in gray until a video is chosen.
+- **Audio** holds rows like Source's, by where the track's video comes from (`arch.md`, Video resolution):
+  - none: `Video` reads `Chosen when it downloads` in gray, or `No match found` in red after a failed match;
+  - the Matcher: `Matched`, `Artists`, `Length`, `Video`, `Chosen by` `Matcher`, `Confidence`;
+  - a YouTube Music source: `Video`, `Chosen by` `Playlist`, and `Spotify match` `Same video · 96%` when the
+    track's Spotify source was matched to that video.
+
+  `Length` is the video's length (`m:ss`), in amber when it differs from the Spotify length by more than 5 s, then
+  ` · Spotify 3:32` in gray. `Video` is the video id as a link to `https://music.youtube.com/watch?v=<id>`.
+  `Confidence` is a 110 px bar, 6 px tall and centered on the line, filled in green as far as the confidence, then
+  6 px and the percentage; a narrower card shortens the bar.
 - **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file.
 
 The selection card: `N tracks selected` in the title's font and line, without a glyph; then **Status**, with a row for

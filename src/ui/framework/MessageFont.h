@@ -7,7 +7,7 @@
 
 namespace westie::ui::framework {
 
-enum class FontStyle { Regular, Semibold, Title, Heading };
+enum class FontStyle { Regular, Semibold, Title, Heading, Code };
 
 class MessageFont {
 public:

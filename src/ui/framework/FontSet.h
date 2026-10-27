@@ -13,12 +13,14 @@ public:
     const MessageFont& semibold() const noexcept;
     const MessageFont& title() const noexcept;
     const MessageFont& heading() const noexcept;
+    const MessageFont& code() const noexcept;
 
 private:
     MessageFont regular_;
     MessageFont semibold_;
     MessageFont title_;
     MessageFont heading_;
+    MessageFont code_;
 };
 
 }
