@@ -73,7 +73,7 @@ framework::ListColumn list_column(const ColumnSpec& spec, framework::Dpi dpi) {
 }
 
 TrackSort default_sort(bool playlist) {
-    return {.column = playlist ? TrackColumn::Number : TrackColumn::Title};
+    return TrackSort(playlist ? TrackColumn::Number : TrackColumn::Title);
 }
 
 // The Status column shows only its icon
@@ -136,7 +136,7 @@ void TrackTable::show_scope(bool playlist) {
 void TrackTable::set_rows(std::vector<TrackRow> rows) {
     Selection selected = selection();
     rows_ = std::move(rows);
-    sort_track_rows(rows_, sort_);
+    sort_.sort(rows_);
     list_.set_item_count(static_cast<int>(rows_.size()));
     restore(selected);
     // A virtual list doesn't know its texts changed
@@ -189,17 +189,11 @@ void TrackTable::add_number_column() {
 }
 
 void TrackTable::sort_by(int column_index) {
-    auto column = static_cast<TrackColumn>(list_.column_subitem(column_index));
-    if (column == sort_.column) {
-        bool ascending = sort_.direction == framework::SortDirection::Ascending;
-        sort_.direction = ascending ? framework::SortDirection::Descending : framework::SortDirection::Ascending;
-    } else {
-        sort_ = {.column = column};
-    }
+    sort_.sort_by(static_cast<TrackColumn>(list_.column_subitem(column_index)));
     show_sort();
 
     Selection selected = selection();
-    sort_track_rows(rows_, sort_);
+    sort_.sort(rows_);
     restore(selected);
     // The row the user was on moved with the sort, so the list follows it
     if (std::optional<int> focused = list_.focused_item()) {
@@ -209,8 +203,8 @@ void TrackTable::sort_by(int column_index) {
 }
 
 void TrackTable::show_sort() {
-    std::optional<int> index = list_.column_index(std::to_underlying(sort_.column));
-    list_.set_sort_arrow(index ? std::optional(framework::ListSortArrow{.index = *index, .direction = sort_.direction}) : std::nullopt);
+    std::optional<int> index = list_.column_index(std::to_underlying(sort_.column()));
+    list_.set_sort_arrow(index ? std::optional(framework::ListSortArrow{.index = *index, .direction = sort_.direction()}) : std::nullopt);
 }
 
 TrackTable::Selection TrackTable::selection() const {

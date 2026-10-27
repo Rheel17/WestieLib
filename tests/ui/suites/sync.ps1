@@ -352,7 +352,7 @@ $h = $app.Hwnd
 Check 'Rows after a restart' (Get-TrackRows $h) "$RowB / $RowLate / $RowC / $RowSenorita / $RowSharedAlone / $RowSlow / $RowA"
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Synced 0 | Waiting 7 | Needs review 0 | Failed 0 | Showing 7 of 7'
 
-# A header click sorts the rows by its column, a second one turns them round; rows that tie go by title
+# A header click sorts the rows by its column, a second one turns them round; rows that tie keep the order they had
 Click-Header $h 5
 Check 'Sorted by Time' (Get-TrackRows $h) "$RowC / $RowSenorita / $RowB / $RowSharedAlone / $RowA / $RowLate / $RowSlow"
 Click-Header $h 5
@@ -360,13 +360,14 @@ Check '  again: longest first' (Get-TrackRows $h) "$RowSlow / $RowLate / $RowA /
 Click-Header $h 2
 Check 'Sorted by Artists' (Get-TrackRows $h) "$RowLate / $RowSharedAlone / $RowSenorita / $RowA / $RowB / $RowC / $RowSlow"
 Click-Header $h 3
-Check 'Sorted by Album: the YouTube Music rows have none' (Get-TrackRows $h) "$RowB / $RowC / $RowSharedAlone / $RowSlow / $RowA / $RowLate / $RowSenorita"
+Check 'Sorted by Album: the YouTube Music rows have none, so stay by artists' (Get-TrackRows $h) (
+	"$RowSharedAlone / $RowA / $RowB / $RowC / $RowSlow / $RowLate / $RowSenorita")
 Click-Header $h 0
-Check 'Sorted by Status: all wait, so by title' (Get-TrackRows $h) "$RowB / $RowLate / $RowC / $RowSenorita / $RowSharedAlone / $RowSlow / $RowA"
+Check 'Sorted by Status: all wait, so stay by album' (Get-TrackRows $h) "$RowSharedAlone / $RowA / $RowB / $RowC / $RowSlow / $RowLate / $RowSenorita"
 
 # The selection stays with its track when the rows move or narrow
-Select-TrackRow $h 5
-Check 'Select row 6' (Get-SelectedRows $h) '5 Slow One'
+Select-TrackRow $h 4
+Check 'Select row 5' (Get-SelectedRows $h) '4 Slow One'
 Click-Header $h 5
 Check '  sorted by Time: it moves along' (Get-SelectedRows $h) '6 Slow One'
 Choose-Source $h 1

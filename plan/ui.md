@@ -374,8 +374,11 @@ Rows are 22 px tall. A 1 px rule (`#E5E5E5`) runs under the column titles, acros
 Time 48 px; # and Time are right-aligned.
 
 Default sort is Title in All tracks and # in a playlist scope. A click on a header sorts by that column, ascending, and
-a second click reverses it, however quickly it follows; the header shows the arrow. Another scope starts at its default sort. The row context
-menu is the Track menu.
+a second click reverses it, however quickly it follows; the header shows the arrow. The sort is stable: rows that tie on
+the column keep the order they had before the click, so sorting by Album after Artists sorts each album by artist. A
+reverse turns the whole list round, ties included. Rows that tie on every column the user sorted by go by the scope's
+default sort, then track key. The order holds while the rows are filtered or refreshed. Another scope starts at its
+default sort, and forgets the earlier clicks. The row context menu is the Track menu.
 
 The selection stays with its tracks while the rows are sorted, filtered by source or refreshed by a sync; a track that
 is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
