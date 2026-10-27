@@ -8,6 +8,7 @@
 #include <memory>
 #include <utility>
 
+#include "core/matching/LibraryMatches.h"
 #include "core/sources/SourceType.h"
 #include "core/sources/SpotifyPlaylist.h"
 #include "core/sources/YouTubeMusicPlaylist.h"
@@ -37,6 +38,7 @@ SyncEngine::SyncEngine(
         tools_(tools),
         http_(http),
         spotify_(std::move(spotify)),
+        normalizer_(normalizer),
         matcher_(http, normalizer, std::move(youtube_music_api)),
         state_(state),
         events_(events) {}
@@ -88,6 +90,7 @@ void SyncEngine::work(const std::stop_token& stop) {
             continue;
         }
         if (fetched && !stop.stop_requested()) {
+            merge_library_matches();
             queue_tracks(tracks);
             fetched = false;
         }
@@ -176,6 +179,22 @@ PlaylistContents SyncEngine::fetch_when_installed(const PlaylistLink& link, cons
             }
             events_.emit(PlaylistFetching{.playlist = link.key()});
         }
+    }
+}
+
+void SyncEngine::merge_library_matches() {
+    // An exception that leaves a thread ends the process; the library is looked at again next sync
+    try {
+        std::vector<LibraryMatch> matches = library_matches(*state_.snapshot(), normalizer_);
+        if (matches.empty()) {
+            return;
+        }
+        state_.update([&](State& state) {
+            for (const LibraryMatch& match : matches) {
+                apply_match(state, match.track, match.match);
+            }
+        });
+    } catch (const std::exception&) {
     }
 }
 

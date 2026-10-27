@@ -623,6 +623,20 @@ override and no YouTube Music source (see Video resolution).
 
 `Matcher` (`src/core/matching/`) runs the queries; `MatchText` and `MatchScore` are pure logic.
 
+**The library first.** YouTube Music keeps one recording under several video ids (a single, an album, a re-release),
+and a playlist can swap one for another. So a Spotify track and the YouTube Music playlist entry of the same song
+can end up with different videos, and never merge. Before it searches, a sync compares every Spotify track in the
+library that has no YouTube Music source a playlist lists (and isn't Removed or Kept) with the YouTube Music sources
+the playlists list (`library_matches`, `src/core/matching/LibraryMatches`): the same score, against the sources with
+the same bare title. When the best reaches 0.9, that video becomes the Spotify source's match, with the score as its
+confidence, and the track merges into that source's track (`apply_match`): the playlist owner's choice wins over a
+search result.
+
+It looks at the whole library, not only at the playlists the sync fetched, so the order in which playlists are added
+or synced doesn't matter: a Spotify track the search matched earlier joins a YouTube Music playlist's entry on the
+first sync after one lists the song, and a Spotify track that comes after the entry merges before it is searched for.
+A downloaded track merges by the Merging rules, its own file going to the Recycle Bin; so far no track has a file.
+
 **Video search.** `searchVideos(query, filter)` serves the UI's Choose a video dialog. It runs the same yt-dlp
 search with `#songs`, `#videos`, or no fragment (for both), and returns up to 20 results. Each result has
 videoId, title, artist, album, type (song or video) and duration. A search runs on its own worker thread, outside
@@ -758,7 +772,8 @@ downloads yet.
   Spotify fetch read before it failed stay, beside the playlist's earlier sources.
 - Without yt-dlp, a YouTube Music fetch emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs it
   (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
-- Once no playlist is left to fetch, the run matches. `tracks_to_match` (`TracksToMatch.cpp`) lists the tracks that
+- Once no playlist is left to fetch, the run first merges what the library matches (Matcher › The library first), in
+  one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match` (`TracksToMatch.cpp`) lists the tracks that
   are `pending` or `failed`, have no YouTube Music source and whose first Spotify source has no match, in playlist
   order (playlists by `addedAt`, then their sources), each once. The run emits `TracksQueued` with the ones it hasn't
   queued yet, and matches them one at a time, saving after each:

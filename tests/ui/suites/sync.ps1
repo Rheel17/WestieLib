@@ -662,7 +662,8 @@ Stop-App $app
 "--- Run 6: matching"
 # A Spotify playlist whose tracks YouTube Music's search finds: the right song second, a live version before the
 # studio one, nothing at all, a search that fails, the video of a YouTube Music track, a video that a YouTube Music
-# playlist added later lists, and only another song of the same artist and length
+# playlist added later lists, and only another song of the same artist and length. Then two the search doesn't need:
+# a song another id of which a YouTube Music playlist added later lists, and one a synced playlist lists already.
 $MatchId = '5matchesmatchesmatches'
 $Web.SpotifyNames[$MatchId] = 'Matches'
 $Web.SpotifyItems[$MatchId] = [Collections.Generic.List[string]]@(
@@ -672,7 +673,9 @@ $Web.SpotifyItems[$MatchId] = [Collections.Generic.List[string]]@(
 	[FakeWeb]::Track('spBrokenSearch00000004', 'Offline', @('Nobody'), 'Unplugged', 150000),
 	[FakeWeb]::Track('spMergesYtm00000000005', 'Way Down We Go', @('KALEO'), 'A/B', 214000),
 	[FakeWeb]::Track('spJoinedLater000000006', 'Only Here', @('Solo'), 'Here', 65000),
-	[FakeWeb]::Track('spOtherTitle0000000007', 'Down Home Blues', @('Kenny'), 'Blues', 180000)
+	[FakeWeb]::Track('spOtherTitle0000000007', 'Down Home Blues', @('Kenny'), 'Blues', 180000),
+	[FakeWeb]::Track('spLibraryLater00000008', 'Slow One', @('Turtle'), 'Slow', 300000),
+	[FakeWeb]::Track('spLibraryFirst00000009', $Cafe, @('Nova'), 'Lights', 191000)
 )
 $Web.YtmResults['Daniel Caesar H.E.R. Best Part'] = [Collections.Generic.List[string]]@(
 	[FakeWeb]::Song('9cHbvRUALrc', 'Pink + White', @('Frank Ocean'), 'Blonde', '3:05'),
@@ -686,6 +689,8 @@ $Web.YtmResults['The Late Hours Sway With Me (WCS Edit)'] = New-Object Collectio
 [void]$Web.YtmBrokenQueries.Add('Nobody Offline')
 $Web.YtmResults['KALEO Way Down We Go'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackAAAAA1', 'Way Down We Go', @('KALEO'), 'A/B', '3:34'))
 $Web.YtmResults['Solo Only Here'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackDDDDD6', 'Only Here', @('Solo'), 'Here', '1:05'))
+# Another id than the one PLslow1 lists
+$Web.YtmResults['Turtle Slow One'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('searchSlow1', 'Slow One', @('Turtle'), 'Slow', '5:00'))
 $Web.YtmResults['Kenny Down Home Blues'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('bakersfield', 'Bakersfield Blues', @('Kenny'), 'Blues', '3:00'))
 $MatchFailures = 'spBrokenSearch00000004 search [HTTP 500 from 127.0.0.1] / spNoResults00000000003 noMatch [Searched "The Late Hours Sway With Me ' +
 	'(WCS Edit)": no results | Searched "The Late Hours Sway With Me": no results] / spOtherTitle0000000007 noMatch [Searched "Kenny Down Home Blues": ' +
@@ -701,35 +706,42 @@ $runs = Get-FetchRuns
 $searches = @($Web.YtmQueries()).Count
 Send-Command $h 'Sync &all'
 Wait-Fetches $h $runs 1
+# Way Down We Go and Cafe Lights are songs PLtracks1 lists, so they take its videos without a search
 Check 'Sync all: the Spotify tracks searched, in playlist order' (Get-YtmQueriesSince $searches) ('Daniel Caesar H.E.R. Best Part / Gnarls Barkley Crazy / ' +
-	'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / KALEO Way Down We Go / Solo Only Here / Kenny Down Home Blues')
-Check '  matches: the best result, not the first; the studio version' (Get-SavedMatches) ('spClearMatch0000000001 zNhtz0Lygik 1 / ' +
-	'spJoinedLater000000006 trackDDDDD6 1 / spLiveLoses00000000002 studioCrazy 1 / spMergesYtm00000000005 trackAAAAA1 1')
+	'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / Solo Only Here / Kenny Down Home Blues / Turtle Slow One')
+Check '  matches: the best result, not the first; the studio version; the library''s' (Get-SavedMatches) ('spClearMatch0000000001 zNhtz0Lygik 1 / ' +
+	'spJoinedLater000000006 trackDDDDD6 1 / spLibraryFirst00000009 trackBBBBB2 1 / spLibraryLater00000008 searchSlow1 1 / ' +
+	'spLiveLoses00000000002 studioCrazy 1 / spMergesYtm00000000005 trackAAAAA1 1')
 Check '  failures: no results, a search that failed, and only another song' (Get-SavedFailures) $MatchFailures
-Check '  tracks: Way Down We Go on both is one track' (Get-SavedTracks) ('spBrokenSearch00000004 failed [spBrokenSearch00000004] True / ' +
+Check '  tracks: Way Down We Go and Cafe Lights on both are one track each' (Get-SavedTracks) ('spBrokenSearch00000004 failed [spBrokenSearch00000004] True / ' +
 	'spClearMatch0000000001 pending [spClearMatch0000000001] True / spJoinedLater000000006 pending [spJoinedLater000000006] True / ' +
+	'spLibraryLater00000008 pending [spLibraryLater00000008] True / ' +
 	'spLiveLoses00000000002 pending [spLiveLoses00000000002] True / spNoResults00000000003 failed [spNoResults00000000003] True / ' +
-	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / ' +
-	'AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True')
+	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / ' +
+	'BBBBB2 pending [BBBBB2,spLibraryFirst00000009] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True')
 Check '  its row: one, both playlists, the album from Spotify' (@((Get-TrackRows $h) -split ' / ' | Where-Object { $_ -like '*Way Down We Go*' }) -join ' / ') (
 	" | Way Down We Go | KALEO | A/B | $TracksName, Matches | 3:34")
-Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 9) 'Waiting'
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 10 | Synced 0 | Waiting 7 | Needs review 0 | Failed 3 | Showing 10 of 10'
+Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 10) 'Waiting'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 11 | Synced 0 | Waiting 8 | Needs review 0 | Failed 3 | Showing 11 of 11'
 
-# The playlist with the video Only Here was matched to: its source joins that track. Only the failed tracks are
-# searched again.
+# A playlist with another id of Slow One: the Spotify track takes it and merges, the order of the playlists aside. The
+# playlist with the video Only Here was matched to: its source joins that track. Only the failed tracks are searched
+# again.
+[void](Add-Playlist $h 'https://music.youtube.com/playlist?list=PLslow1')
 [void](Add-Playlist $h 'https://music.youtube.com/playlist?list=PLshared1')
 $runs = Get-FetchRuns
 $searches = @($Web.YtmQueries()).Count
 Send-Command $h 'Sync &all'
-Wait-Fetches $h $runs 2
+Wait-Fetches $h $runs 3
 Check 'Sync all again: only the failed tracks searched' (Get-YtmQueriesSince $searches) $FailedQueries
-Check '  Only Here: the YouTube Music source joined the Spotify track' (@((Get-SavedTracks) -split ' / ' | Where-Object { $_ -like 'spJoinedLater*' })) (
+Check '  Only Here: the YouTube Music source joined the Spotify track' (@((Get-SavedTracks) -split ' / ' | Where-Object { $_ -like 'spJoinedLater*' }) -join ' / ') (
 	'spJoinedLater000000006 pending [spJoinedLater000000006,DDDDD6] True')
+Check '  Slow One: the Spotify track merged into the playlist''s' "$(@((Get-SavedTracks) -split ' / ' | Where-Object { $_ -like '*Slow*' })) | $(
+	@((Get-SavedMatches) -split ' / ' | Where-Object { $_ -like 'spLibraryLater*' }))" 'SLOWW7 pending [SLOWW7,spLibraryLater00000008] True | spLibraryLater00000008 trackSLOWW7 1'
 Check '  failures as before' (Get-SavedFailures) $MatchFailures
 Check '  the added playlist selected: Only Here among its rows' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
 	"1 | $RowShared / 2 |  | Only Here | Solo | Here | Matches, $SharedName | 1:05 | " +
-	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 10 in $SharedName")
+	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 11 in $SharedName")
 # Matches lists the track too, but that is another playlist: here it is no duplicate
 Check '  Only Here there: no duplicate' (Get-StatusTip $h 1 1) 'Waiting'
 Select-TrackRow $h 1

@@ -31,6 +31,7 @@ add_executable(WestieLib WIN32
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
+	src/core/matching/LibraryMatches.cpp
 	src/core/matching/MatchScore.cpp
 	src/core/matching/MatchText.cpp
 	src/core/matching/Matcher.cpp

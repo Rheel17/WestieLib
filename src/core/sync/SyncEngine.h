@@ -47,6 +47,7 @@ private:
     PlaylistContents fetch_contents(const PlaylistLink& link, const std::stop_token& stop);
     void show_page(const PlaylistLink& link, const PlaylistContents& so_far);
     PlaylistContents fetch_when_installed(const PlaylistLink& link, const std::stop_token& stop);
+    void merge_library_matches();
     void queue_tracks(MatchQueue& queue);
     void match(const std::string& track, const std::stop_token& stop);
     void fail_match(const std::string& track, TrackFailure failure, std::string error);
@@ -55,6 +56,7 @@ private:
     ToolFolder& tools_;
     platform::HttpClient& http_;
     SpotifyUrls spotify_;
+    const platform::TextNormalizer& normalizer_;
     Matcher matcher_;
     StateStore& state_;
     EventSink& events_;
