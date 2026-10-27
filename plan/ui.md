@@ -356,7 +356,7 @@ when you click their header. Right-click the header to show, hide or reorder col
 | Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead. Hovering the cell shows the word as a tooltip (`Synced`, `Needs review`, `Downloading 62%`, …) |
 | Title     | on      | |
 | Artists   | on      | joined with `, ` |
-| Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time |
+| Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time, unless a Spotify source merged in has one. Title, Artists, Album and Time show the effective metadata (`arch.md`) |
 | Playlists | on      | names of every playlist that lists one of the track's sources, joined with `, `, ending in an ellipsis when cut |
 | Time      | on      | m:ss |
 | Source    | off     | logo of each source |
@@ -372,6 +372,10 @@ menu is the Track menu.
 
 The selection stays with its tracks while the rows are sorted, filtered by source or refreshed by a sync; a track that
 is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
+
+A row is a file, so a playlist that lists one recording more than once shows it once, at its first position: a repeat
+of an entry, and also the same song under several Spotify ids (single, album, compilation) whose matches found one
+video. Its row count can be lower than the playlist's entries on Spotify.
 
 A refresh, such as each fetched page or match of a sync, keeps the table where it is scrolled. Another scope, status
 tab, search or source starts it at the top.

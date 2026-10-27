@@ -7,6 +7,7 @@
 #include <string_view>
 #include <utility>
 
+#include "core/state/EffectiveMetadata.h"
 #include "platform/win32/Utf16.h"
 #include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
@@ -76,15 +77,6 @@ std::map<std::string, std::vector<std::wstring>> playlist_names(const core::Stat
     return names;
 }
 
-const core::Source* first_source(const core::State& state, const core::Track& track) {
-    for (const std::string& key : track.sources) {
-        if (auto source = state.sources.find(key); source != state.sources.end()) {
-            return &source->second;
-        }
-    }
-    return nullptr;
-}
-
 }
 
 std::vector<TrackRow> track_rows(const core::State& state, const std::optional<std::string>& playlist) {
@@ -107,12 +99,11 @@ std::vector<TrackRow> track_rows(const core::State& state, const std::optional<s
             continue;
         }
         TrackRow row{.status = status_tab(track->second.status), .position = listing.position};
-        if (const core::Source* source = first_source(state, track->second)) {
-            row.title = platform::win32::to_utf16(source->title);
-            row.artists = join_utf8(source->artists);
-            row.album = platform::win32::to_utf16(source->album);
-            row.duration = source->duration;
-        }
+        core::TrackMetadata metadata = core::effective_metadata(state, track->second);
+        row.title = platform::win32::to_utf16(metadata.title);
+        row.artists = join_utf8(metadata.artists);
+        row.album = platform::win32::to_utf16(metadata.album);
+        row.duration = metadata.duration;
         for (const std::string& source : track->second.sources) {
             std::optional<core::SourceType> type = core::source_type_of_key(source);
             if (type && !std::ranges::contains(row.sources, *type)) {

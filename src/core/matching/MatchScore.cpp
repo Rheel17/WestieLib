@@ -26,6 +26,9 @@ constexpr std::chrono::milliseconds OtherLength{30000};
 constexpr double UnknownLengthScore = 0.5;
 // A live version, a remix or a cover where the other has none is another recording
 constexpr double VersionFactor = 0.5;
+// Below it the titles share too little to be one song, however well the artist and length agree
+constexpr double SameTitleMinimum = 0.5;
+constexpr double OtherTitleFactor = 0.5;
 
 std::size_t common_words(std::vector<std::string> a, std::vector<std::string> b) {
     std::ranges::sort(a);
@@ -96,10 +99,13 @@ ComparableSong comparable_song(
 }
 
 double match_score(const ComparableSong& wanted, const ComparableSong& found) {
-    double score = TitleWeight * dice(wanted.title.words, found.title.words) + ArtistWeight * artists_score(wanted.artists, found.artists) +
-                   LengthWeight * length_score(wanted.duration, found.duration);
+    double title = dice(wanted.title.words, found.title.words);
+    double score = TitleWeight * title + ArtistWeight * artists_score(wanted.artists, found.artists) + LengthWeight * length_score(wanted.duration, found.duration);
     if (wanted.title.versions != found.title.versions) {
         score *= VersionFactor;
+    }
+    if (title < SameTitleMinimum) {
+        score *= OtherTitleFactor;
     }
     return score;
 }

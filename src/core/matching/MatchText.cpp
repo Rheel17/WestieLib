@@ -23,9 +23,9 @@ constexpr std::array Replacements = {
 constexpr std::array<std::string_view, 3> SuffixSeparators = {" - ", " – ", " — "};
 constexpr std::array<std::string_view, 5> FeaturingWords = {" feat. ", " feat ", " ft. ", " ft ", " featuring "};
 // Each a different recording than the one without it
-constexpr std::array<std::string_view, 14> VersionWords = {
-    "live", "remix", "cover", "karaoke", "sped up", "slowed", "instrumental", "acoustic", "demo", "nightcore", "reverb", "in the style of",
-    "made famous by", "tribute",
+constexpr std::array<std::string_view, 20> VersionWords = {
+    "live", "remix", "cover", "karaoke", "sped up", "slowed", "instrumental", "acoustic", "stripped", "session", "sessions", "recorded at", "piano",
+    "orchestral", "demo", "nightcore", "reverb", "in the style of", "made famous by", "tribute",
 };
 
 std::string replaced(std::string text) {

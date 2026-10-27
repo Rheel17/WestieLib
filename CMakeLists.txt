@@ -47,6 +47,7 @@ add_executable(WestieLib WIN32
 	src/core/sources/YouTubeMusicPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylistName.cpp
 	src/core/sources/YtDlpError.cpp
+	src/core/state/EffectiveMetadata.cpp
 	src/core/state/MergeTracks.cpp
 	src/core/state/PruneTracks.cpp
 	src/core/state/StateStore.cpp

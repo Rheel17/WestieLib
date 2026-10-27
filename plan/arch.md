@@ -287,6 +287,10 @@ playlist anymore is looked at again (`prune_tracks`, `src/core/state/`):
    ISRC);
 3. the track's first YouTube Music source.
 
+A field that is empty in one goes on to the next, so a merged track shows its Spotify album before its YouTube Music
+source has one. `effective_metadata` (`src/core/state/EffectiveMetadata`) gives the title, artists, album and length
+by these rules, the length in the same order; so far there are no `edits`. The track table and the cards show it.
+
 The cover art comes from the first of:
 1. the custom cover;
 2. the first Spotify source's `coverUrl`;
@@ -592,8 +596,10 @@ override and no YouTube Music source (see Video resolution).
    first Spotify artist matches one of the candidate's, or a little less for another Spotify artist; a name that
    starts the other (`Prince`, `Prince & The Revolution`) scores 0.9, but one somewhere inside it doesn't, since that
    is more often a tribute (`The Hits Of Phil Collins`). The length scores fully within 2 s and nothing from 30 s.
-   Words such as `live`, `remix`, `cover`, `karaoke`, `sped up`, `slowed`, `instrumental`, `acoustic`, `demo`,
-   `in the style of`, `made famous by` and `tribute` halve the score when one title has them and the other doesn't. A candidate
+   Words such as `live`, `remix`, `cover`, `karaoke`, `sped up`, `slowed`, `instrumental`, `acoustic`, `stripped`,
+   `session`, `recorded at`, `piano`, `orchestral`, `demo`, `in the style of`, `made famous by` and `tribute` halve
+   the score when one title has them and the other doesn't. So does a title similarity under 0.5: the same artist's
+   other song of about the same length (`Down Home Blues`, `Bakersfield Blues`) would pass otherwise. A candidate
    whose video already belongs to a track gets a small bonus, so the same song from both sources tends to end up as
    one track. Ties go to YouTube Music's order.
 5. **Choose** the highest score.
