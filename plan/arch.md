@@ -160,7 +160,7 @@ The state separates what playlists list from what is on disk:
       "durationMs": 242733,
       "isrc": "USxxx0000000",
       "coverUrl": "https://i.scdn.co/image/...",
-      "match": { "videoId": "ccccccccccc", "confidence": 0.94, "review": false,
+      "match": { "videoId": "ccccccccccc", "confidence": 0.94,
                  "title": "Title", "artists": [ "Artist One" ], "durationMs": 243000 },
       "track": "spotify:6r8k1vznHrzlEKYxxxxxxx"
     },
@@ -220,7 +220,7 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | `title`, `artists`, `durationMs` | From the playlist                                                          |
 | `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
 | `isrc`, `coverUrl`               | Spotify only. The playlist response has the cover but no ISRC; where the ISRC comes from is decided with the Matcher |
-| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence` (0 to 1), `review`, and the video's `title`, `artists` and `durationMs` as YouTube Music's search lists them, so a review shows what was matched |
+| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), and the video's `title`, `artists` and `durationMs` as YouTube Music's search lists them, so a review shows what was matched |
 | `track`                          | Key of the track this source belongs to                                    |
 
 **Track fields.**
@@ -253,16 +253,22 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 
 `resolved_video` (`src/core/state/TrackVideos`) gives the video and the source it comes from; there is no override yet.
 
-A track **needs review** when its video comes from a match with `review: true`. Resolution runs for tracks
-without a file, and again when the override changes. Setting `videoOverride` re-downloads the track (or merges
-it, see below), and clears `failure` and `review`.
+A track **needs review** when its video comes from a match that isn't `confirmed` and whose confidence is under the
+review threshold (see Matcher › Choose). The flag isn't stored, so a new threshold applies to the matches already
+made. Resolution runs for tracks without a file, and again when the override changes. Setting `videoOverride`
+re-downloads the track (or merges it, see below), and clears `failure`; the track's video then no longer comes from
+the match, so it no longer needs review.
+
+`needs_review` (`src/core/state/MatchReview`) gives it, for a match and for a track.
 
 **Merging.** No two tracks share a video. A video gets resolved in three ways:
 - a fetch adds a YouTube Music source;
 - the Matcher finishes;
 - a video override is set.
 
-Each time, if another track already has that video, the two tracks merge:
+Each time, if another track already has that video, the two tracks merge. A track that needs review doesn't count:
+its match may be wrong, so it neither merges into a track with its video nor takes one in, until `confirmMatch`
+confirms it, which then merges it. Meanwhile two tracks can share a video. A merge goes like this:
 - The track that had the video first survives. The other track's sources move into it, and its entry is
   deleted.
 - If the deleted track had a file, that file goes to the Recycle Bin.
@@ -360,8 +366,8 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   long as it needs, unchanged. `update` holds a second mutex for its whole run, so changes never interleave, and swaps
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
-  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `match` (without
-  `review`) and `track`; and tracks with `sources`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
+  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `match` and
+  `track`; and tracks with `sources`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
   out, and a failure name from a later version reads as none. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
@@ -612,10 +618,10 @@ override and no YouTube Music source (see Video resolution).
 5. **Choose** the highest score.
    - The source's `match` stores the video id, the score as the confidence, and the candidate's title, artists and
      duration.
-   - So far every match is used as it is. The review threshold, `match.review` and Needs review come with manual
-     matching: a confidence below the threshold will set `review: true`, and the track stays flagged until a video
-     override is set or the match is confirmed.
-   - If the chosen video already belongs to another track, the two tracks merge instead of downloading.
+   - A confidence under the review threshold, 0.85 for now (it is still being tuned), makes the track need review
+     (see Video resolution). It stays flagged until the match is confirmed or a video override is set.
+   - If the chosen video already belongs to another track, the two tracks merge instead of downloading, unless the
+     track needs review.
    - When the searches return nothing, or no candidate reaches the minimum score (0.7, which a matching title and
      length alone don't reach, as with a cover by another artist), the track fails with
      `failure: noMatch` and the searched queries in `error`. A search that fails (no network, an HTTP error) fails
@@ -778,8 +784,10 @@ downloads yet.
   order (playlists by `addedAt`, then their sources), each once. The run emits `TracksQueued` with the ones it hasn't
   queued yet, and matches them one at a time, saving after each:
   - `apply_match` (`ApplyMatch.cpp`) stores the match, clears a failure (a failed track waits again), and merges the
-    track into the one that already has that video (`track_with_video`, `merge_tracks`). The run emits
-    `TracksMerged`, or `TrackStatusChanged`.
+    track into the one that already has that video (`track_with_video`, `merge_tracks`), unless the match needs
+    review. The run emits `TracksMerged`, or `TrackStatusChanged`.
+- `confirm_match` (`src/core/matching/ConfirmMatch`) serves `confirmMatch` on the UI thread: it sets `confirmed` and
+  merges the track as `apply_match` would have.
   - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
   - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped. A track is tried
     once a run.
@@ -803,7 +811,7 @@ downloads yet.
 | `retry(trackKeys)`                       | Queues the given tracks again without fetching playlists       |
 | `resolveRemovals({trackKey: keep/remove})` | Applies removal decisions                                    |
 | `setVideoOverride(trackKey, youtubeUrl)` | Sets `videoOverride` and re-downloads the track, or merges it into the track that already has that video |
-| `confirmMatch(trackKey)`                 | Clears `review` on the match the track's video came from       |
+| `confirmMatch(trackKey)`                 | Sets `confirmed` on the match the track's video comes from, then merges the track into one that already has that video |
 | `searchVideos(query, filter)`            | Searches YouTube Music songs, videos or both; answers with `VideoSearchResults` |
 | `editTrack(trackKey, edits, coverImage?)` | Stores `edits` and an optional custom cover. Re-tags the file, renames it when artists or title changed, emits `TrackUpdated` |
 | `setSettings(settings)`                  | Saves `settings.json`; applies to the next run                 |

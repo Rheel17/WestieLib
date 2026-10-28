@@ -103,6 +103,7 @@ private:
     std::optional<PlaylistRow> selected_row() const;
     void show_playlist_menu(POINT screen);
     void remove_playlist();
+    void confirm_match();
     void open_library_folder() const;
     void open_playlist_page() const;
     void copy_playlist_link() const;

@@ -25,8 +25,8 @@ const wchar_t* status_explanation(StatusTab status, core::TrackFailure failure) 
     case StatusTab::Failed:  return L"The last attempt failed. It's retried on the next sync.";
     case StatusTab::Removed: return L"No longer in any playlist. The file is still in the library.";
     case StatusTab::Kept:    return L"Kept after it left every playlist.";
-    // Needs review has a note instead, which comes with matching
-    case StatusTab::NeedsReview: return L"";
+    // A note in amber, not an explanation. Until there are files to listen to, the video is what there is to check
+    case StatusTab::NeedsReview: return L"Low-confidence match. Check it on YouTube Music, then confirm it or choose another video.";
     default:                     return L"Downloads on the next sync.";
     }
 }

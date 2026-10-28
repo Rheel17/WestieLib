@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "core/sources/SourceType.h"
+#include "core/state/MatchReview.h"
 #include "core/state/MergeTracks.h"
 #include "core/state/TrackVideos.h"
 
@@ -25,6 +26,10 @@ std::optional<std::string> apply_match(State& state, const std::string& track_ke
     track->second.failure = TrackFailure::None;
     track->second.error.clear();
 
+    // A match that may be wrong stays apart until it is confirmed
+    if (needs_review(match)) {
+        return std::nullopt;
+    }
     // The track that had the video first survives
     std::optional<std::string> survivor = track_with_video(state, match.video_id, track_key);
     if (survivor) {

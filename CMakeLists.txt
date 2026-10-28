@@ -31,6 +31,7 @@ add_executable(WestieLib WIN32
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
+	src/core/matching/ConfirmMatch.cpp
 	src/core/matching/LibraryMatches.cpp
 	src/core/matching/MatchScore.cpp
 	src/core/matching/MatchText.cpp
@@ -49,6 +50,7 @@ add_executable(WestieLib WIN32
 	src/core/sources/YouTubeMusicPlaylistName.cpp
 	src/core/sources/YtDlpError.cpp
 	src/core/state/EffectiveMetadata.cpp
+	src/core/state/MatchReview.cpp
 	src/core/state/MergeTracks.cpp
 	src/core/state/PruneTracks.cpp
 	src/core/state/StateStore.cpp
@@ -195,6 +197,7 @@ add_executable(WestieLib WIN32
 	src/ui/tracks/StatusTabText.cpp
 	src/ui/tracks/TrackEntries.cpp
 	src/ui/tracks/TrackPanel.cpp
+	src/ui/tracks/TrackReview.cpp
 	src/ui/tracks/TrackRows.cpp
 	src/ui/tracks/TrackSearch.cpp
 	src/ui/tracks/TrackSort.cpp

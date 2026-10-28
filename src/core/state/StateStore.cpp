@@ -55,6 +55,7 @@ constexpr std::array FailureNames = {FailureName{TrackFailure::NoMatch, "noMatch
 struct MatchJson {
     std::string video_id{};
     double confidence = 0.0;
+    std::optional<bool> confirmed{};
     std::string title{};
     std::vector<std::string> artists{};
     std::int64_t duration_ms = 0;
@@ -152,6 +153,7 @@ Match match_of(MatchJson&& json) {
     return {
         .video_id = std::move(json.video_id),
         .confidence = json.confidence,
+        .confirmed = json.confirmed.value_or(false),
         .title = std::move(json.title),
         .artists = std::move(json.artists),
         .duration = std::chrono::milliseconds(json.duration_ms),
@@ -162,6 +164,7 @@ MatchJson json_of(const Match& match) {
     return {
         .video_id = match.video_id,
         .confidence = match.confidence,
+        .confirmed = match.confirmed ? std::optional(true) : std::nullopt,
         .title = match.title,
         .artists = match.artists,
         .duration_ms = match.duration.count(),
@@ -184,8 +187,10 @@ struct glz::meta<westie::core::PlaylistJson> {
 template<>
 struct glz::meta<westie::core::MatchJson> {
     using T = westie::core::MatchJson;
-    constexpr static auto value =
-            glz::object("videoId", &T::video_id, "confidence", &T::confidence, "title", &T::title, "artists", &T::artists, "durationMs", &T::duration_ms);
+    constexpr static auto value = glz::object(
+            "videoId", &T::video_id, "confidence", &T::confidence, "confirmed", &T::confirmed, "title", &T::title, "artists", &T::artists, "durationMs",
+            &T::duration_ms
+    );
 };
 
 template<>

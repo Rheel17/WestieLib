@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include "ui/commands/CommandState.h"
+#include "ui/framework/Button.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/FontSet.h"
@@ -28,6 +30,7 @@ public:
     int height_for(int width) const;
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void set_contents(const TrackDetails& track);
+    void update(const CommandState& state);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -35,6 +38,7 @@ protected:
 private:
     int arrange(int width, framework::DeferredPositions* positions) const;
     void layout();
+    void on_command(WPARAM wparam) const;
     void open_source(std::size_t index) const;
     void select_playlist(std::size_t index) const;
 
@@ -46,8 +50,10 @@ private:
     SectionTitle status_section_;
     IconText status_;
     framework::Label explanation_;
+    framework::Label review_note_;
     framework::Label reason_;
     OutputBox output_;
+    framework::Button confirm_;
     SectionTitle source_section_;
     framework::Label first_source_key_;
     SourceLink first_source_;

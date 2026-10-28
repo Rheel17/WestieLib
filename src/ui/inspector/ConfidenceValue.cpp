@@ -23,7 +23,7 @@ constexpr UINT LineFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_EL
 }
 
 ConfidenceValue::ConfidenceValue(HWND parent) : Window(window_class(), {.style = WS_CHILD | WS_VISIBLE, .parent = parent}) {
-    set_confidence(0.0);
+    set_confidence(0.0, false);
 }
 
 void ConfidenceValue::set_font(HFONT font) {
@@ -31,8 +31,9 @@ void ConfidenceValue::set_font(HFONT font) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
-void ConfidenceValue::set_confidence(double confidence) {
+void ConfidenceValue::set_confidence(double confidence, bool review) {
     confidence_ = confidence;
+    review_ = review;
     text_ = std::format(L"{}%", std::lround(confidence * PercentPerWhole));
     platform::win32::check(SetWindowTextW(hwnd(), text_.c_str()), "SetWindowTextW");
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
@@ -64,7 +65,7 @@ void ConfidenceValue::paint() const {
     // A narrow card shortens the bar rather than cutting the percentage
     int bar_width = std::clamp(static_cast<int>(client.right) - dpi.scale(BarGapDips) - static_cast<int>(text.cx), 0, dpi.scale(BarWidthDips));
     int bar_top = (client.bottom - dpi.scale(BarHeightDips)) / 2;
-    paint_fraction_bar(paint.dc(), {0, bar_top, bar_width, bar_top + dpi.scale(BarHeightDips)}, confidence_);
+    paint_fraction_bar(paint.dc(), {0, bar_top, bar_width, bar_top + dpi.scale(BarHeightDips)}, confidence_, review_ ? BarFill::Paused : BarFill::Progress);
 
     RECT percent{bar_width + dpi.scale(BarGapDips), 0, client.right, client.bottom};
     SetBkMode(paint.dc(), TRANSPARENT);

@@ -22,7 +22,7 @@ SelectionCard::SelectionCard(HWND parent) :
         Panel(parent, L"Selection card"),
         title_(hwnd(), CardTitleStyle),
         section_(hwnd(), L"Status"),
-        // Needs review counts as Synced
+        // Needs review counts under the track's status
         rows_{
             status_row(StatusTab::Synced), status_row(StatusTab::Waiting), status_row(StatusTab::Failed), status_row(StatusTab::Removed),
             status_row(StatusTab::Kept),

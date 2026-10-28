@@ -39,8 +39,10 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         status_section_(hwnd(), L"Status"),
         status_(hwnd(), StatusStyle),
         explanation_(hwnd(), L"", {.color = framework::TextColor::Gray, .wrap = true}),
+        review_note_(hwnd(), status_explanation(StatusTab::NeedsReview, core::TrackFailure::None), {.color = framework::TextColor::Warning, .wrap = true}),
         reason_(hwnd(), L"", {.color = framework::TextColor::Error}),
         output_(hwnd()),
+        confirm_(hwnd(), {.text = L"Confirm match", .command = std::to_underlying(CommandId::ConfirmMatch)}),
         source_section_(hwnd(), L"Source"),
         first_source_key_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         first_source_(hwnd(), [this] { open_source(0); }),
@@ -67,12 +69,13 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
         section->set_font(fonts.semibold().handle());
     }
     for (framework::Label* label : {
-             &artists_, &album_, &explanation_, &reason_, &first_source_key_, &second_source_key_, &playlists_key_, &no_playlists_, &key_key_, &key_,
+             &artists_, &album_, &explanation_, &review_note_, &reason_, &first_source_key_, &second_source_key_, &playlists_key_, &no_playlists_, &key_key_, &key_,
              &file_,
          }) {
         label->set_font(fonts.regular().handle());
     }
     output_.set_font(fonts.code().handle());
+    confirm_.apply_dpi(dpi, fonts.regular());
     audio_.apply_dpi(fonts);
     first_source_.apply_dpi(dpi, fonts.regular());
     second_source_.apply_dpi(dpi, fonts.regular());
@@ -112,10 +115,15 @@ void TrackCard::set_contents(const TrackDetails& track) {
     layout();
 }
 
+void TrackCard::update(const CommandState& state) {
+    confirm_.set_enabled(state.enabled(CommandId::ConfirmMatch));
+}
+
 LRESULT TrackCard::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE: layout(); return 0;
-    default:      return Panel::handle_message(message, wparam, lparam);
+    case WM_SIZE:    layout(); return 0;
+    case WM_COMMAND: on_command(wparam); return 0;
+    default:         return Panel::handle_message(message, wparam, lparam);
     }
 }
 
@@ -129,17 +137,23 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
 
     layout.section(status_section_.hwnd());
     layout.block(status_.hwnd(), dpi.scale(StatusGapDips), status_.height());
-    if (track_.row.status == StatusTab::NeedsReview && !track_.row.duplicate_of) {
-        layout.hide(explanation_.hwnd());
-    } else {
-        layout.block(explanation_.hwnd(), dpi.scale(ExplanationGapDips), explanation_.height_for(width));
-    }
+    bool review = track_.row.status == StatusTab::NeedsReview;
+    // A duplicate explains whose duplicate it is instead
+    bool note = review && !track_.row.duplicate_of;
+    const framework::Label& explanation = note ? review_note_ : explanation_;
+    layout.hide((note ? explanation_ : review_note_).hwnd());
+    layout.block(explanation.hwnd(), dpi.scale(ExplanationGapDips), explanation.height_for(width));
     if (track_.failure != core::TrackFailure::None) {
         layout.block(reason_.hwnd(), dpi.scale(ReasonGapDips), line_height_);
         layout.block(output_.hwnd(), dpi.scale(OutputGapDips), output_.height_for(width));
     } else {
         layout.hide(reason_.hwnd());
         layout.hide(output_.hwnd());
+    }
+    if (review) {
+        layout.buttons({&confirm_});
+    } else {
+        layout.hide(confirm_.hwnd());
     }
 
     layout.section(source_section_.hwnd());
@@ -163,6 +177,12 @@ void TrackCard::layout() {
     framework::DeferredPositions positions;
     arrange(client.right, &positions);
     positions.apply();
+}
+
+void TrackCard::on_command(WPARAM wparam) const {
+    if (HIWORD(wparam) == BN_CLICKED) {
+        events_.on_command(static_cast<CommandId>(LOWORD(wparam)));
+    }
 }
 
 void TrackCard::open_source(std::size_t index) const {

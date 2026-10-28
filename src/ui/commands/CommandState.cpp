@@ -13,7 +13,7 @@ bool CommandState::enabled(CommandId command) const {
     case CommandId::SyncSelectedPlaylist: return playlist_selected && !syncing;
     case CommandId::CancelSync:           return syncing;
     case CommandId::CheckForUpdates:      return !tools_busy && !syncing;
-    case CommandId::ConfirmMatch:
+    case CommandId::ConfirmMatch:         return review_selected;
     case CommandId::ChooseVideo:
     case CommandId::EditTrack:
     case CommandId::Retry:

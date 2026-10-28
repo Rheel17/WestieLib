@@ -3,17 +3,22 @@
 #include <ranges>
 #include <set>
 
+#include "ui/tracks/TrackReview.h"
+
 namespace westie::ui {
 
 namespace {
 
-void count(TrackCounts& counts, const core::Track& track) {
+void count(TrackCounts& counts, const core::State& state, const core::Track& track) {
     ++counts.total;
     switch (track.status) {
     case core::TrackStatus::Downloaded: ++counts.synced; break;
     case core::TrackStatus::Pending:    ++counts.waiting; break;
     case core::TrackStatus::Failed:     ++counts.failed; break;
     default:                            break;
+    }
+    if (shows_review(state, track)) {
+        ++counts.to_review;
     }
 }
 
@@ -24,7 +29,7 @@ TrackCounts count_tracks(const core::State& state, const std::optional<std::stri
     TrackCounts counts;
     if (!playlist) {
         for (const core::Track& track : state.tracks | std::views::values) {
-            count(counts, track);
+            count(counts, state, track);
         }
         return counts;
     }
@@ -41,7 +46,7 @@ TrackCounts count_tracks(const core::State& state, const std::optional<std::stri
             continue;
         }
         if (auto track = state.tracks.find(source->second.track); track != state.tracks.end()) {
-            count(counts, track->second);
+            count(counts, state, track->second);
         }
     }
     return counts;

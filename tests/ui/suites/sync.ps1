@@ -187,6 +187,7 @@ $Senorita = "Se$([char]0xF1)orita"
 $RowLate = " | Late Night Swing | Ana, Ben | Nights | $SpotifyName | 4:01"
 $RowSenorita = " | $Senorita | Earth, Wind & Fire | Summer | $SpotifyName | 3:05"
 $SpotifyQuery = "$SpotifyId 0 100 Bearer fake-token-$SpotifyId WebPlayer"
+$ReviewNote = 'Low-confidence match. Check it on YouTube Music, then confirm it or choose another video.'
 
 # The Spotify playlist: two tracks, one by a single artist with a comma in its name, an episode and a local file (both
 # left out), and a repeat
@@ -575,7 +576,7 @@ Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
 $seeded = Get-SavedState
 $app = Start-App
 $h = $app.Hwnd
-Check 'All tracks: a row per track, two failed' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Showing 6 of 6'
+Check 'All tracks: a row per track, two failed' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 1 | Failed 2 | Showing 6 of 6'
 
 Select-TrackRow $h 0
 Check 'Only on YouTube Music: the playlist chose its video' (Wait-TrackCard $h 'ytm:vidAlone001') ("Track card:  / Alone Here / Lone / Album is read when it downloads / " +
@@ -592,11 +593,13 @@ $confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'
 $y = [int]((Get-ClientHeight $confidence) / 2)
 Check '  confidence bar: filled, empty end, gap' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 110) - 1), $y, ((S 110) + 1), $y)) -join ' ') '06b025 e6e6e6 ffffff'
 Select-TrackRow $h 2
-Check 'A live version: lengths 33 s apart' (Wait-TrackCard $h 'spotify:spCrazy0000000000000002') ("Track card:  / Crazy / Gnarls Barkley / St. Elsewhere / " +
-	"Status / Waiting / Downloads on the next sync. / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+Check 'A live version: lengths 33 s apart, 61% needs review' (Wait-TrackCard $h 'spotify:spCrazy0000000000000002') ("Track card:  / Crazy / Gnarls Barkley / St. Elsewhere / " +
+	"Status / Needs review / $ReviewNote / Confirm match / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spCrazy0000000000000002 / Audio / Matched / Crazy (Live at Coachella 2006) / Artists / Gnarls Barkley / Length / 3:31 $MiddleDot Spotify 2:58 / " +
 	"ID / liveCrazy01 / Chosen by / Matcher / Confidence / 61% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-live.png") }
+$confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'))[0]
+Check '  confidence bar: yellow' ([W]::PixelsIn($h, $confidence, @(0, $y)) -join ' ') 'd9a400'
 # The merged track has one row, for its first entry: WCS's, the first playlist
 Select-TrackRow $h 3
 Check 'On both: one row, the playlist chose, the match agrees' (Wait-TrackCard $h 'ytm:vidMerged01') ("Track card:  / Merged Song / Both / Shared / " +
@@ -635,7 +638,7 @@ $merged = "Merged Song | Both | Shared | WCS, Her playlist | 3:20"
 Check 'Her playlist: a row per entry, Playlists naming WCS too' (Get-TrackRows $h) ("1 |  | Best Part | Daniel Caesar, H.E.R. | Freudian | Her playlist | 3:29 / " +
 	"2 |  | Crazy | Gnarls Barkley | St. Elsewhere | Her playlist | 2:58 / 3 |  | $merged / 4 |  | No Results | The Late Hours | Sway | Her playlist | 3:48 / " +
 	"5 |  | Offline | Nobody | Unplugged | Her playlist | 2:30 / 6 |  | $merged")
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Duplicates 1 | Showing 6 of 6 in Her playlist'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 1 | Failed 2 | Duplicates 1 | Showing 6 of 6 in Her playlist'
 Check '  Status tooltips: #3 | #6' "$(Get-StatusTip $h 2 1) | $(Get-StatusTip $h 5 1)" "Waiting | Duplicate of track #3 $MiddleDot Waiting"
 Select-TrackRow $h 5
 Check '  #6 a duplicate: its card' (Wait-TrackCard $h 'spotify:spMergedAgain000000006') ("Track card:  / Merged Song / Both / Shared / " +
@@ -646,9 +649,9 @@ Check '  #6 a duplicate: its card' (Wait-TrackCard $h 'spotify:spMergedAgain0000
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-duplicate.png") }
 Click-Tab $h 5
 Check '  the Duplicates tab: #6 alone' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
-	"6 |  | $merged | All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Duplicates 1 | Showing 1 of 6 in Her playlist")
+	"6 |  | $merged | All 6 | Synced 0 | Waiting 4 | Needs review 1 | Failed 2 | Duplicates 1 | Showing 1 of 6 in Her playlist")
 Click-AllTracks $h
-Check '  All tracks: no Duplicates tab, back to All' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 0 | Failed 2 | Showing 6 of 6'
+Check '  All tracks: no Duplicates tab, back to All' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 1 | Failed 2 | Showing 6 of 6'
 
 # Adding a playlist saves the state, which keeps the matches and failures as they were
 Click-AllTracks $h
@@ -761,4 +764,91 @@ Send-Command $h '&Cancel'
 for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
 [void]$Web.YtmGate.Set()
 Check '  Cancel: the run ends, the failures as they were' "$(Test-Syncing $h) | $(Get-SavedFailures)" "False | $MatchFailures"
+Stop-App $app
+
+"--- Run 7: matches to review"
+# Two songs whose best result is 25 s off: one alone, one whose title is the longer one of a YouTube Music playlist's
+# entry. Under 0.85 each, so they need review, and the second stays apart from that entry until it is confirmed.
+$ReviewId = '6reviewreviewreviewrev'
+$Web.SpotifyNames[$ReviewId] = 'Reviews'
+$Web.SpotifyItems[$ReviewId] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Track('spReviewAlone000000001', 'Tell Me', @('Rae'), 'Tell', 200000),
+	[FakeWeb]::Track('spReviewApart000000002', 'Apart Song', @('Rae'), 'Apart', 200000)
+)
+$Web.YtmResults['Rae Tell Me'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('reviewVid01', 'Tell Me', @('Rae'), 'Tell', '3:45'))
+$Web.YtmResults['Rae Apart Song'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('apartVid001', 'Apart Song Extended', @('Rae'), 'Apart', '3:45'))
+
+# Each Spotify source with a match as "id videoId confirmed"
+function Get-SavedReviews {
+	@((Get-SavedState).sources.PSObject.Properties | Where-Object { $_.Value.match } | ForEach-Object {
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.videoId) $([bool]$_.Value.match.confirmed)"
+	}) -join ' / '
+}
+
+function Click-CardButton($hwnd, [string]$text) {
+	$button = @([W]::Children((Get-InspectorCard $hwnd), 'Button') | Where-Object { [W]::TextOf($_) -eq $text })[0]
+	[void][W]::PostMessageW($button, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+}
+
+function Wait-SavedTracks([string]$like) {
+	for ($i = 0; $i -lt 50 -and (Get-SavedTracks) -notlike $like; $i++) { Start-Sleep -Milliseconds 100 }
+	Get-SavedTracks
+}
+
+$playlists = '"ytm:PLreview1": {"url": "https://music.youtube.com/playlist?list=PLreview1", "name": "Long ones", "addedAt": "2026-01-01T12:00:00Z", ' +
+	'"sources": ["ytm:apartVid001"]}, ' +
+	"`"spotify:$ReviewId`": {`"url`": `"https://open.spotify.com/playlist/$ReviewId`", `"name`": `"Reviews`", `"addedAt`": `"2026-01-02T12:00:00Z`"}"
+$sources = '"ytm:apartVid001": {"title": "Apart Song Extended", "artists": ["Rae"], "durationMs": 225000, "track": "ytm:apartVid001"}'
+$tracks = '"ytm:apartVid001": {"sources": ["ytm:apartVid001"], "status": "pending", "addedAt": "2026-01-01T12:00:00Z"}'
+[IO.File]::WriteAllText($StateFile, "{`"version`": 1, `"playlists`": {$playlists}, `"sources`": {$sources}, `"tracks`": {$tracks}}")
+Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
+$app = Start-App
+$h = $app.Hwnd
+# Until its tracks are fetched, Reviews has no counts line
+$script:TallRows = @(1)
+Click-PlaylistRow $h 2
+$script:TallRows = 1, 2
+$queries = Get-SpotifyQueries
+Send-Command $h 'Sync &selected playlist'
+Wait-Fetches $h $queries 1 -Spotify
+Check 'Synced: both matched, neither confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 False / spReviewApart000000002 apartVid001 False'
+Check '  the one with the entry''s video stays apart' (Get-SavedTracks) ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
+	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 pending [ytm:apartVid001] True')
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 2 | Synced 0 | Waiting 2 | Needs review 2 | Failed 0 | Duplicates 0 | Showing 2 of 3 in Reviews'
+Check '  Status tooltips' "$(Get-StatusTip $h 0 1) | $(Get-StatusTip $h 1 1)" 'Needs review | Needs review'
+Check '  the playlist card counts them' ((Wait-CardTexts $h 'Playlist card') -like '* / To review / 2 / *') 'True'
+Update-MenuStates $h
+Check '  Confirm match grayed with nothing selected' ([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*') 'True'
+
+Select-TrackRow $h 0
+Check 'Tell Me: the note and Confirm match' (Wait-TrackCard $h 'spotify:spReviewAlone000000001') ("Track card:  / Tell Me / Rae / Tell / " +
+	"Status / Needs review / $ReviewNote / Confirm match / Source / Source / Spotify $MiddleDot Open track / Playlists / Reviews / " +
+	"Key / spotify:spReviewAlone000000001 / Audio / Matched / Tell Me / Artists / Rae / Length / 3:45 $MiddleDot Spotify 3:20 / " +
+	"ID / reviewVid01 / Chosen by / Matcher / Confidence / 84% / File / Not downloaded yet.")
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-review.png") }
+$confirm = @([W]::Children((Get-InspectorCard $h), 'Button') | Where-Object { [W]::TextOf($_) -eq 'Confirm match' })[0]
+Update-MenuStates $h
+Check '  Confirm match enabled: button | menu' "$([W]::IsWindowEnabled($confirm)) | $([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*')" 'True | False'
+$confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'))[0]
+Check '  confidence bar: yellow to 84%, then empty' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 92) - 1), $y, ((S 92) + 1), $y)) -join ' ') 'd9a400 d9a400 e6e6e6'
+Send-Command $h '&Confirm match'
+for ($i = 0; $i -lt 50 -and (Get-SavedReviews) -notlike '*reviewVid01 True*'; $i++) { Start-Sleep -Milliseconds 100 }
+Check 'Track > Confirm match: saved' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 False'
+Check '  tabs | its status' "$(Get-TrackSummary $h) | $(Get-StatusTip $h 0 1)" 'All 2 | Synced 0 | Waiting 2 | Needs review 1 | Failed 0 | Duplicates 0 | Showing 2 of 3 in Reviews | Waiting'
+Check '  its card: Waiting, no button' ((Wait-TrackCard $h 'spotify:spReviewAlone000000001') -like '*Status / Waiting / Downloads on the next sync. / Source / *') 'True'
+
+Select-TrackRow $h 1
+[void](Wait-TrackCard $h 'spotify:spReviewApart000000002')
+Click-CardButton $h 'Confirm match'
+Check 'Confirm match in the card: merged into the entry''s track' (Wait-SavedTracks '*apartVid001,spReview*') ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
+	'ytm:apartVid001 pending [ytm:apartVid001,spReviewApart000000002] True')
+Check '  saved confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True'
+Check '  tabs' (Get-TrackSummary $h) 'All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 2 in Reviews'
+
+$searches = @($Web.YtmQueries()).Count
+$queries = Get-SpotifyQueries
+Send-Command $h 'Sync &selected playlist'
+Wait-Fetches $h $queries 1 -Spotify
+Check 'Synced again: confirmed matches aren''t searched again' "[$(Get-YtmQueriesSince $searches)] $(Get-SavedReviews)" (
+	'[] spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True')
 Stop-App $app

@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "core/sources/SourceType.h"
+#include "core/state/MatchReview.h"
 
 namespace westie::core {
 
@@ -40,7 +41,8 @@ std::optional<ResolvedVideo> resolved_video(const State& state, const Track& tra
 
 std::optional<std::string> track_with_video(const State& state, std::string_view video_id, std::string_view except) {
     for (const auto& [key, track] : state.tracks) {
-        if (key == except) {
+        // A match that may be wrong takes no other track's sources in
+        if (key == except || needs_review(state, track)) {
             continue;
         }
         if (std::optional<ResolvedVideo> video = resolved_video(state, track); video && video->video_id == video_id) {
@@ -53,6 +55,9 @@ std::optional<std::string> track_with_video(const State& state, std::string_view
 std::set<std::string> track_videos(const State& state) {
     std::set<std::string> videos;
     for (const Track& track : state.tracks | std::views::values) {
+        if (needs_review(state, track)) {
+            continue;
+        }
         if (std::optional<ResolvedVideo> video = resolved_video(state, track)) {
             videos.insert(std::move(video->video_id));
         }

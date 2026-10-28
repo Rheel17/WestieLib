@@ -751,7 +751,7 @@ function trackInspector(s, t, cfg) {
 		kept: ['kept', 'Kept', 'Kept after it left every playlist.'],
 	};
 	let [icon, word, expl] = STATUS[t.status];
-	const review = t.status === 'downloaded' && t.review;
+	const review = (t.status === 'downloaded' || t.status === 'pending') && t.review;
 	if (review) [icon, word, expl] = ['warn', 'Needs review', ''];
 	if (t.dup) [icon, word, expl] = ['duplicate', 'Duplicate', `Duplicate of track #${t.dupAt} in this playlist.`];
 	if (t.noMatch) expl = 'No usable video was found. Choose one yourself.';
@@ -1086,10 +1086,10 @@ const SCREENS = [
 		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'] },
 		cap: 'The Needs review tab lists low-confidence matches. One is selected, and the inspector offers Confirm match, Choose video… and Edit track….',
 		notes: [
-			'Needs review is a subset of Synced. These files exist, but the Matcher wasn’t sure it picked the right video.',
+			'Needs review is a subset of Synced and Waiting. The Matcher wasn’t sure it picked the right video, so the match doesn’t merge into another track until it is confirmed.',
 			'The Audio section shows what was matched. A length that is more than 5 seconds off is drawn in amber. This often gives away a live version or a cover.',
 			'Confirm match clears the flag (<code>confirmMatch</code>). Choose video… opens the dialog on the next screen.',
-			'The confidence bar is a progress control in the paused (yellow) state.',
+			'The confidence bar is yellow, the color of a paused progress bar.',
 		],
 	},
 	{

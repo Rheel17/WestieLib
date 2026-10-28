@@ -71,7 +71,7 @@ void AudioRows::set_contents(const TrackDetails& track) {
         matched_.set_text(track.match->title);
         artists_.set_text(track.match->artists);
         length_.set_lengths(track.match->duration, track.match->source_duration);
-        confidence_.set_confidence(track.match->confidence);
+        confidence_.set_confidence(track.match->confidence, track.row.status == StatusTab::NeedsReview);
         spotify_match_.set_text(std::format(L"Same ID · {}%", std::lround(track.match->confidence * PercentPerWhole)));
     }
 }

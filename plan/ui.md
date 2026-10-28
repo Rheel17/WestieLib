@@ -64,14 +64,18 @@ The UI uses its own words for the core statuses.
 | (downloading)      | Waiting, shown as `Downloading 62%`  | blue progress ring that fills      |
 | (needs a tool)     | Waiting, shown as `Waiting for ffmpeg` | gray hourglass, still            |
 | `failed`           | Failed                               | red circle with cross              |
-| `match.review`     | Needs review                         | amber warning triangle             |
+| (unconfirmed low-confidence match) | Needs review         | amber warning triangle             |
 | `orphaned`         | Removed                              | orange circle with slash           |
 | `kept`             | Kept                                 | gray pin                           |
 | (a playlist's later entry of a track) | Duplicate         | two overlapping gray squares, nearly square-cornered |
 
-In the Status column, Needs review wins over Synced and shows ⚠, because review is the state the user can act
-on. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a duplicate
-counts under its track's status everywhere else.
+In the Status column, Needs review wins over Synced and Waiting and shows ⚠, because review is the state the user
+can act on. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a
+duplicate counts under its track's status everywhere else.
+
+**Needs review.** A Spotify track needs review when its video comes from a match whose confidence is under the
+review threshold (`arch.md`, Matcher › Choose) and that the user hasn't confirmed. Until then the match stays apart:
+it doesn't merge into a track that already has the video.
 
 **Waiting for tools.** Work that needs a tool waits while that tool isn't installed, and only then; work that doesn't
 need it goes ahead. Waiting isn't failing: the hourglass is gray and still, unlike ✕ for a failed download and ⚠ for
@@ -138,7 +142,8 @@ The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Sett
     runs. The tools don't matter: work that needs a missing tool waits (see Vocabulary › Waiting for tools).
   - `Remove playlist…` and `Sync selected playlist` need a selected playlist, and `Sync selected playlist` also needs
     no sync running.
-  - Track items need a selected track.
+  - Track items need a selected track. `Confirm match` needs exactly one selected row, and that it needs review.
+  - So far the other Track items stay disabled; each is enabled with its feature.
   - `Check for updates` is disabled while tools are checked, installed or updated, and while a sync runs.
   - Everything else is always enabled.
 - View › Log shows a check mark while the log pane is shown.
@@ -362,7 +367,8 @@ the source into account, so each button shows how many rows it would list:
 - `Duplicates` lists the playlist's duplicates. It shows in every playlist scope, also at 0, and never in All tracks,
   which has none.
 - All = Synced + Waiting + Failed + Removed + Kept.
-- Needs review is a subset of Synced, and Duplicates of All: a duplicate also counts under its track's status.
+- Needs review is a subset of Synced and Waiting: a row that needs review also counts under its track's status. So
+  is Duplicates of All: a duplicate also counts under its track's status.
 
 ### Result line
 
@@ -443,7 +449,7 @@ tab, search or source starts it at the top.
     5 s, which often gives away a live version or a cover;
   - `ID`, the YouTube Music id as a link; `No match found` in red when the Matcher found nothing;
   - `Chosen by`: `Playlist`, `Matcher` or `Override`;
-  - `Confidence`, as a bar + %; the bar uses the paused (yellow) state when review is needed;
+  - `Confidence`, as a bar + %; the bar is yellow when review is needed;
   - for a YouTube Music entry whose track merged with a Spotify source, `Spotify match: Same ID · 96%` replaces
     the matcher rows.
 - **File**: the file name and `Show in folder`.
@@ -454,8 +460,9 @@ them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 So far no track has a file, so the track card shows no cover, no year, and `File` not downloaded yet. It shows the
 status with its explanation, a failed match's reason and output, and the Audio rows of a video that a YouTube Music
 source or the Matcher chose. Until Choose video exists, a failed match explains "No usable video was found. It's
-searched again on the next sync." The Needs review note, the ISRC and every action button come with their
-features, and so do the selection card's bulk actions.
+searched again on the next sync." With no file to listen to, the Needs review note reads "Low-confidence match.
+Check it on YouTube Music, then confirm it or choose another video.", and its only action is `Confirm match`. The
+ISRC and the other action buttons come with their features, and so do the selection card's bulk actions.
 
 ```
 ┌ inspector ──────────────────────┐   ┌ inspector ──────────────────────┐
@@ -531,12 +538,14 @@ The track card, from the top, in DIPs:
 
   `Length` is the video's length (`m:ss`), in amber when it differs from the Spotify length by more than 5 s, then
   ` · Spotify 3:32` in gray. `ID` is the YouTube Music id (the video id) as a link to `https://music.youtube.com/watch?v=<id>`.
-  `Confidence` is a 110 px bar, 6 px tall and centered on the line, filled in green as far as the confidence, then
-  6 px and the percentage; a narrower card shortens the bar.
+  `Confidence` is a 110 px bar, 6 px tall and centered on the line, filled as far as the confidence, then 6 px and
+  the percentage; a narrower card shortens the bar. The fill is green, or `#D9A400` (a paused progress bar's yellow)
+  when the track needs review.
 - **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file.
 
 The selection card: `N tracks selected` in the title's font and line, without a glyph; then **Status**, with a row for
-each status that holds any of the tracks, in the order Synced (with Needs review), Waiting, Failed, Removed, Kept: the
+each status that holds any of the tracks, in the order Synced, Waiting, Failed, Removed, Kept (a track that needs
+review counts under its status): the
 word as the key, and its 16 px icon, 4 px, and the count as the value. When all of them are Removed, "No longer in any
 playlist. Their files are still in the library." follows 6 px below in gray.
 

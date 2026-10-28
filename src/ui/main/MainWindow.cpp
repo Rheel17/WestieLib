@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ResourceIds.h"
+#include "core/matching/ConfirmMatch.h"
 #include "core/playlists/AddPlaylist.h"
 #include "core/playlists/RemovePlaylist.h"
 #include "platform/NearestExistingFolder.h"
@@ -79,7 +80,14 @@ MainWindow::MainWindow(
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
-        tracks_(hwnd(), normalizer, [this] { show_inspector(); }),
+        tracks_(
+                hwnd(), normalizer,
+                [this] {
+                    // Before the card shows its buttons, so they don't fade from disabled to enabled
+                    update_commands();
+                    show_inspector();
+                }
+        ),
         welcome_(
                 hwnd(),
                 settings_store.defaults().library_path,
@@ -318,11 +326,13 @@ void MainWindow::layout_panels() {
 }
 
 CommandState MainWindow::command_state() const {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
     return {
         .syncing = sync_board_.running(),
         .tools_busy = tool_board_.running(),
         .has_playlists = has_playlists(),
         .playlist_selected = selected_playlist_.has_value(),
+        .review_selected = selected.size() == 1 && selected.front().status == StatusTab::NeedsReview,
         .log_visible = panels_.log_visible,
     };
 }
@@ -354,7 +364,8 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::CheckForUpdates:      tools_.run(true); return;
     case CommandId::About:                show_about_dialog(hwnd()); return;
     case CommandId::FocusSearch:          tracks_.focus_search(); return;
-    default:                             return;
+    case CommandId::ConfirmMatch:         confirm_match(); return;
+    default:                              return;
     }
 }
 
@@ -389,6 +400,15 @@ void MainWindow::remove_playlist() {
     }
     core::remove_playlist(state_, playlist->key);
     selected_playlist_.reset();
+    show_playlists();
+}
+
+void MainWindow::confirm_match() {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    if (selected.size() != 1) {
+        return;
+    }
+    core::confirm_match(state_, selected.front().track);
     show_playlists();
 }
 

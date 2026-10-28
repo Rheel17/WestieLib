@@ -21,8 +21,10 @@ struct TrackRow {
     // The source key of the entry, or in All tracks of the track's first entry
     std::string key{};
     std::string track{};
-    // Its track's status, a duplicate's too
+    // Its track's status, a duplicate's too: NeedsReview wins over Synced and Waiting
     StatusTab status = StatusTab::Waiting;
+    // The same without NeedsReview, which the status tabs count it under too
+    StatusTab counts_as = StatusTab::Waiting;
     std::wstring title{};
     std::wstring artists{};
     std::wstring album{};

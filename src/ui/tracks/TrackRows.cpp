@@ -12,6 +12,7 @@
 #include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
 #include "ui/tracks/TrackEntries.h"
+#include "ui/tracks/TrackReview.h"
 #include "ui/tracks/TrackSearch.h"
 
 namespace westie::ui {
@@ -119,9 +120,11 @@ std::vector<TrackRow> track_rows(const core::State& state, const std::optional<s
         if (track == state.tracks.end()) {
             continue;
         }
+        StatusTab status = status_tab(track->second.status);
         TrackRow row{
             .track = track->first,
-            .status = status_tab(track->second.status),
+            .status = shows_review(state, track->second) ? StatusTab::NeedsReview : status,
+            .counts_as = status,
             .position = listing.position,
             .source = core::source_type_of_key(listing.source),
         };
@@ -151,11 +154,10 @@ std::vector<TrackRow> rows_from_source(const std::vector<TrackRow>& rows, std::o
 std::vector<TrackRow> rows_in_tab(const std::vector<TrackRow>& rows, StatusTab tab) {
     auto in_tab = [tab](const TrackRow& row) {
         switch (tab) {
-        case StatusTab::All:    return true;
-        // Needs review is part of Synced
-        case StatusTab::Synced:     return row.status == StatusTab::Synced || row.status == StatusTab::NeedsReview;
-        case StatusTab::Duplicates: return row.duplicate_of.has_value();
-        default:                    return row.status == tab;
+        case StatusTab::All:         return true;
+        case StatusTab::NeedsReview: return row.status == StatusTab::NeedsReview;
+        case StatusTab::Duplicates:  return row.duplicate_of.has_value();
+        default:                     return row.counts_as == tab;
         }
     };
     return rows | std::views::filter(in_tab) | std::ranges::to<std::vector>();
@@ -168,14 +170,16 @@ StatusCounts status_counts(const std::vector<TrackRow>& rows) {
         if (row.duplicate_of) {
             ++counts.duplicates;
         }
-        switch (row.status) {
-        case StatusTab::NeedsReview: ++counts.needs_review; ++counts.synced; break;
-        case StatusTab::Synced:      ++counts.synced; break;
-        case StatusTab::Waiting:     ++counts.waiting; break;
-        case StatusTab::Failed:      ++counts.failed; break;
-        case StatusTab::Removed:     ++counts.removed; break;
-        case StatusTab::Kept:        ++counts.kept; break;
-        default:                     break;
+        if (row.status == StatusTab::NeedsReview) {
+            ++counts.needs_review;
+        }
+        switch (row.counts_as) {
+        case StatusTab::Synced:  ++counts.synced; break;
+        case StatusTab::Waiting: ++counts.waiting; break;
+        case StatusTab::Failed:  ++counts.failed; break;
+        case StatusTab::Removed: ++counts.removed; break;
+        case StatusTab::Kept:    ++counts.kept; break;
+        default:                 break;
         }
     }
     return counts;
