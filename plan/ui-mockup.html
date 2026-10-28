@@ -954,35 +954,35 @@ function settingsDialog() {
 
 const dlgTitle = title => `<div class="dt"><span class="t">${title}</span><span class="capb">${ic('close', 's10')}</span></div>`;
 
-// One dialog for both cases: several candidates to pick from, or nothing found. Both take a pasted link.
+// One dialog for both cases: several candidates to pick from, or nothing found. Both take a pasted link. The list
+// holds the current match, the library's YouTube Music entries that come close, and the search results, by score.
 function chooseVideoDialog(t, found) {
 	const results = found ? [
-		['Feeling Good (Live)', 'Michael Bublé', 'Caught in the Act', 'Song', '4:12', 'current'],
-		['Feeling Good', 'Michael Bublé', '', 'Video', '3:59', 'sel'],
-		['Feeling Good', 'Nina Simone', 'I Put a Spell on You', 'Song', '2:53'],
-		['Feeling Good (Acoustic Cover)', 'Covers Club', 'Acoustic Covers, Vol. 3', 'Song', '3:40'],
-		['Feeling Good (Karaoke Version)', 'Ameritz Karaoke', 'Karaoke Hits 2005', 'Song', '3:58'],
+		['Feeling Good', 'Michael Bublé', '', '3:59', 0.96, 'library', 'sel'],
+		['Feeling Good (Live)', 'Michael Bublé', 'Caught in the Act', '4:12', 0.58, 'current'],
+		['Feeling Good', 'Nina Simone', 'I Put a Spell on You', '2:53', 0.55],
+		['Feeling Good (Acoustic Cover)', 'Covers Club', 'Acoustic Covers, Vol. 3', '3:40', 0.31],
+		['Feeling Good (Karaoke Version)', 'Ameritz Karaoke', 'Karaoke Hits 2005', '3:58', 0.30],
 	] : [];
-	const rows = results.map(([title, artist, album, type, len, flag]) => {
+	const rows = results.map(([title, artist, album, len, score, mark, sel]) => {
 		const off = Math.abs(secs(len) - t.dur) > 5;
-		return `<tr${flag === 'sel' ? ' class="sel"' : ''}><td class="c0">${esc(title)}${flag === 'current' ? ' <span class="gray">(current)</span>' : ''}</td>
-			<td>${esc(artist)}</td><td>${esc(album)}</td><td>${type}</td><td class="cl tm r${off ? ' amber' : ''}">${len}</td><td class="fill"></td></tr>`;
+		return `<tr${sel ? ' class="sel"' : ''}><td class="c0">${esc(title)}${mark ? ` <span class="gray">(${mark === 'current' ? 'current' : 'in library'})</span>` : ''}</td>
+			<td>${esc(artist)}</td><td>${esc(album)}</td><td class="cl tm r${off ? ' amber' : ''}">${len}</td><td class="r">${pct(score)}</td><td class="fill"></td></tr>`;
 	}).join('');
-	const query = found ? 'Michael Bublé Feeling Good' : 'The Late Hours Sway With Me';
+	const query = found ? 'Michael Bublé Feeling Good' : 'The Late Hours Sway With Me (WCS Edit)';
 	const link = found
 		? `<div class="edit"><span class="cue">https://music.youtube.com/watch?v=…</span></div>`
 		: `<div class="edit focus"><span>https://www.youtube.com/watch?v=Qm4XtP0r8zA</span><span class="caret" style="margin-left:-3px"></span></div>
-			<div class="detect">${ic('yt', 's14')}<span>YouTube video · Qm4XtP0r8zA</span></div>`;
-	return `<div class="dlg" style="width:660px">${dlgTitle('Choose a video')}
+			<div class="detect">${ic('ytm', 's14')}<span>YouTube video · Qm4XtP0r8zA</span></div>`;
+	return `<div class="dlg" style="width:640px">${dlgTitle('Choose a video')}
 		<div class="db">
 			<div class="srcline">${glyph(t.src)}<b>${esc(t.title)}</b><span class="gray">· ${esc(t.artists.join(', '))} · ${esc(t.album)} · ${mmss(t.dur)}</span></div>
 			<div class="gray" style="margin:2px 0 12px 18px">${found ? `Current match: ${esc(t.mt)}, ${pct(t.conf)} confidence` : 'The Matcher found no usable video.'}</div>
 			<div class="lbl">Search YouTube Music:</div>
-			<div class="fld"><div class="edit" style="flex:1">${esc(query)}</div>
-				<div class="combo" style="width:140px"><span>Songs and videos</span>${ic('chev', 's10')}</div>${btn('Search')}</div>
+			<div class="fld"><div class="edit" style="flex:1">${esc(query)}</div>${btn('Search')}</div>
 			<div class="lv mini" style="height:138px;position:relative"><table>
-				<colgroup><col style="width:230px"><col style="width:120px"><col style="width:150px"><col style="width:52px"><col style="width:52px"><col></colgroup>
-				<thead><tr><th>Title</th><th>Artist</th><th>Album</th><th>Type</th><th class="r">Length</th><th class="fill"></th></tr></thead>
+				<colgroup><col style="width:240px"><col style="width:130px"><col style="width:140px"><col style="width:52px"><col style="width:48px"><col></colgroup>
+				<thead><tr><th>Title</th><th>Artists</th><th>Album</th><th class="r">Length</th><th class="r">Score</th><th class="fill"></th></tr></thead>
 				<tbody>${rows}</tbody>
 			</table>${found ? '' : `<div class="lvempty">No results. Try fewer words, or paste a link below.</div>`}</div>
 			<div class="lbl" style="margin-top:12px">Or paste a YouTube or YouTube Music link:</div>
@@ -1098,10 +1098,10 @@ const SCREENS = [
 		cap: 'Choose video… (inspector, Track menu or Edit track) opens this dialog. It lists YouTube Music results for the track, and it also takes a pasted link.',
 		notes: [
 			'The source track and the current match are at the top, so you can compare them at a glance.',
-			'The search starts from the Matcher’s query. You can edit it and search songs, videos, or both. The Matcher only searches songs. Here the official music video is selected because its length matches.',
+			'The list starts from the Matcher’s queries, with the current match and the library’s YouTube Music entries that come close, sorted by score. You can edit the query and search again; like the Matcher, it searches songs. Here a WCS playlist’s entry is selected: choosing it merges the two tracks.',
 			'Lengths more than 5 seconds off the Spotify length are amber.',
-			'Open in browser plays the selected result on YouTube, so you can listen before you choose.',
-			'Use this video sets the video override (<code>setVideoOverride</code>) and downloads the track again.',
+			'Open in browser plays the selected result on YouTube Music, so you can listen before you choose.',
+			'Use this video sets the video override (<code>setVideoOverride</code>) and downloads the track again. On the current match, it confirms the match instead.',
 		],
 	},
 	{

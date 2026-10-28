@@ -4,7 +4,6 @@
 
 #include <windows.h>
 
-#include "ui/commands/CommandState.h"
 #include "ui/framework/Button.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Dpi.h"
@@ -30,7 +29,6 @@ public:
     int height_for(int width) const;
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void set_contents(const TrackDetails& track);
-    void update(const CommandState& state);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -53,7 +51,7 @@ private:
     framework::Label review_note_;
     framework::Label reason_;
     OutputBox output_;
-    framework::Button confirm_;
+    framework::Button choose_;
     SectionTitle source_section_;
     framework::Label first_source_key_;
     SourceLink first_source_;

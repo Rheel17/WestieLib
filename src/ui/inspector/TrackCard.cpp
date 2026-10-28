@@ -42,7 +42,7 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         review_note_(hwnd(), status_explanation(StatusTab::NeedsReview, core::TrackFailure::None), {.color = framework::TextColor::Warning, .wrap = true}),
         reason_(hwnd(), L"", {.color = framework::TextColor::Error}),
         output_(hwnd()),
-        confirm_(hwnd(), {.text = L"Confirm match", .command = std::to_underlying(CommandId::ConfirmMatch)}),
+        choose_(hwnd(), {.text = L"Choose video…", .command = std::to_underlying(CommandId::ChooseVideo)}),
         source_section_(hwnd(), L"Source"),
         first_source_key_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         first_source_(hwnd(), [this] { open_source(0); }),
@@ -75,7 +75,7 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
         label->set_font(fonts.regular().handle());
     }
     output_.set_font(fonts.code().handle());
-    confirm_.apply_dpi(dpi, fonts.regular());
+    choose_.apply_dpi(dpi, fonts.regular());
     audio_.apply_dpi(fonts);
     first_source_.apply_dpi(dpi, fonts.regular());
     second_source_.apply_dpi(dpi, fonts.regular());
@@ -115,10 +115,6 @@ void TrackCard::set_contents(const TrackDetails& track) {
     layout();
 }
 
-void TrackCard::update(const CommandState& state) {
-    confirm_.set_enabled(state.enabled(CommandId::ConfirmMatch));
-}
-
 LRESULT TrackCard::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE:    layout(); return 0;
@@ -150,10 +146,12 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
         layout.hide(reason_.hwnd());
         layout.hide(output_.hwnd());
     }
-    if (review) {
-        layout.buttons({&confirm_});
+    // Such a track's entries are all Spotify tracks, so Choose video applies whenever the button shows, and it's never
+    // disabled: a themed button fades in from the state it was last drawn in
+    if (review || track_.failure == core::TrackFailure::NoMatch) {
+        layout.buttons({&choose_});
     } else {
-        layout.hide(confirm_.hwnd());
+        layout.hide(choose_.hwnd());
     }
 
     layout.section(source_section_.hwnd());

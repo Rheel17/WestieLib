@@ -3,11 +3,11 @@
 #include <algorithm>
 #include <map>
 #include <optional>
-#include <ranges>
 #include <set>
 
 #include "core/matching/MatchScore.h"
 #include "core/sources/SourceType.h"
+#include "core/state/ListedSources.h"
 #include "core/state/TrackVideos.h"
 
 namespace westie::core {
@@ -33,14 +33,6 @@ std::string words_key(const MatchText& text) {
         key += word;
     }
     return key;
-}
-
-std::set<std::string> listed_sources(const State& state) {
-    std::set<std::string> listed;
-    for (const Playlist& playlist : state.playlists | std::views::values) {
-        listed.insert(playlist.sources.begin(), playlist.sources.end());
-    }
-    return listed;
 }
 
 std::map<std::string, std::vector<ListedSong>> listed_songs(
@@ -73,7 +65,8 @@ std::vector<LibraryMatch> library_matches(const State& state, const platform::Te
 
     std::vector<LibraryMatch> matches;
     for (const auto& [key, track] : state.tracks) {
-        if (track.status == TrackStatus::Orphaned || track.status == TrackStatus::Kept || has_listed_youtube_music_source(track, listed)) {
+        bool chosen = !track.video_override.empty() || has_listed_youtube_music_source(track, listed);
+        if (track.status == TrackStatus::Orphaned || track.status == TrackStatus::Kept || chosen) {
             continue;
         }
         const std::string* spotify = first_source_of(track, SourceType::Spotify);

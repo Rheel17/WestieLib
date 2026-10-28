@@ -8,6 +8,7 @@
 #include <knownfolders.h>
 
 #include "Version.h"
+#include "core/matching/VideoSearch.h"
 #include "core/playlists/PlaylistLookup.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
@@ -88,13 +89,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
             .api = service_url(L"WESTIELIB_SPOTIFY_API", "https://api-partner.spotify.com"),
         };
         westie::core::PlaylistLookup lookup(yt_dlp, http, spotify.web, events);
-        westie::core::SyncEngine sync(
-                yt_dlp, tool_folder, http, normalizer, spotify, service_url(L"WESTIELIB_YTMUSIC_API", "https://music.youtube.com"), state, events
-        );
+        std::string youtube_music = service_url(L"WESTIELIB_YTMUSIC_API", "https://music.youtube.com");
+        westie::core::SyncEngine sync(yt_dlp, tool_folder, http, normalizer, spotify, youtube_music, state, events);
+        westie::core::VideoSearch video_search(http, normalizer, youtube_music, state, events);
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;
-        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync, normalizer);
+        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync, video_search, normalizer);
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         // Started before the window shows, so its first paint already knows of the run
         tools.run(settings.auto_update_tools);

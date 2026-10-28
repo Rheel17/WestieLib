@@ -7,6 +7,8 @@
 
 #include <windows.h>
 
+#include "core/matching/VideoSearch.h"
+#include "core/matching/VideoSearchResults.h"
 #include "core/playlists/PlaylistLink.h"
 #include "core/playlists/PlaylistLookedUp.h"
 #include "core/playlists/PlaylistLookup.h"
@@ -33,6 +35,7 @@
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
 #include "ui/dialogs/AddPlaylistDialog.h"
+#include "ui/dialogs/ChooseVideoDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/events/CoreEventQueue.h"
 #include "ui/framework/Dpi.h"
@@ -69,6 +72,7 @@ public:
             core::ToolManager& tools,
             core::PlaylistLookup& lookup,
             core::SyncEngine& sync,
+            core::VideoSearch& video_search,
             const platform::TextNormalizer& normalizer
     );
 
@@ -104,6 +108,7 @@ private:
     void show_playlist_menu(POINT screen);
     void remove_playlist();
     void confirm_match();
+    void choose_video();
     void open_library_folder() const;
     void open_playlist_page() const;
     void copy_playlist_link() const;
@@ -126,6 +131,7 @@ private:
     void apply_event(const core::TrackStatusChanged& event);
     void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);
+    void apply_event(const core::VideoSearchResults& results);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_activate(WORD state);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
@@ -146,6 +152,7 @@ private:
     core::ToolManager& tools_;
     core::PlaylistLookup& lookup_;
     core::SyncEngine& sync_;
+    core::VideoSearch& video_search_;
     const platform::TextNormalizer& normalizer_;
     ToolBoard tool_board_;
     SyncBoard sync_board_;
@@ -170,9 +177,10 @@ private:
     FetchFailureNotice fetch_failure_;
     // A playlist's key, or nothing while All tracks is selected
     std::optional<std::string> selected_playlist_;
-    // Only while they're open, so tool and look-up events can reach them
+    // Only while they're open, so tool, look-up and search events can reach them
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;
+    std::optional<ChooseVideoDialog> choose_video_dialog_;
 };
 
 }

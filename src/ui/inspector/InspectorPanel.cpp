@@ -59,7 +59,6 @@ void InspectorPanel::show_selection(const StatusCounts& counts) {
 void InspectorPanel::update(const CommandState& state) {
     library_.update(state);
     playlist_.update(state);
-    track_.update(state);
 }
 
 LRESULT InspectorPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {

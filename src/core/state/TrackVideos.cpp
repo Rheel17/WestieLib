@@ -24,6 +24,9 @@ std::optional<std::string> own_video(std::string_view source_key) {
 }
 
 std::optional<ResolvedVideo> resolved_video(const State& state, const Track& track) {
+    if (!track.video_override.empty()) {
+        return ResolvedVideo{.video_id = track.video_override, .source = track.sources.empty() ? "" : track.sources.front(), .overridden = true};
+    }
     // The playlist owner chose a YouTube Music source's video
     if (const std::string* key = first_source_of(track, SourceType::YouTubeMusic)) {
         return ResolvedVideo{.video_id = own_video(*key).value_or(""), .source = *key};

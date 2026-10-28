@@ -421,6 +421,7 @@ function Reset-Checks {
 	$Web.YtDlp = $null
 	[void]$Web.AssetGate.Reset()
 	[void]$Web.YtmGate.Set()
+	$Web.ForgetQueries()
 	$script:dpi = 96
 	$script:TallRows = @()
 }
@@ -533,6 +534,8 @@ function Write-ManyPlaylists([int]$count) {
 }
 
 $MiddleDot = [char]0xB7
+# The track card's button
+$ChooseVideo = "Choose video$Ellipsis"
 
 function Get-TrackPanel($hwnd) { Get-Panel $hwnd 'Tracks' }
 
@@ -595,6 +598,29 @@ function Click-Header($hwnd, [int]$position) {
 # The inspector's visible card
 function Get-InspectorCard($hwnd) {
 	@(Get-DirectChildren (Get-Panel $hwnd 'Inspector') 'WestieLib.Panel' | Where-Object { [W]::IsWindowVisible($_) })[0]
+}
+
+# The card of the track with key $key. From one track's card to another's the card's name stays, so this waits for the
+# key; while the inspector swaps one card for another, for a moment neither shows. The texts and places are read without
+# waiting for the app's thread, so a read can come halfway through a layout: this waits until two reads agree.
+function Wait-TrackCard($hwnd, [string]$key) {
+	$last = $null
+	for ($i = 0; $i -lt 40; $i++) {
+		$texts = if (Get-InspectorCard $hwnd) { Get-CardTexts $hwnd } else { $null }
+		if ($texts -like "* / Key / $key / *" -and $texts -eq $last) { break }
+		$last = $texts
+		Start-Sleep -Milliseconds 50
+	}
+	Get-CardTexts $hwnd
+}
+
+function Get-SavedState { Get-Content $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json }
+
+# A sync enables Cancel until it ends
+function Test-Syncing($hwnd) {
+	Update-MenuStates $hwnd
+	$menu = [W]::GetMenu($hwnd)
+	([W]::GetMenuState($menu, [W]::CommandOf($menu, '&Cancel'), 0) -band 0x1) -eq 0
 }
 
 # A card's name, then the texts of its windows from the top, and left to right within a row

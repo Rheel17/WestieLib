@@ -251,7 +251,8 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 2. the video of its first YouTube Music source, because the playlist owner chose it;
 3. the Matcher's result for its first Spotify source.
 
-`resolved_video` (`src/core/state/TrackVideos`) gives the video and the source it comes from; there is no override yet.
+`resolved_video` (`src/core/state/TrackVideos`) gives the video, the source it comes from (for an override, the
+track's first source), and whether it is the override.
 
 A track **needs review** when its video comes from a match that isn't `confirmed` and whose confidence is under the
 review threshold (see Matcher › Choose). The flag isn't stored, so a new threshold applies to the matches already
@@ -279,6 +280,18 @@ confirms it, which then merges it. Meanwhile two tracks can share a video. A mer
 Sources stay attached to their track until the track is removed, with one exception: choosing another video for one
 entry of a merged track (Choose video, `setVideoOverride` on a duplicate, with manual matching) moves that source out
 into a track of its own, which gets the override. So a merge is never final.
+
+`set_video_override` (`src/core/matching/VideoOverride`) does it for an entry, a source, and a video:
+- The video the track has already changes nothing, except that a match that needs review is confirmed
+  (`confirm_match`).
+- When the source is the one the track's video comes from, the override is the whole track's. Otherwise the source
+  first moves into a track of its own (`split_source`, `src/core/state/SplitSource`): keyed by the source when it
+  isn't the track key, or else the track keeps it and its other sources move into a track keyed by the first of them.
+  The new track takes the old one's status and `addedAt`.
+- The track gets `videoOverride`, loses its failure, and a failed one waits again. When another track already has
+  the video, it merges into that one.
+
+A track with an override is never matched again, neither by a sync's search nor from the library.
 
 All tracks shows a row per track, but a playlist shows a row per source it lists (an *entry*), so a merge doesn't
 take a row out of a playlist: when it lists several sources of one track, the later ones show as duplicates (ui.md ›
@@ -367,7 +380,7 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
   `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `match` and
-  `track`; and tracks with `sources`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
+  `track`; and tracks with `sources`, `videoOverride`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
   out, and a failure name from a later version reads as none. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
@@ -452,7 +465,7 @@ tools it needs (ui.md, Vocabulary › Waiting for tools):
 | `SpotifySource` fetch                  | –              |
 | `YouTubeMusicSource` fetch             | yt-dlp         |
 | Matcher                                | –              |
-| `searchVideos`                         | yt-dlp         |
+| `searchVideos`                         | –              |
 | Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg |
 
 A step whose tool isn't available stays queued, and the track stays `pending` with a `waitingFor` list of tool names
@@ -643,10 +656,35 @@ or synced doesn't matter: a Spotify track the search matched earlier joins a You
 first sync after one lists the song, and a Spotify track that comes after the entry merges before it is searched for.
 A downloaded track merges by the Merging rules, its own file going to the Recycle Bin; so far no track has a file.
 
-**Video search.** `searchVideos(query, filter)` serves the UI's Choose a video dialog. It runs the same yt-dlp
-search with `#songs`, `#videos`, or no fragment (for both), and returns up to 20 results. Each result has
-videoId, title, artist, album, type (song or video) and duration. A search runs on its own worker thread, outside
-any sync run. A new search cancels the previous one.
+**Video search.** `searchVideos(source, query)` serves the UI's Choose a video dialog, for a Spotify source.
+`VideoSearch` (`src/core/matching/VideoSearch`) runs it on its own worker thread, outside any sync run; a new search
+stops the one before, and a stopped one answers nothing. It answers with `VideoSearchResults`: the request's number,
+the candidates, and the error of a search that failed. Searching needs no tool: it is the Matcher's own search
+(`search_youtube_music_songs`), for the query, or without one for each of the Matcher's queries (`match_queries`,
+`src/core/matching/MatchQueries`).
+
+`video_candidates` (`src/core/matching/VideoCandidates`) makes the list from a fresh snapshot, each video once, by
+score (`match_score` against the source, at most 1), ties in this order:
+1. the source's match;
+2. the YouTube Music sources the playlists list (`listed_sources`, `src/core/state/ListedSources`) that score at
+   least 0.5;
+3. the search results.
+
+Each candidate has the video id, title, artists, album (none for a library source), length, score, whether it is the
+source's track's video, and the track that has it otherwise (`track_with_video`). A failed search still answers with
+the first two.
+
+**Video links.** `parse_video_link` (`src/core/matching/VideoLink`) turns a pasted link into a video id. It drops
+spaces around the text; `http://` or `https://` is optional, and host names ignore case.
+
+| Accepted | Example |
+|----------|---------|
+| `music.youtube.com`, `youtube.com`, `www.youtube.com`, `m.youtube.com` with `/watch?…v=<id>…` | `https://music.youtube.com/watch?v=5aM1xdk8lRw&si=…` |
+| the same hosts with `/shorts/<id>` | `youtube.com/shorts/5aM1xdk8lRw` |
+| `youtu.be/<id>`, with any query | `https://youtu.be/5aM1xdk8lRw?si=…` |
+| the id alone | `5aM1xdk8lRw` |
+
+An id is 11 characters of `[A-Za-z0-9_-]`.
 
 ### Downloader
 
@@ -780,14 +818,15 @@ downloads yet.
   (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
 - Once no playlist is left to fetch, the run first merges what the library matches (Matcher › The library first), in
   one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match` (`TracksToMatch.cpp`) lists the tracks that
-  are `pending` or `failed`, have no YouTube Music source and whose first Spotify source has no match, in playlist
+  are `pending` or `failed`, have no override and no YouTube Music source, and whose first Spotify source has no match, in playlist
   order (playlists by `addedAt`, then their sources), each once. The run emits `TracksQueued` with the ones it hasn't
   queued yet, and matches them one at a time, saving after each:
   - `apply_match` (`ApplyMatch.cpp`) stores the match, clears a failure (a failed track waits again), and merges the
     track into the one that already has that video (`track_with_video`, `merge_tracks`), unless the match needs
     review. The run emits `TracksMerged`, or `TrackStatusChanged`.
 - `confirm_match` (`src/core/matching/ConfirmMatch`) serves `confirmMatch` on the UI thread: it sets `confirmed` and
-  merges the track as `apply_match` would have.
+  merges the track as `apply_match` would have. `set_video_override` serves `setVideoOverride` there too. A match
+  that a run makes meanwhile for a track that got an override is dropped (`apply_match` leaves such a track alone).
   - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
   - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped. A track is tried
     once a run.
@@ -810,9 +849,9 @@ downloads yet.
 | `cancel()`                               | Cancels the running sync                                       |
 | `retry(trackKeys)`                       | Queues the given tracks again without fetching playlists       |
 | `resolveRemovals({trackKey: keep/remove})` | Applies removal decisions                                    |
-| `setVideoOverride(trackKey, youtubeUrl)` | Sets `videoOverride` and re-downloads the track, or merges it into the track that already has that video |
+| `setVideoOverride(sourceKey, videoId)`   | Sets `videoOverride` on the source's track, or on a track of its own (see Merging), and re-downloads it, or merges it into the track that already has that video |
 | `confirmMatch(trackKey)`                 | Sets `confirmed` on the match the track's video comes from, then merges the track into one that already has that video |
-| `searchVideos(query, filter)`            | Searches YouTube Music songs, videos or both; answers with `VideoSearchResults` |
+| `searchVideos(sourceKey, query?)`        | Lists candidate videos for a Spotify source, searching YouTube Music's songs; answers with `VideoSearchResults` |
 | `editTrack(trackKey, edits, coverImage?)` | Stores `edits` and an optional custom cover. Re-tags the file, renames it when artists or title changed, emits `TrackUpdated` |
 | `setSettings(settings)`                  | Saves `settings.json`; applies to the next run                 |
 | `relocateLibrary(path)`                  | Points the state at a moved library folder                     |
@@ -835,7 +874,7 @@ downloads yet.
 | `TrackProgress`                | track key, percent                              |
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |
-| `VideoSearchResults`           | query, filter, results                          |
+| `VideoSearchResults`           | request number, candidates, error               |
 | `RemovalsPending`              | list of orphaned track keys                     |
 | `ToolsRunChanged`              | whether a ToolManager run is going              |
 | `ToolStatus`                   | tool, state, installed release, percent, error  |

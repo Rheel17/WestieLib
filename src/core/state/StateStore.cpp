@@ -72,6 +72,7 @@ struct SourceJson {
 
 struct TrackJson {
     std::vector<std::string> sources{};
+    std::optional<std::string> video_override{};
     std::string status{};
     std::optional<std::string> failure{};
     std::optional<std::string> error{};
@@ -203,8 +204,10 @@ struct glz::meta<westie::core::SourceJson> {
 template<>
 struct glz::meta<westie::core::TrackJson> {
     using T = westie::core::TrackJson;
-    constexpr static auto value =
-            glz::object("sources", &T::sources, "status", &T::status, "failure", &T::failure, "error", &T::error, "addedAt", &T::added_at);
+    constexpr static auto value = glz::object(
+            "sources", &T::sources, "videoOverride", &T::video_override, "status", &T::status, "failure", &T::failure, "error", &T::error, "addedAt",
+            &T::added_at
+    );
 };
 
 template<>
@@ -256,6 +259,7 @@ State StateStore::load() const {
     for (auto& [key, track] : json.tracks) {
         state.tracks[key] = {
             .sources = std::move(track.sources),
+            .video_override = std::move(track.video_override).value_or(""),
             .status = status_named(track.status),
             .failure = failure_named(track.failure),
             .error = std::move(track.error).value_or(""),
@@ -283,6 +287,7 @@ void StateStore::save(const State& state) {
     for (const auto& [key, track] : state.tracks) {
         json.tracks[key] = {
             .sources = track.sources,
+            .video_override = optional_text(track.video_override),
             .status = std::string(status_name(track.status)),
             .failure = failure_name(track.failure),
             .error = optional_text(track.error),

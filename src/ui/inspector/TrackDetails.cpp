@@ -9,6 +9,7 @@
 #include "core/sources/SourcePage.h"
 #include "core/state/TrackVideos.h"
 #include "platform/win32/Utf16.h"
+#include "ui/ArtistsText.h"
 #include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
 
@@ -16,7 +17,6 @@ namespace westie::ui {
 
 namespace {
 
-constexpr std::string_view ArtistSeparator = ", ";
 constexpr int ErrorLines = 2;
 
 std::optional<TrackSource> source_link_of(const core::Track& track, core::SourceType type) {
@@ -38,17 +38,6 @@ bool lists_track(const core::State& state, const core::Playlist& playlist, const
     });
 }
 
-std::wstring joined(const std::vector<std::string>& parts) {
-    std::string text;
-    for (const std::string& part : parts) {
-        if (!text.empty()) {
-            text += ArtistSeparator;
-        }
-        text += part;
-    }
-    return platform::win32::to_utf16(text);
-}
-
 std::optional<TrackMatch> match_of(const core::State& state, const std::string* key) {
     if (key == nullptr) {
         return std::nullopt;
@@ -61,7 +50,7 @@ std::optional<TrackMatch> match_of(const core::State& state, const std::string* 
     return TrackMatch{
         .video_id = platform::win32::to_utf16(match.video_id),
         .title = platform::win32::to_utf16(match.title),
-        .artists = joined(match.artists),
+        .artists = artists_text(match.artists),
         .duration = match.duration,
         .source_duration = source->second.duration,
         .confidence = match.confidence,
@@ -79,6 +68,12 @@ TrackVideo video(const std::string& id, VideoChooser chosen_by) {
 void show_entry_video(const core::State& state, const core::Track& track, const std::string& entry, TrackDetails& details) {
     // How the entry itself got its video, so a duplicate shows what the Matcher did with it
     const std::string* first_spotify = core::first_source_of(track, core::SourceType::Spotify);
+    // The user's choice is every entry's
+    if (!track.video_override.empty()) {
+        details.video = video(track.video_override, VideoChooser::Override);
+        details.match = match_of(state, core::source_type_of_key(entry) == core::SourceType::Spotify ? &entry : first_spotify);
+        return;
+    }
     if (std::optional<std::string> own = core::own_video(entry)) {
         details.video = video(*own, VideoChooser::Playlist);
         details.match = match_of(state, first_spotify);

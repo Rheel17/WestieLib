@@ -11,7 +11,8 @@
 namespace westie::core {
 
 bool needs_match(const State& state, const Track& track) {
-    if (track.status != TrackStatus::Pending && track.status != TrackStatus::Failed) {
+    // The user chose an override's video
+    if ((track.status != TrackStatus::Pending && track.status != TrackStatus::Failed) || !track.video_override.empty()) {
         return false;
     }
     // The playlist owner chose a YouTube Music source's video

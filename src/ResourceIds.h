@@ -42,3 +42,13 @@
 #define IDC_PLAYLIST_LINK         1100
 #define IDC_PLAYLIST_KIND         1101
 #define IDC_SYNC_NOW              1102
+
+#define IDD_CHOOSE_VIDEO          102
+#define IDC_VIDEO_SOURCE          1200
+#define IDC_VIDEO_CURRENT         1201
+#define IDC_VIDEO_QUERY           1202
+#define IDC_VIDEO_SEARCH          1203
+#define IDC_VIDEO_LIST            1204
+#define IDC_VIDEO_LINK            1205
+#define IDC_VIDEO_LINK_KIND       1206
+#define IDC_OPEN_VIDEO            1207

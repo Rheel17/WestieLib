@@ -8,6 +8,7 @@
 #   playlists     adding, keeping, selecting, showing, removing and scrolling playlists, and state.json
 #   tracks        the track panel: filter bar, status tabs, result line and the table's columns
 #   sync          syncing YouTube Music and Spotify playlists into state.json and the track table, and matching
+#   choose-video  the Choose a video dialog: its candidates, searches and links, and the video it sets
 #   painting      painting and blinking during splitter drags
 #   dpi           moving to a monitor with another DPI, and restoring there
 #
@@ -28,7 +29,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Suites = 'window', 'settings', 'tools', 'add-playlist', 'playlists', 'tracks', 'sync', 'painting', 'dpi'
+$Suites = 'window', 'settings', 'tools', 'add-playlist', 'playlists', 'tracks', 'sync', 'choose-video', 'painting', 'dpi'
 # powershell -File passes "a,b" as one string
 $chosen = if ($Suite) { @($Suite -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { $Suites }
 $unknown = @($chosen | Where-Object { $_ -notin $Suites })

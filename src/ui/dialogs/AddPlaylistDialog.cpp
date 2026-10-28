@@ -21,15 +21,6 @@ constexpr UINT_PTR SpinnerTimer = 2;
 constexpr UINT SpinnerFrameMs = 16;
 constexpr std::chrono::milliseconds SpinnerTurn{1000};
 
-std::wstring dialog_item_text(HWND dialog, int id) {
-    HWND item = GetDlgItem(dialog, id);
-    std::wstring text;
-    text.resize_and_overwrite(GetWindowTextLengthW(item), [item](wchar_t* buffer, std::size_t size) {
-        return static_cast<std::size_t>(GetWindowTextW(item, buffer, static_cast<int>(size) + 1));
-    });
-    return text;
-}
-
 }
 
 AddPlaylistDialog::AddPlaylistDialog(AddedPlaylistName added_name, core::PlaylistLookup& lookup, const ToolBoard& tools) :
@@ -101,7 +92,7 @@ void AddPlaylistDialog::on_timer(WPARAM timer) {
 }
 
 void AddPlaylistDialog::check_link() {
-    check_ = check_playlist_link(dialog_item_text(hwnd(), IDC_PLAYLIST_LINK), added_name_);
+    check_ = check_playlist_link(item_text(IDC_PLAYLIST_LINK), added_name_);
     // Every change starts the delay again
     KillTimer(hwnd(), LookupTimer);
     if (lookup_.set_link(check_)) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <windows.h>
 
 namespace westie::ui::framework {
@@ -17,6 +19,9 @@ protected:
     HWND hwnd() const noexcept;
     INT_PTR show_modal(HWND owner);
     void end(INT_PTR result);
+    std::wstring item_text(int id) const;
+    // For a message whose result isn't the dialog procedure's, such as WM_NOTIFY's
+    INT_PTR message_result(LRESULT result) const;
 
     virtual INT_PTR handle_message(UINT message, WPARAM wparam, LPARAM lparam);
 

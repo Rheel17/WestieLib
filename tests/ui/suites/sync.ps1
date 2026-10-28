@@ -16,8 +16,6 @@ function Write-SyncPlaylists([string[]]$keys) {
 	[IO.File]::WriteAllText($StateFile, '{"version": 1, "playlists": {' + ($entries -join ', ') + '}}')
 }
 
-function Get-SavedState { Get-Content $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json }
-
 # Source and track keys without their ytm:track or spotify: prefix
 $KeyPrefix = '^(ytm:track|spotify:)'
 
@@ -87,13 +85,6 @@ function Get-BigPlaylist {
 
 function New-BigTrack([int]$n) { [FakeWeb]::Track("spBigTrack$('{0:D12}' -f $n)", "Big Song $('{0:D3}' -f $n)", @('Many'), 'Big', 60000) }
 
-# A sync enables Cancel until it ends
-function Test-Syncing($hwnd) {
-	Update-MenuStates $hwnd
-	$menu = [W]::GetMenu($hwnd)
-	([W]::GetMenuState($menu, [W]::CommandOf($menu, '&Cancel'), 0) -band 0x1) -eq 0
-}
-
 # Waits until $count fetches more than $before have started, and then for the sync to end. yt-dlp logs a fetch only
 # after the sync was queued, so by then the window knows a sync is going. With -Spotify, it counts FakeWeb's Spotify
 # queries instead, which come after the sync was queued too.
@@ -155,16 +146,6 @@ function Check-ListButton([string]$what, $hwnd, [int]$count) {
 	$list = Get-PlaylistList $hwnd
 	$button = [W]::RectIn(([W]::Children($list, 'Button'))[0], $list)
 	Check $what $button.Top ((Get-PlaylistRowTop $hwnd ($count + 1)) + (S 8))
-}
-
-# The card of the track with key $key. From one track's card to another's the card's name stays, so this waits for the
-# key; while the inspector swaps one card for another, for a moment neither shows.
-function Wait-TrackCard($hwnd, [string]$key) {
-	for ($i = 0; $i -lt 20; $i++) {
-		if ((Get-InspectorCard $hwnd) -and (Get-CardTexts $hwnd) -like "* / Key / $key / *") { break }
-		Start-Sleep -Milliseconds 50
-	}
-	Get-CardTexts $hwnd
 }
 
 function Get-TrackSummary($hwnd) { "$([W]::TabTexts((Get-StatusTabs $hwnd))) | $([W]::TextOf((Get-ResultLine $hwnd)))" }
@@ -594,7 +575,7 @@ $y = [int]((Get-ClientHeight $confidence) / 2)
 Check '  confidence bar: filled, empty end, gap' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 110) - 1), $y, ((S 110) + 1), $y)) -join ' ') '06b025 e6e6e6 ffffff'
 Select-TrackRow $h 2
 Check 'A live version: lengths 33 s apart, 61% needs review' (Wait-TrackCard $h 'spotify:spCrazy0000000000000002') ("Track card:  / Crazy / Gnarls Barkley / St. Elsewhere / " +
-	"Status / Needs review / $ReviewNote / Confirm match / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+	"Status / Needs review / $ReviewNote / $ChooseVideo / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spCrazy0000000000000002 / Audio / Matched / Crazy (Live at Coachella 2006) / Artists / Gnarls Barkley / Length / 3:31 $MiddleDot Spotify 2:58 / " +
 	"ID / liveCrazy01 / Chosen by / Matcher / Confidence / 61% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-live.png") }
@@ -610,8 +591,8 @@ if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-mer
 Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 3) 'Waiting'
 Select-TrackRow $h 4
 Check 'No match: the reason and the last two lines' (Wait-TrackCard $h 'spotify:spNoResults00000000004') ("Track card:  / No Results / The Late Hours / Sway / " +
-	"Status / Failed / No usable video was found. It's searched again on the next sync. / No match on YouTube Music / " +
-	"$($NoMatchError -replace '\\"', '"' -replace '\\n', "`n") / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+	"Status / Failed / No usable video was found. Choose one yourself. / No match on YouTube Music / " +
+	"$($NoMatchError -replace '\\"', '"' -replace '\\n', "`n") / $ChooseVideo / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spNoResults00000000004 / Audio / ID / No match found / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-nomatch.png") }
 $card = Get-InspectorCard $h
@@ -785,11 +766,6 @@ function Get-SavedReviews {
 	}) -join ' / '
 }
 
-function Click-CardButton($hwnd, [string]$text) {
-	$button = @([W]::Children((Get-InspectorCard $hwnd), 'Button') | Where-Object { [W]::TextOf($_) -eq $text })[0]
-	[void][W]::PostMessageW($button, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-}
-
 function Wait-SavedTracks([string]$like) {
 	for ($i = 0; $i -lt 50 -and (Get-SavedTracks) -notlike $like; $i++) { Start-Sleep -Milliseconds 100 }
 	Get-SavedTracks
@@ -821,14 +797,14 @@ Update-MenuStates $h
 Check '  Confirm match grayed with nothing selected' ([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*') 'True'
 
 Select-TrackRow $h 0
-Check 'Tell Me: the note and Confirm match' (Wait-TrackCard $h 'spotify:spReviewAlone000000001') ("Track card:  / Tell Me / Rae / Tell / " +
-	"Status / Needs review / $ReviewNote / Confirm match / Source / Source / Spotify $MiddleDot Open track / Playlists / Reviews / " +
+Check 'Tell Me: the note and Choose video' (Wait-TrackCard $h 'spotify:spReviewAlone000000001') ("Track card:  / Tell Me / Rae / Tell / " +
+	"Status / Needs review / $ReviewNote / $ChooseVideo / Source / Source / Spotify $MiddleDot Open track / Playlists / Reviews / " +
 	"Key / spotify:spReviewAlone000000001 / Audio / Matched / Tell Me / Artists / Rae / Length / 3:45 $MiddleDot Spotify 3:20 / " +
 	"ID / reviewVid01 / Chosen by / Matcher / Confidence / 84% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-review.png") }
-$confirm = @([W]::Children((Get-InspectorCard $h), 'Button') | Where-Object { [W]::TextOf($_) -eq 'Confirm match' })[0]
+$choose = @([W]::Children((Get-InspectorCard $h), 'Button') | Where-Object { [W]::TextOf($_) -eq $ChooseVideo })[0]
 Update-MenuStates $h
-Check '  Confirm match enabled: button | menu' "$([W]::IsWindowEnabled($confirm)) | $([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*')" 'True | False'
+Check '  enabled: Choose video | grayed: menu''s Confirm match' "$([W]::IsWindowEnabled($choose)) | $([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*')" 'True | False'
 $confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'))[0]
 Check '  confidence bar: yellow to 84%, then empty' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 92) - 1), $y, ((S 92) + 1), $y)) -join ' ') 'd9a400 d9a400 e6e6e6'
 Send-Command $h '&Confirm match'
@@ -839,8 +815,8 @@ Check '  its card: Waiting, no button' ((Wait-TrackCard $h 'spotify:spReviewAlon
 
 Select-TrackRow $h 1
 [void](Wait-TrackCard $h 'spotify:spReviewApart000000002')
-Click-CardButton $h 'Confirm match'
-Check 'Confirm match in the card: merged into the entry''s track' (Wait-SavedTracks '*apartVid001,spReview*') ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
+Send-Command $h '&Confirm match'
+Check 'Confirm match: merged into the entry''s track' (Wait-SavedTracks '*apartVid001,spReview*') ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
 	'ytm:apartVid001 pending [ytm:apartVid001,spReviewApart000000002] True')
 Check '  saved confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True'
 Check '  tabs' (Get-TrackSummary $h) 'All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 2 in Reviews'

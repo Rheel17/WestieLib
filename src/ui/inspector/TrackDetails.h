@@ -21,7 +21,7 @@ struct TrackPlaylist {
     std::wstring name{};
 };
 
-enum class VideoChooser { Playlist, Matcher };
+enum class VideoChooser { Playlist, Matcher, Override };
 
 struct TrackVideo {
     std::wstring id{};

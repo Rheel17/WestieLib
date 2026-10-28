@@ -11,7 +11,8 @@ namespace westie::core {
 
 std::optional<std::string> apply_match(State& state, const std::string& track_key, const Match& match) {
     auto track = state.tracks.find(track_key);
-    if (track == state.tracks.end()) {
+    // The user may have chosen a video while the match ran
+    if (track == state.tracks.end() || !track->second.video_override.empty()) {
         return std::nullopt;
     }
     const std::string* source = first_source_of(track->second, SourceType::Spotify);

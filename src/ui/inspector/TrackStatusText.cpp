@@ -16,9 +16,8 @@ int status_icon(StatusTab status) {
 }
 
 const wchar_t* status_explanation(StatusTab status, core::TrackFailure failure) {
-    // Until Choose video exists, searching again is all there is to say
     if (status == StatusTab::Failed && failure == core::TrackFailure::NoMatch) {
-        return L"No usable video was found. It's searched again on the next sync.";
+        return L"No usable video was found. Choose one yourself.";
     }
     switch (status) {
     case StatusTab::Synced:  return L"The file is in the library and tagged.";

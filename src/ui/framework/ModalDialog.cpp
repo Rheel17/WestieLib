@@ -28,6 +28,20 @@ void ModalDialog::end(INT_PTR result) {
     platform::win32::check(EndDialog(hwnd_, result), "EndDialog");
 }
 
+std::wstring ModalDialog::item_text(int id) const {
+    HWND item = GetDlgItem(hwnd_, id);
+    std::wstring text;
+    text.resize_and_overwrite(GetWindowTextLengthW(item), [item](wchar_t* buffer, std::size_t size) {
+        return static_cast<std::size_t>(GetWindowTextW(item, buffer, static_cast<int>(size) + 1));
+    });
+    return text;
+}
+
+INT_PTR ModalDialog::message_result(LRESULT result) const {
+    SetWindowLongPtrW(hwnd_, DWLP_MSGRESULT, result);
+    return TRUE;
+}
+
 INT_PTR ModalDialog::handle_message(UINT, WPARAM, LPARAM) {
     return FALSE;
 }

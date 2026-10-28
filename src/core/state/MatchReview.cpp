@@ -13,7 +13,7 @@ bool needs_review(const Match& match) {
 
 bool needs_review(const State& state, const Track& track) {
     std::optional<ResolvedVideo> video = resolved_video(state, track);
-    if (!video || source_type_of_key(video->source) != SourceType::Spotify) {
+    if (!video || video->overridden || source_type_of_key(video->source) != SourceType::Spotify) {
         return false;
     }
     auto source = state.sources.find(video->source);

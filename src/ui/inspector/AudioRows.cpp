@@ -16,7 +16,11 @@ framework::Label key_label(HWND card, const wchar_t* text) {
 }
 
 const wchar_t* chooser_text(VideoChooser chooser) {
-    return chooser == VideoChooser::Matcher ? L"Matcher" : L"Playlist";
+    switch (chooser) {
+    case VideoChooser::Matcher:  return L"Matcher";
+    case VideoChooser::Override: return L"Override";
+    default:                     return L"Playlist";
+    }
 }
 
 }

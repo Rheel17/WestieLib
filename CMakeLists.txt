@@ -35,13 +35,19 @@ add_executable(WestieLib WIN32
 	src/core/matching/LibraryMatches.cpp
 	src/core/matching/MatchScore.cpp
 	src/core/matching/MatchText.cpp
+	src/core/matching/MatchQueries.cpp
 	src/core/matching/Matcher.cpp
+	src/core/matching/VideoCandidates.cpp
+	src/core/matching/VideoLink.cpp
+	src/core/matching/VideoOverride.cpp
+	src/core/matching/VideoSearch.cpp
 	src/core/matching/YouTubeMusicSearch.cpp
 	src/core/playlists/AddPlaylist.cpp
 	src/core/playlists/PlaylistLink.cpp
 	src/core/playlists/PlaylistLookup.cpp
 	src/core/playlists/RemovePlaylist.cpp
 	src/core/settings/SettingsStore.cpp
+	src/core/sources/LinkUrl.cpp
 	src/core/sources/SourcePage.cpp
 	src/core/sources/SourceType.cpp
 	src/core/sources/SpotifyEmbedPage.cpp
@@ -50,9 +56,11 @@ add_executable(WestieLib WIN32
 	src/core/sources/YouTubeMusicPlaylistName.cpp
 	src/core/sources/YtDlpError.cpp
 	src/core/state/EffectiveMetadata.cpp
+	src/core/state/ListedSources.cpp
 	src/core/state/MatchReview.cpp
 	src/core/state/MergeTracks.cpp
 	src/core/state/PruneTracks.cpp
+	src/core/state/SplitSource.cpp
 	src/core/state/StateStore.cpp
 	src/core/state/TrackVideos.cpp
 	src/core/sync/ApplyFetch.cpp
@@ -87,6 +95,7 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Win32ProcessRunner.cpp
 	src/platform/win32/Win32TextNormalizer.cpp
 	src/platform/win32/WinHttpClient.cpp
+	src/ui/ArtistsText.cpp
 	src/ui/DurationText.cpp
 	src/ui/FatalError.cpp
 	src/ui/PlaylistTypeText.cpp
@@ -100,6 +109,7 @@ add_executable(WestieLib WIN32
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/dialogs/AddPlaylistDialog.cpp
+	src/ui/dialogs/ChooseVideoDialog.cpp
 	src/ui/dialogs/FolderPicker.cpp
 	src/ui/dialogs/LinkLine.cpp
 	src/ui/dialogs/LinkLinePainter.cpp
@@ -108,6 +118,8 @@ add_executable(WestieLib WIN32
 	src/ui/dialogs/RemovePlaylistDialog.cpp
 	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/dialogs/ToolListView.cpp
+	src/ui/dialogs/VideoChoice.cpp
+	src/ui/dialogs/VideoListView.cpp
 	src/ui/events/CoreEventQueue.cpp
 	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/Animation.cpp

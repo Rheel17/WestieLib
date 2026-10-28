@@ -71,6 +71,12 @@ public class FakeWeb {
 		lock (ytmQueries) return ytmQueries.ToArray();
 	}
 
+	// So a suite sees only the queries it caused
+	public void ForgetQueries() {
+		lock (spotifyQueries) spotifyQueries.Clear();
+		lock (ytmQueries) ytmQueries.Clear();
+	}
+
 	// A song as YouTube Music's search lists it: the title, then "<artists> • <album> • <length>", then the plays
 	public static string Song(string video, string title, string[] artists, string album, string length) {
 		var runs = new List<string>();

@@ -12,8 +12,10 @@ namespace westie::core {
 
 struct ResolvedVideo {
     std::string video_id{};
-    // A YouTube Music source, whose own video it is, or a Spotify source, whose match it is
+    // A YouTube Music source, whose own video it is, or a Spotify source, whose match it is; for an override, the
+    // track's first source
     std::string source{};
+    bool overridden = false;
 };
 
 const std::string* first_source_of(const Track& track, SourceType type);

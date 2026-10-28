@@ -10,6 +10,8 @@
 
 #include "ResourceIds.h"
 #include "core/matching/ConfirmMatch.h"
+#include "core/matching/VideoOverride.h"
+#include "core/sources/SourceType.h"
 #include "core/playlists/AddPlaylist.h"
 #include "core/playlists/RemovePlaylist.h"
 #include "platform/NearestExistingFolder.h"
@@ -20,6 +22,8 @@
 #include "ui/commands/CommandMenu.h"
 #include "ui/dialogs/AboutDialog.h"
 #include "ui/dialogs/AddPlaylistDialog.h"
+#include "ui/dialogs/ChooseVideoDialog.h"
+#include "ui/dialogs/VideoChoice.h"
 #include "ui/dialogs/RemovePlaylistDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/framework/DeferredPositions.h"
@@ -51,6 +55,7 @@ MainWindow::MainWindow(
         core::ToolManager& tools,
         core::PlaylistLookup& lookup,
         core::SyncEngine& sync,
+        core::VideoSearch& video_search,
         const platform::TextNormalizer& normalizer
 ) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
@@ -61,6 +66,7 @@ MainWindow::MainWindow(
         tools_(tools),
         lookup_(lookup),
         sync_(sync),
+        video_search_(video_search),
         normalizer_(normalizer),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
@@ -80,14 +86,7 @@ MainWindow::MainWindow(
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
-        tracks_(
-                hwnd(), normalizer,
-                [this] {
-                    // Before the card shows its buttons, so they don't fade from disabled to enabled
-                    update_commands();
-                    show_inspector();
-                }
-        ),
+        tracks_(hwnd(), normalizer, [this] { show_inspector(); }),
         welcome_(
                 hwnd(),
                 settings_store.defaults().library_path,
@@ -333,6 +332,7 @@ CommandState MainWindow::command_state() const {
         .has_playlists = has_playlists(),
         .playlist_selected = selected_playlist_.has_value(),
         .review_selected = selected.size() == 1 && selected.front().status == StatusTab::NeedsReview,
+        .spotify_entry_selected = selected.size() == 1 && selected.front().source == core::SourceType::Spotify,
         .log_visible = panels_.log_visible,
     };
 }
@@ -365,6 +365,7 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::About:                show_about_dialog(hwnd()); return;
     case CommandId::FocusSearch:          tracks_.focus_search(); return;
     case CommandId::ConfirmMatch:         confirm_match(); return;
+    case CommandId::ChooseVideo:          choose_video(); return;
     default:                              return;
     }
 }
@@ -409,6 +410,28 @@ void MainWindow::confirm_match() {
         return;
     }
     core::confirm_match(state_, selected.front().track);
+    show_playlists();
+}
+
+void MainWindow::choose_video() {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    if (selected.size() != 1) {
+        return;
+    }
+    std::optional<VideoChoice> choice = video_choice(*state_.snapshot(), selected.front().key);
+    if (!choice) {
+        return;
+    }
+    std::string source = choice->source;
+    choose_video_dialog_.emplace(
+            std::move(*choice), video_search_, [this](const std::string& video_id) { return library_video_title(*state_.snapshot(), video_id); }
+    );
+    std::optional<std::string> video = choose_video_dialog_->choose(hwnd());
+    choose_video_dialog_.reset();
+    if (!video) {
+        return;
+    }
+    core::set_video_override(state_, source, *video);
     show_playlists();
 }
 
@@ -551,6 +574,12 @@ void MainWindow::apply_event(const core::SyncFinished&) {
     show_playlists();
 }
 
+void MainWindow::apply_event(const core::VideoSearchResults& results) {
+    if (choose_video_dialog_) {
+        choose_video_dialog_->show_results(results);
+    }
+}
+
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
     // Only menus and accelerators send WM_COMMAND without a control
     if (lparam == 0) {
@@ -633,6 +662,7 @@ void MainWindow::on_destroy() {
     // The workers wind down while the window goes, and whatever they still report stays in the queue
     tools_.stop();
     lookup_.stop();
+    video_search_.stop();
     sync_.cancel();
     events_.set_target(nullptr);
     save_state();

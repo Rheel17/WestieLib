@@ -90,7 +90,7 @@ failed shows in the status bar (see Status bar › Tools) and in Settings, not o
 | Fetch a YouTube Music playlist            | yt-dlp          |
 | Match a Spotify track (search YouTube Music) | –            |
 | Download a track: audio, thumbnail cover  | yt-dlp, ffmpeg  |
-| Choose a video: search                    | yt-dlp          |
+| Choose a video: search                    | –               |
 
 A track that waits shows the hourglass in the Status column, with `Waiting for ffmpeg` (or `Waiting for yt-dlp and
 ffmpeg`) as its tooltip and in the inspector. A playlist whose fetch waits shows it on line 5 (see Left panel). The
@@ -143,6 +143,7 @@ The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Sett
   - `Remove playlist…` and `Sync selected playlist` need a selected playlist, and `Sync selected playlist` also needs
     no sync running.
   - Track items need a selected track. `Confirm match` needs exactly one selected row, and that it needs review.
+    `Choose video…` needs exactly one selected row whose entry is a Spotify track.
   - So far the other Track items stay disabled; each is enabled with its feature.
   - `Check for updates` is disabled while tools are checked, installed or updated, and while a sync runs.
   - Everything else is always enabled.
@@ -433,8 +434,11 @@ tab, search or source starts it at the top.
 
     | State          | Actions                                 |
     |----------------|-----------------------------------------|
-    | Needs review   | `Confirm match`, `Choose video…`, `Edit track…` |
+    | Needs review   | `Choose video…`, `Edit track…`          |
     | Failed, no match | `Choose video…`, `Retry`              |
+
+    Confirming a match goes through Choose video too: its current match is in the list. The Track menu keeps
+    `Confirm match` as a shortcut.
     | Failed, other  | `Retry`, `Edit track…`                  |
     | Synced, Waiting, Kept | `Edit track…`                    |
     | Removed        | `Keep`, `Move to Recycle Bin…`          |
@@ -459,10 +463,10 @@ them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
 So far no track has a file, so the track card shows no cover, no year, and `File` not downloaded yet. It shows the
 status with its explanation, a failed match's reason and output, and the Audio rows of a video that a YouTube Music
-source or the Matcher chose. Until Choose video exists, a failed match explains "No usable video was found. It's
-searched again on the next sync." With no file to listen to, the Needs review note reads "Low-confidence match.
-Check it on YouTube Music, then confirm it or choose another video.", and its only action is `Confirm match`. The
-ISRC and the other action buttons come with their features, and so do the selection card's bulk actions.
+source, the Matcher or an override chose. With no file to listen to, the Needs review note reads "Low-confidence
+match. Check it on YouTube Music, then confirm it or choose another video." The only action so far is
+`Choose video…`, for Needs review and for Failed, no match. The ISRC and the other action buttons come with their
+features, and so do the selection card's bulk actions.
 
 ```
 ┌ inspector ──────────────────────┐   ┌ inspector ──────────────────────┐
@@ -708,22 +712,57 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     playlist shows in the left panel.
 - **Choose a video**. Opened by `Choose video…` in the inspector, the Track menu or Edit track. One dialog
   covers both the case with several candidates and the case where nothing was found:
-  - At the top: the source track (glyph, title, artists, album, length) and either "Current match: <title>,
-    58% confidence" or "The Matcher found no usable video."
-  - `Search YouTube Music:` an edit pre-filled with the Matcher's query, a `Songs and videos` / `Songs` /
-    `Videos` drop-down, and `Search`. Searching needs yt-dlp: without it, `Search` is disabled and the results list
-    reads "Search needs yt-dlp, which isn't installed yet." Pasting a link still works.
-  - A results list with Title | Artist | Album | Type | Length:
-    - the current match is marked `(current)`;
-    - a video that already belongs to another track is marked `(in library)`, and choosing it merges the two
-      tracks;
-    - lengths more than 5 s off the source length are amber;
-    - with no results, the list shows "No results. Try fewer words, or paste a link below."
-  - `Or paste a YouTube or YouTube Music link:` an edit with a live detection line (YouTube logo, `YouTube video ·
-    <id>`).
-  - The footer has `Open in browser` on the left (it plays the selected result or the pasted link), then
-    `Use this video` (default) and `Cancel`.
-  - `Use this video` sets the video override and downloads the track again.
+  - At the top: the source track (glyph, title, then artists, album and length in gray), and under it the track's
+    video, by where it comes from: "Current match: <title>, 58% confidence", "Current video: <title>, from a YouTube
+    Music playlist", "Current video: <title or id>, chosen by you", or without one "The Matcher found no usable
+    video." (after a failed match) or "The Matcher hasn't looked for a video yet."
+  - `Search YouTube Music:` an edit pre-filled with the Matcher's first query, and `Search`. The search is the
+    Matcher's own (`arch.md`, Matcher › Search): songs only, and no tool needed. A video that isn't a song is
+    chosen by its link (below).
+  - A results list with Title | Artists | Album | Length | Score, sorted by score (ties in the order below), each
+    video once:
+    - the current match, marked `(current)`;
+    - the YouTube Music sources the playlists list that score at least 50% against the track, marked
+      `(in library)`;
+    - the search results. When the dialog opens, those of the Matcher's queries; after `Search` (or Enter in the
+      edit), those of the edit's text. The current match and the library rows stay.
+    - A result whose video already belongs to another track is marked `(in library)` too. Choosing a video in the
+      library merges the track into the one that has it.
+    - `Score` is `match_score` against the track, as a percentage. Lengths more than 5 s off the source length are
+      amber.
+    - While a search runs, the list is empty and reads "Searching YouTube Music…". Without rows after it, it reads
+      "No results. Try fewer words, or paste a link below.", or "Couldn't search YouTube Music: <reason>" when the
+      search failed.
+  - `Or paste a YouTube or YouTube Music link:` an edit with a live detection line under it. It reads nothing for an
+    empty edit, `Not a YouTube link` in gray, or the YouTube Music logo and `YouTube video · <id>`, followed by the
+    title when the library has that video. The links it takes are in `arch.md` (Video links).
+  - A link that names a video wins over the list's selection; selecting a row leaves the link as it is.
+  - The footer has `Open in browser` on the left (it opens the video `Use this video` would take on YouTube
+    Music), then `Use this video` (default) and `Cancel`. Both of the first two are enabled once the link names a
+    video or a row is selected. A double-click on a row is `Use this video`.
+  - `Use this video` on the current match confirms it. Any other video becomes the video override, which downloads
+    the track again.
+  - It is 640 px wide:
+
+    ```
+    ┌ Choose a video ─────────────────────────────────────────────────────────┐
+    │ ● Best Part · Daniel Caesar, H.E.R. · Freudian · 3:29                    │
+    │ Current match: Best Part, 78% confidence                                 │
+    │ Search YouTube Music: [Daniel Caesar H.E.R. Best Part        ] [Search]  │
+    │ ┌ Title                   │ Artists        │ Album     │ Length │ Score ┐│
+    │ │ Best Part (current)     │ Daniel Caesar  │ Freudian  │ 3:29   │ 78%   ││
+    │ │ Best Part (in library)  │ Daniel Caesar  │           │ 3:31   │ 74%   ││
+    │ │ Best Part - Live        │ Daniel Caesar  │ Live      │ 4:12   │ 31%   ││
+    │ └──────────────────────────────────────────────────────────────────────┘│
+    │ Or paste a YouTube or YouTube Music link:                                │
+    │ [                                                                    ]   │
+    │ ● YouTube video · 5aM1xdk8lRw                                            │
+    │                                                                          │
+    │ [Open in browser]                          [Use this video]  [Cancel]    │
+    └──────────────────────────────────────────────────────────────────────────┘
+    ```
+  - So far it opens from the inspector and the Track menu, for an entry whose source is a Spotify track; Edit track
+    comes with its feature.
 - **Edit track**. Opened by `Edit track…`, Enter, or a double-click on a row:
   - **Cover art**: a 132 px preview, `Choose image…`, `Paste` and `Reset`, plus a source line (`From the video
     thumbnail`, `From Spotify`, `Custom image`).
@@ -777,7 +816,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | `confirmMatch` | inspector actions, Track menu |
 | `setVideoOverride` | Choose a video dialog, Edit track dialog (Audio link) |
 | `editTrack` | Edit track dialog (tags, cover art) |
-| `searchVideos` / `VideoSearchResults` | Choose a video dialog |
+| `searchVideos` / `VideoSearchResults` | Choose a video dialog's list |
 | `setSettings` | Settings dialog OK |
 | `relocateLibrary` / `rebuildState` / `checkForUpdates` | Tools menu, Settings, infobar |
 | `TrackStatusChanged` / `TrackProgress` | Status cell, status counts, playlist row, inspector, status bar |
