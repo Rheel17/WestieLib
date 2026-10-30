@@ -243,7 +243,7 @@ void MainWindow::show_inspector() {
     }
     std::vector<TrackRow> selected = tracks_.selected_rows();
     if (selected.size() == 1) {
-        if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), selected.front())) {
+        if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), normalizer_, selected.front())) {
             inspector_.show_track(*track);
             return;
         }

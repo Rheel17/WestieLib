@@ -77,8 +77,13 @@ public class FakeWeb {
 		lock (ytmQueries) ytmQueries.Clear();
 	}
 
-	// A song as YouTube Music's search lists it: the title, then "<artists> • <album> • <length>", then the plays
+	// A song as YouTube Music's search lists it: the title, then "<artists> • <album> • <length>", then the plays, and the
+	// explicit badge for an explicit song
 	public static string Song(string video, string title, string[] artists, string album, string length) {
+		return Song(video, title, artists, album, length, false);
+	}
+
+	public static string Song(string video, string title, string[] artists, string album, string length, bool isExplicit) {
 		var runs = new List<string>();
 		for (int i = 0; i < artists.Length; i++) {
 			if (i > 0) runs.Add("{\"text\":\"" + (i == artists.Length - 1 ? " & " : ", ") + "\"}");
@@ -88,7 +93,8 @@ public class FakeWeb {
 		runs.Add("{\"text\":" + Json(album) + ",\"navigationEndpoint\":{\"browseEndpoint\":{\"browseId\":\"MPREfake\"}}}");
 		runs.Add("{\"text\":\" " + (char)0x2022 + " \"}");
 		runs.Add("{\"text\":\"" + length + "\"}");
-		return "{\"musicResponsiveListItemRenderer\":{\"playlistItemData\":{\"videoId\":\"" + video + "\"},\"flexColumns\":[" +
+		string badges = isExplicit ? "\"badges\":[{\"musicInlineBadgeRenderer\":{\"icon\":{\"iconType\":\"MUSIC_EXPLICIT_BADGE\"}}}]," : "";
+		return "{\"musicResponsiveListItemRenderer\":{" + badges + "\"playlistItemData\":{\"videoId\":\"" + video + "\"},\"flexColumns\":[" +
 			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[{\"text\":" + Json(title) + ",\"navigationEndpoint\":{\"watchEndpoint\":{" +
 			"\"videoId\":\"" + video + "\"}}}]}}}," +
 			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[" + string.Join(",", runs) + "]}}}," +
@@ -97,15 +103,20 @@ public class FakeWeb {
 
 	// Playlist items as the query API has them, with fields the app doesn't read too
 	public static string Track(string id, string title, string[] artists, string album, long milliseconds) {
+		return Track(id, title, artists, album, milliseconds, false);
+	}
+
+	public static string Track(string id, string title, string[] artists, string album, long milliseconds, bool isExplicit) {
 		long seconds = milliseconds / 1000;
 		lock (TrackSongs) {
-			TrackSongs[string.Join(" ", artists) + " " + title] = Song("yt" + id, title, artists, album, (seconds / 60) + ":" + (seconds % 60).ToString("00"));
+			TrackSongs[string.Join(" ", artists) + " " + title] = Song("yt" + id, title, artists, album, (seconds / 60) + ":" + (seconds % 60).ToString("00"), isExplicit);
 		}
 		string artistItems = string.Join(",", artists.Select(a => "{\"profile\":{\"name\":" + Json(a) + "},\"uri\":\"spotify:artist:" + id + "\"}"));
 		return "{\"addedAt\":{\"isoString\":\"2026-07-09T14:06:14.326Z\"},\"addedBy\":null,\"itemV2\":{\"__typename\":\"TrackResponseWrapper\",\"data\":{" +
 			"\"__typename\":\"Track\",\"albumOfTrack\":{\"artists\":{\"items\":[" + artistItems + "]},\"coverArt\":{\"sources\":[{\"height\":640," +
 			"\"url\":\"https://i.scdn.co/image/" + id + "\",\"width\":640}]},\"name\":" + Json(album) + ",\"uri\":\"spotify:album:" + id + "\"}," +
-			"\"artists\":{\"items\":[" + artistItems + "]},\"discNumber\":1,\"trackDuration\":{\"totalMilliseconds\":" + milliseconds + "}," +
+			"\"artists\":{\"items\":[" + artistItems + "]},\"contentRating\":{\"label\":\"" + (isExplicit ? "EXPLICIT" : "NONE") + "\"}," +
+			"\"discNumber\":1,\"trackDuration\":{\"totalMilliseconds\":" + milliseconds + "}," +
 			"\"name\":" + Json(title) + ",\"playability\":{\"playable\":true,\"reason\":\"PLAYABLE\"},\"playcount\":\"1234\",\"trackNumber\":1," +
 			"\"uri\":\"spotify:track:" + id + "\"}}}";
 	}

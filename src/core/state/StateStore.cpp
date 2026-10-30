@@ -52,13 +52,26 @@ struct FailureName {
 
 constexpr std::array FailureNames = {FailureName{TrackFailure::NoMatch, "noMatch"}, FailureName{TrackFailure::Search, "search"}};
 
+struct DoubtName {
+    MatchDoubt doubt = MatchDoubt::Title;
+    std::string_view name{};
+};
+
+constexpr std::array DoubtNames = {
+    DoubtName{MatchDoubt::Title, "title"},   DoubtName{MatchDoubt::Artist, "artist"},     DoubtName{MatchDoubt::Version, "version"},
+    DoubtName{MatchDoubt::Length, "length"}, DoubtName{MatchDoubt::Explicit, "explicit"},
+};
+
 struct MatchJson {
     std::string video_id{};
     double confidence = 0.0;
     std::optional<bool> confirmed{};
+    std::optional<std::vector<std::string>> doubts{};
     std::string title{};
     std::vector<std::string> artists{};
+    std::optional<std::string> album{};
     std::int64_t duration_ms = 0;
+    std::optional<bool> explicit_content{};
 };
 
 struct SourceJson {
@@ -66,6 +79,7 @@ struct SourceJson {
     std::vector<std::string> artists{};
     std::optional<std::string> album{};
     std::int64_t duration_ms = 0;
+    std::optional<bool> explicit_content{};
     std::optional<MatchJson> match{};
     std::string track{};
 };
@@ -150,14 +164,39 @@ PlaylistJson json_of(const Playlist& playlist) {
     };
 }
 
+std::vector<MatchDoubt> doubts_named(const std::optional<std::vector<std::string>>& names) {
+    std::vector<MatchDoubt> doubts;
+    for (const std::string& name : names.value_or(std::vector<std::string>())) {
+        // A doubt from a later version is left out; the next sync judges the match again anyway
+        if (auto found = std::ranges::find(DoubtNames, name, &DoubtName::name); found != DoubtNames.end()) {
+            doubts.push_back(found->doubt);
+        }
+    }
+    return doubts;
+}
+
+std::optional<std::vector<std::string>> doubt_names(const std::vector<MatchDoubt>& doubts) {
+    if (doubts.empty()) {
+        return std::nullopt;
+    }
+    std::vector<std::string> names;
+    for (MatchDoubt doubt : doubts) {
+        names.emplace_back(std::ranges::find(DoubtNames, doubt, &DoubtName::doubt)->name);
+    }
+    return names;
+}
+
 Match match_of(MatchJson&& json) {
     return {
         .video_id = std::move(json.video_id),
         .confidence = json.confidence,
         .confirmed = json.confirmed.value_or(false),
+        .doubts = doubts_named(json.doubts),
         .title = std::move(json.title),
         .artists = std::move(json.artists),
+        .album = std::move(json.album).value_or(""),
         .duration = std::chrono::milliseconds(json.duration_ms),
+        .explicit_content = json.explicit_content,
     };
 }
 
@@ -166,9 +205,12 @@ MatchJson json_of(const Match& match) {
         .video_id = match.video_id,
         .confidence = match.confidence,
         .confirmed = match.confirmed ? std::optional(true) : std::nullopt,
+        .doubts = doubt_names(match.doubts),
         .title = match.title,
         .artists = match.artists,
+        .album = optional_text(match.album),
         .duration_ms = match.duration.count(),
+        .explicit_content = match.explicit_content,
     };
 }
 
@@ -189,16 +231,18 @@ template<>
 struct glz::meta<westie::core::MatchJson> {
     using T = westie::core::MatchJson;
     constexpr static auto value = glz::object(
-            "videoId", &T::video_id, "confidence", &T::confidence, "confirmed", &T::confirmed, "title", &T::title, "artists", &T::artists, "durationMs",
-            &T::duration_ms
+            "videoId", &T::video_id, "confidence", &T::confidence, "confirmed", &T::confirmed, "doubts", &T::doubts, "title", &T::title, "artists",
+            &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "explicit", &T::explicit_content
     );
 };
 
 template<>
 struct glz::meta<westie::core::SourceJson> {
     using T = westie::core::SourceJson;
-    constexpr static auto value =
-            glz::object("title", &T::title, "artists", &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "match", &T::match, "track", &T::track);
+    constexpr static auto value = glz::object(
+            "title", &T::title, "artists", &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "explicit", &T::explicit_content, "match",
+            &T::match, "track", &T::track
+    );
 };
 
 template<>
@@ -252,6 +296,7 @@ State StateStore::load() const {
             .artists = std::move(source.artists),
             .album = std::move(source.album).value_or(""),
             .duration = std::chrono::milliseconds(source.duration_ms),
+            .explicit_content = source.explicit_content,
             .match = source.match ? std::optional(match_of(std::move(*source.match))) : std::nullopt,
             .track = std::move(source.track),
         };
@@ -280,6 +325,7 @@ void StateStore::save(const State& state) {
             .artists = source.artists,
             .album = optional_text(source.album),
             .duration_ms = source.duration.count(),
+            .explicit_content = source.explicit_content,
             .match = source.match ? std::optional(json_of(*source.match)) : std::nullopt,
             .track = source.track,
         };

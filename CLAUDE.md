@@ -66,7 +66,8 @@ of a phase, run all of them (no `-Suite`). Either must report 0 failures.
   `src/`, sorted case-sensitively (`"ResourceIds.h"` before `"platform/..."`). Separate the blocks with blank lines.
 - Win32: use the W APIs. Check results with `platform::win32::check` / `check_status`, wrap every handle in RAII
   (`UniqueHandle`), and keep sizes in DIPs, scaled with `Dpi` where they're used. `platform/` never includes `ui/`.
-- Add every new `.cpp` to `add_executable` in `CMakeLists.txt`.
+- Add every new `.cpp` to `add_executable` in `CMakeLists.txt`, or to `MATCHING_SOURCES` when the unit checks need it
+  (`docs/build.md`).
 
 ## Gotchas
 

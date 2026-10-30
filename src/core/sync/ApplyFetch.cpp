@@ -21,6 +21,7 @@ void add_source(State& state, SourceTrack&& listed, std::chrono::system_clock::t
         source.album = std::move(*listed.album);
     }
     source.duration = listed.duration;
+    source.explicit_content = listed.explicit_content;
     if (state.tracks.contains(source.track)) {
         return;
     }

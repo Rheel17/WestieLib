@@ -28,6 +28,8 @@ constexpr std::string_view SongsFilter = "EgWKAQIIAWoMEA4QChADEAQQCRAF";
 constexpr std::string_view SearchPath = "/youtubei/v1/search?prettyPrint=false";
 constexpr std::string_view GroupSeparator = " • ";
 constexpr std::array<std::string_view, 2> ArtistSeparators = {", ", " & "};
+// The badge an explicit song has next to its title; a song without it isn't explicit
+constexpr std::string_view ExplicitBadge = "MUSIC_EXPLICIT_BADGE";
 constexpr int SecondsPerMinute = 60;
 
 struct ClientJson {
@@ -79,12 +81,35 @@ struct PlaylistItemDataJson {
     };
 };
 
+struct IconJson {
+    std::string icon_type{};
+
+    struct glaze {
+        constexpr static auto value = glz::object("iconType", &IconJson::icon_type);
+    };
+};
+
+struct InlineBadgeJson {
+    IconJson icon{};
+};
+
+struct BadgeJson {
+    std::optional<InlineBadgeJson> inline_badge{};
+
+    struct glaze {
+        constexpr static auto value = glz::object("musicInlineBadgeRenderer", &BadgeJson::inline_badge);
+    };
+};
+
 struct ItemRendererJson {
     std::optional<PlaylistItemDataJson> playlist_item_data{};
     std::vector<ColumnJson> flex_columns{};
+    std::vector<BadgeJson> badges{};
 
     struct glaze {
-        constexpr static auto value = glz::object("playlistItemData", &ItemRendererJson::playlist_item_data, "flexColumns", &ItemRendererJson::flex_columns);
+        constexpr static auto value = glz::object(
+                "playlistItemData", &ItemRendererJson::playlist_item_data, "flexColumns", &ItemRendererJson::flex_columns, "badges", &ItemRendererJson::badges
+        );
     };
 };
 
@@ -185,7 +210,12 @@ std::optional<SongResult> song_of(const ItemRendererJson& item) {
     if (!item.playlist_item_data || item.playlist_item_data->video_id.empty() || item.flex_columns.size() < 2) {
         return std::nullopt;
     }
-    SongResult song{.video_id = item.playlist_item_data->video_id};
+    SongResult song{
+        .video_id = item.playlist_item_data->video_id,
+        .explicit_content = std::ranges::any_of(
+                item.badges, [](const BadgeJson& badge) { return badge.inline_badge && badge.inline_badge->icon.icon_type == ExplicitBadge; }
+        ),
+    };
     for (const RunJson& run : item.flex_columns[0].renderer.text.runs) {
         song.title += run.text;
     }

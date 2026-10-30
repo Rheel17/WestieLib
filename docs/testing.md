@@ -34,14 +34,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 
 | Suite | Checks | Run it after changes to |
 |-------|--------|-------------------------|
+| `unit` | The unit checks (below): the Matcher's rules against real cases from the user's library | `core/matching/`, `core/state/MatchDoubt`, `platform/win32/Win32TextNormalizer` |
 | `window` | DPI awareness, icons, menus and their states, About, the toolbar and status bar, the side panels' first-run content, sizes, splitter limits, the log pane, saving and restoring the window state | `ui/main/`, `ui/commands/`, `ui/toolbar/`, `ui/statusbar/`, `ui/log/`, `ui/welcome/WelcomePanel`, menus, accelerators |
 | `settings` | The Settings dialog, the library folder field, Browse and Change..., settings.json | `core/settings/`, `ui/dialogs/SettingsDialog`, `ui/dialogs/FolderPicker`, `ui/welcome/LibraryFolder*` |
 | `tools` | The Tools part, the Settings dialog's Tools group, Check for updates, installing yt-dlp | `core/tools/`, `core/github/`, `ui/tools/`, `ui/dialogs/ToolListView` |
 | `add-playlist` | The Add playlist dialog: opening it, reading links, the Spotify and YouTube Music look-ups, Ctrl+Backspace and Ctrl+Z in the link field | `ui/dialogs/AddPlaylistDialog`, `ui/dialogs/Link*`, `ui/dialogs/PlaylistLinkCheck`, `core/sources/`, `core/playlists/PlaylistLink`, `PlaylistLookup` |
 | `playlists` | Adding, keeping, selecting, showing, removing and scrolling playlists, the cards, the playlist menu, state.json | `ui/playlists/`, `ui/inspector/`, `ui/dialogs/RemovePlaylistDialog`, `core/playlists/`, `core/state/` |
 | `tracks` | The track panel before it holds tracks: the filter bar, the status tabs, the result line, Clear, the search field's keys (Ctrl+Backspace, Ctrl+Delete, the undo history, Enter, Esc, Ctrl+F), the table's columns, sorting and row height | `ui/tracks/`, `ui/framework/TabStrip`, `ui/framework/ListView`, `ui/framework/ComboBox`, `ui/framework/IconView`, `ui/framework/Edit`, `ui/framework/EditKeys`, `ui/framework/EditHistory`, `ui/framework/WordBreaks` |
-| `sync` | Sync all, Sync selected and Sync now: what a YouTube Music or Spotify fetch writes to state.json, the table's rows, the tab counts and result line, the cards; a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter, the search (words in any field and order, case and accents aside) and the tabs, the selection through all that, the track card of a selected row and its playlist link, the cards of tracks a seeded state.json gives a video, a match or a failure (and that saving keeps those fields), matching: the queries, the best result over the first, a live version passed over, no results, a failed search, only another song of the same artist and length, songs a YouTube Music playlist lists under another id than the search finds (merged without a search when that playlist synced first, and on the next sync when it comes later), a match that merges into a YouTube Music track and a YouTube Music source that joins a matched track (one row in All tracks, naming both playlists), a playlist that lists one track twice (its second entry a duplicate, with its card, Status tooltip and the Duplicates tab, which only playlists have), a second sync that searches only the failed tracks, and Cancel during a search, the selection card of two, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), a fetch that waits for yt-dlp, a sync that keeps the table where it is scrolled (`Get-TopRow`, `LVM_GETTOPINDEX`), and a Spotify fetch that shows its pages as they come (also when cancelled between them, or when the list changes), asks for a page again after HTTP 500, or fails | `core/sync/`, `core/state/`, `core/matching/`, `core/sources/YouTubeMusicPlaylist`, `core/sources/Spotify*`, `platform/win32/WinHttpClient`, `ui/sync/`, `ui/tracks/`, `ui/inspector/Track*`, `ui/inspector/SourceLink`, `ui/inspector/CoverArt`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
-| `choose-video` | The Choose a video dialog: opening it from the card and the Track menu, the track and current-video lines, the candidates (the current match, the library's YouTube Music entries, the search results) with their marks, scores and order, searching again, a failed search, no results, pasted links, the buttons' states; and what Use this video does: confirm the current match, merge into the library's track, set an override from a link, split an entry out of a merged track; a sync that leaves overridden tracks alone | `ui/dialogs/ChooseVideoDialog`, `ui/dialogs/Video*`, `core/matching/Video*`, `core/matching/ConfirmMatch`, `core/matching/MatchQueries`, `core/state/SplitSource`, `core/state/TrackVideos`, `ui/inspector/Track*` |
+| `sync` | Sync all, Sync selected and Sync now: what a YouTube Music or Spotify fetch writes to state.json, the table's rows, the tab counts and result line, the cards; a failed fetch, Cancel, removing a playlist with its tracks, the rows after a restart, sorting them, the Source filter, the search (words in any field and order, case and accents aside) and the tabs, the selection through all that, the track card of a selected row and its playlist link, the cards of tracks a seeded state.json gives a video, a match or a failure (and that saving keeps those fields), matching: the queries, the best result over the first, a live version passed over, no results, a failed search, only another song of the same artist and length, an artist found under a longer name (Tora, ToraMusic), a cover by the track's own artists found as "with" one of them, the rules a review of real matches added (the remix by the track's remixer, a re-recording and a language version over the original, an artist that shares one word, a title without its space, a `$` in a name, a title that shares half its words), how the Matcher decides (a guest only YouTube Music names stored to review with its doubt, the plain song over its feat. version, only a live version of another length failing, `with` and `feat.` credits alike, a channel name for the artist, 7 s off on the same album and on another, the explicit version over the clean one, the album and explicit flag the match keeps), another cut 25 s off to review, songs a YouTube Music playlist lists under another id than the search finds (merged without a search when that playlist synced first, and on the next sync when it comes later), a match that merges into a YouTube Music track and a YouTube Music source that joins a matched track (one row in All tracks, naming both playlists), a playlist that lists one track twice (its second entry a duplicate, with its card, Status tooltip and the Duplicates tab, which only playlists have), a second sync that searches only the failed tracks, and Cancel during a search, the selection card of two, the rows' counts line, their sync controls and tooltips, the playlist card's rows, the infobar (Details, its close box, a failure that comes back), a fetch that waits for yt-dlp, a sync that keeps the table where it is scrolled (`Get-TopRow`, `LVM_GETTOPINDEX`), and a Spotify fetch that shows its pages as they come (also when cancelled between them, or when the list changes), asks for a page again after HTTP 500, or fails | `core/sync/`, `core/state/`, `core/matching/`, `core/sources/YouTubeMusicPlaylist`, `core/sources/Spotify*`, `platform/win32/WinHttpClient`, `ui/sync/`, `ui/tracks/`, `ui/inspector/Track*`, `ui/inspector/SourceLink`, `ui/inspector/CoverArt`, `ui/infobar/`, `ui/playlists/LastSyncLine`, `ui/playlists/PlaylistRowPainter`, `ui/TrackCounts` |
+| `choose-video` | The Choose a match dialog: opening it from the card and the Track menu, the track and current-video lines, the candidates (the current match, the library's YouTube Music entries, the search results) with their marks, scores and order, searching again, a failed search, no results, pasted links, the buttons' states; and what Use this match does: confirm the current match, merge into the library's track, set an override from a link, split an entry out of a merged track; a sync that leaves overridden tracks alone | `ui/dialogs/ChooseVideoDialog`, `ui/dialogs/Video*`, `core/matching/Video*`, `core/matching/ConfirmMatch`, `core/matching/MatchQueries`, `core/state/SplitSource`, `core/state/TrackVideos`, `ui/inspector/Track*` |
 | `painting` | Unpainted areas and blinking during splitter drags | anything that paints a panel or moves panels: `BufferedPaint`, `DeferredPositions`, splitters, new panels |
 | `dpi` | Everything that scales, on a monitor with another DPI | DPI handling; ask the user for a monitor at another scale first |
 
@@ -54,6 +55,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   and empties the data folder, so a suite seeds what it starts from: `Set-SavedWindow` (the registry values),
   `Set-SavedAutoUpdate` (settings.json), `Install-FakeTools`, `Write-ManyPlaylists` (state.json). Never rely on another
   suite having run. Within a suite, a run may build on the one before (run 2 restores what run 1 saved).
+
+## `tests/unit/`
+
+```powershell
+& $build\WestieLibTests.exe
+```
+
+- A console program over the core's pure logic, built with the app (`WestieLibTests` in `CMakeLists.txt`), with no
+  test framework: `CHECK(expression)` and the `check_…` helpers in each file count a check and print `FAIL
+  <file>:<line>: <what>` when it fails. The last line counts checks and failures, and the exit code is 1 when any
+  failed. The `unit` suite of `ui-checks.ps1` runs it, so `ui-checks.ps1` covers it.
+- So far it covers the Matcher's rules (`plan/arch.md`, Matcher): the words (`MatchWordsChecks`), title parts
+  (`TitlePartsChecks`), names and credits (`NameChecks`), and in `JudgementChecks` a table of real cases from the
+  user's library, the Spotify track against what YouTube Music listed, each with the verdict and doubts it must
+  get, then the confidences, the ranking of candidates, and the words `version_difference` gives the track card's doubt list.
+- A rule change starts there: add the case that shows it, with the verdict it should get, and keep the rest passing.
+  The Win32 normalizer runs for real, so the checks see the same words the app does.
 
 ## Protect the user's state
 
@@ -77,14 +95,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
     page of `SpotifyItems` that `offset` and `limit` ask for, and `NotFound` for ids without items. Pages after the
     first wait while `SpotifyPageGate` is reset, so the `sync` suite can look at the app between pages and cancel there.
     `SpotifyFailures` makes the query for `"<playlist id> <offset>"` answer HTTP 500 that many more times. `Track`, `Episode`
-    and `LocalFile` build those items, with fields the app doesn't read too, and `SpotifyQueries()` lists the queries
+    and `LocalFile` build those items, with fields the app doesn't read too (`Track` takes an explicit flag as a last
+    argument, which sets `contentRating`), and `SpotifyQueries()` lists the queries
     it got with their headers. Given a `YtDlp` to serve, it also answers yt-dlp's latest release on GitHub's API (other
     repositories get 404), and holds the download back until `AssetGate` is set.
   - `WESTIELIB_YTMUSIC_API` points at `FakeWeb` too, which answers YouTube Music's search
     (`POST /youtubei/v1/search`) in its shape, and HTTP 400 without the songs filter. A query gets the songs
-    `YtmResults` lists for it (built with `Song`; an empty list for no results), HTTP 500 when it is in
-    `YtmBrokenQueries`, or else, when it is `"<artists> <title>"` of an item `Track` built, that song as video
-    `yt<track id>`; anything else has no results. So a check that only fetches Spotify playlists sees their tracks
+    `YtmResults` lists for it (built with `Song`, whose explicit flag as a last argument adds the explicit badge; an
+    empty list for no results), HTTP 500 when it is in `YtmBrokenQueries`, or else, when it is `"<artists> <title>"` of
+    an item `Track` built, that song as video `yt<track id>`, as explicit as the track; anything else has no results. So a check that only fetches Spotify playlists sees their tracks
     matched and Waiting. `YtmQueries()` lists the searches, and each waits for `YtmGate`, which the `sync` suite
     resets to look at the app while it matches and to cancel there. `Reset-Checks` empties both query lists
     (`ForgetQueries`), so a suite sees only its own.
@@ -100,7 +119,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - A sync enables Cancel until it ends (`Test-Syncing`). The `sync` suite waits for one with `Wait-Fetches`: first until
   the fake yt-dlp has logged the fetches it expects, which comes after the window knows of the sync, then until Cancel
   grays; with `-Spotify` it counts FakeWeb's Spotify queries instead. `Get-TrackRows` reads the table's rows through `ListViewRow`, and `Get-SavedPlaylistSync`,
-  `Get-SavedSources` and `Get-SavedTracks` read state.json.
+  `Get-SavedSources` and `Get-SavedTracks` read state.json, as do `Get-SavedMatches` and `Get-SavedJudgements` (the
+  matches with their confidence and doubts). They all read through `Get-SavedState`, which tries again for a moment
+  while the app is replacing the file.
 - `Select-TrackRow` selects a table row with Home and Down (`WM_KEYDOWN`), not a click: the list checks a sent click
   against the real cursor, which is elsewhere, starts a drag, and the drag then takes the next click on a header.
   `Get-SelectedRows` lists the selected rows (`LVM_GETNEXTITEM`). `Choose-Source`, `Click-Tab` and `Click-Header`
@@ -161,7 +182,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   held, so it goes through `PostCtrlKey`, which waits for it. `EM_SETSEL` places the caret first.
 - `Focus` gives a window the real keyboard focus, through `AttachThreadInput` like `PostCtrlKey`. A click that follows
   then moves the focus for real, as a mouse click would.
-- `RedInk` tells whether a window's text is drawn in the error color, in a `PrintWindow` capture.
+- `RedInk` and `AmberInk` tell whether a window's text is drawn in the error or the warning color, in a `PrintWindow`
+  capture. The `sync` suite's Run 7 checks with `AmberInk` that a review's doubts are amber and the Audio rows aren't.
 - `EditTextTop` gives where an edit's line of text starts in its window (its client area's top plus `EM_GETRECT`'s),
   and `TextHeight` the message font's `tmHeight`, so the `tracks` suite checks that the search text is centered.
 - A dialog that opens from a button click is modal, so post `BM_CLICK` rather than send it, then wait for the window
@@ -227,7 +249,7 @@ and `choose-video` suites use it) waits until two reads agree. `Get-CardTexts` l
   `TCM_GETITEMRECT` / `HDM_GETITEMRECT` (`Click-Tab`, `Click-Header`). `Double-Click-Header` sends the down, up,
   `WM_LBUTTONDBLCLK`, up of two quick clicks. The `tracks` suite's table holds no rows, so the row height
   check gives it three with `LVM_SETITEMCOUNT` and measures one.
-- The Choose a video dialog's list answers on a search worker. The `choose-video` suite waits for FakeWeb to log the
+- The Choose a match dialog's list answers on a search worker. The `choose-video` suite waits for FakeWeb to log the
   search, then for the list to stop reading `Searching YouTube Music…`: the list keeps what it reads while it has no
   rows as its window text. It selects a row with Home and Down, as in the track table.
 - The suites are dot-sourced into the runner's scope, so a suite's variables can overwrite the runner's: never name

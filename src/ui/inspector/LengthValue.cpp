@@ -12,7 +12,6 @@ namespace westie::ui {
 
 namespace {
 
-constexpr std::chrono::seconds MostOff{5};
 constexpr UINT LineFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS;
 
 }
@@ -27,7 +26,6 @@ void LengthValue::set_font(HFONT font) {
 void LengthValue::set_lengths(std::chrono::milliseconds video, std::chrono::milliseconds source) {
     video_ = duration_text(video);
     source_ = std::format(L" · Spotify {}", duration_text(source));
-    off_ = video - source > MostOff || source - video > MostOff;
     platform::win32::check(SetWindowTextW(hwnd(), (video_ + source_).c_str()), "SetWindowTextW");
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
@@ -55,7 +53,7 @@ void LengthValue::paint() const {
     SetBkMode(paint.dc(), TRANSPARENT);
     SIZE video{};
     platform::win32::check(GetTextExtentPoint32W(paint.dc(), video_.c_str(), static_cast<int>(video_.size()), &video), "GetTextExtentPoint32W");
-    SetTextColor(paint.dc(), framework::text_color(off_ ? framework::TextColor::Warning : framework::TextColor::Normal));
+    SetTextColor(paint.dc(), framework::text_color(framework::TextColor::Normal));
     RECT first = client;
     DrawTextW(paint.dc(), video_.c_str(), static_cast<int>(video_.size()), &first, LineFormat);
 

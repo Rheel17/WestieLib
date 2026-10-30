@@ -26,15 +26,30 @@ FetchContent_Declare(miniz
 	SYSTEM)
 FetchContent_MakeAvailable(miniz)
 
+# The Matcher's rules and what they use, which the unit checks build as well
+set(MATCHING_SOURCES
+	src/core/matching/Credits.cpp
+	src/core/matching/MatchEvidence.cpp
+	src/core/matching/MatchJudgement.cpp
+	src/core/matching/MatchRank.cpp
+	src/core/matching/MatchWords.cpp
+	src/core/matching/NameMatch.cpp
+	src/core/matching/SongFacts.cpp
+	src/core/matching/TitleParts.cpp
+	src/platform/win32/Utf16.cpp
+	src/platform/win32/Win32Error.cpp
+	src/platform/win32/Win32TextNormalizer.cpp
+)
+set(WINDOWS_DEFINITIONS UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+
 add_executable(WestieLib WIN32
 	src/main.cpp
+	${MATCHING_SOURCES}
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
 	src/core/matching/ConfirmMatch.cpp
 	src/core/matching/LibraryMatches.cpp
-	src/core/matching/MatchScore.cpp
-	src/core/matching/MatchText.cpp
 	src/core/matching/MatchQueries.cpp
 	src/core/matching/Matcher.cpp
 	src/core/matching/VideoCandidates.cpp
@@ -89,11 +104,8 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Pipe.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/ShellOpen.cpp
-	src/platform/win32/Utf16.cpp
-	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32FileOps.cpp
 	src/platform/win32/Win32ProcessRunner.cpp
-	src/platform/win32/Win32TextNormalizer.cpp
 	src/platform/win32/WinHttpClient.cpp
 	src/ui/ArtistsText.cpp
 	src/ui/DurationText.cpp
@@ -168,6 +180,7 @@ add_executable(WestieLib WIN32
 	src/ui/inspector/CardLayout.cpp
 	src/ui/inspector/ConfidenceValue.cpp
 	src/ui/inspector/CoverArt.cpp
+	src/ui/inspector/DoubtList.cpp
 	src/ui/inspector/IconText.cpp
 	src/ui/inspector/InspectorPanel.cpp
 	src/ui/inspector/LengthValue.cpp
@@ -229,8 +242,23 @@ set_source_files_properties(res/WestieLib.rc PROPERTIES OBJECT_DEPENDS
 # windres also searches these directories for the files named in the .rc
 target_include_directories(WestieLib PRIVATE src res "${GENERATED_DIR}")
 
-target_compile_definitions(WestieLib PRIVATE
-	UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+target_compile_definitions(WestieLib PRIVATE ${WINDOWS_DEFINITIONS})
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
 target_link_libraries(WestieLib PRIVATE glaze::glaze miniz comctl32 uxtheme gdiplus shell32 ole32 uuid winhttp bcrypt normaliz)
+
+# The unit checks: a console program that tests/ui/ui-checks.ps1 runs as its unit suite
+add_executable(WestieLibTests
+	tests/unit/main.cpp
+	tests/unit/Checks.cpp
+	tests/unit/JudgementChecks.cpp
+	tests/unit/MatchWordsChecks.cpp
+	tests/unit/NameChecks.cpp
+	tests/unit/TitlePartsChecks.cpp
+	${MATCHING_SOURCES}
+)
+target_include_directories(WestieLibTests PRIVATE src)
+target_compile_definitions(WestieLibTests PRIVATE ${WINDOWS_DEFINITIONS})
+target_compile_options(WestieLibTests PRIVATE -Wall -Wextra)
+target_link_options(WestieLibTests PRIVATE -static)
+target_link_libraries(WestieLibTests PRIVATE normaliz)

@@ -53,6 +53,13 @@ function Get-SavedMatches {
 	}) -join ' / '
 }
 
+# The same with the match's doubts, as "id videoId confidence [doubts]", for the sources whose id matches $pattern
+function Get-SavedJudgements([string]$pattern) {
+	@((Get-SavedState).sources.PSObject.Properties | Where-Object { $_.Value.match -and ($_.Name -replace $KeyPrefix, '') -match $pattern } | ForEach-Object {
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.videoId) $($_.Value.match.confidence) [$(@($_.Value.match.doubts) -join ',')]"
+	}) -join ' / '
+}
+
 # Each failed track as "id failure [error, its lines separated by |]"
 function Get-SavedFailures {
 	@((Get-SavedState).tracks.PSObject.Properties | Where-Object { $_.Value.failure } | ForEach-Object {
@@ -168,7 +175,8 @@ $Senorita = "Se$([char]0xF1)orita"
 $RowLate = " | Late Night Swing | Ana, Ben | Nights | $SpotifyName | 4:01"
 $RowSenorita = " | $Senorita | Earth, Wind & Fire | Summer | $SpotifyName | 3:05"
 $SpotifyQuery = "$SpotifyId 0 100 Bearer fake-token-$SpotifyId WebPlayer"
-$ReviewNote = 'Low-confidence match. Check it on YouTube Music, then confirm it or choose another video.'
+# A match from before the Matcher stored its doubts
+$LowConfidence = "$Bullet Low confidence"
 
 # The Spotify playlist: two tracks, one by a single artist with a comma in its name, an episode and a local file (both
 # left out), and a repeat
@@ -575,7 +583,7 @@ $y = [int]((Get-ClientHeight $confidence) / 2)
 Check '  confidence bar: filled, empty end, gap' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 110) - 1), $y, ((S 110) + 1), $y)) -join ' ') '06b025 e6e6e6 ffffff'
 Select-TrackRow $h 2
 Check 'A live version: lengths 33 s apart, 61% needs review' (Wait-TrackCard $h 'spotify:spCrazy0000000000000002') ("Track card:  / Crazy / Gnarls Barkley / St. Elsewhere / " +
-	"Status / Needs review / $ReviewNote / $ChooseVideo / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+	"Status / Needs review / $LowConfidence / $ChooseMatch / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spCrazy0000000000000002 / Audio / Matched / Crazy (Live at Coachella 2006) / Artists / Gnarls Barkley / Length / 3:31 $MiddleDot Spotify 2:58 / " +
 	"ID / liveCrazy01 / Chosen by / Matcher / Confidence / 61% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-live.png") }
@@ -590,9 +598,8 @@ Check 'On both: one row, the playlist chose, the match agrees' (Wait-TrackCard $
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-merged.png") }
 Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 3) 'Waiting'
 Select-TrackRow $h 4
-Check 'No match: the reason and the last two lines' (Wait-TrackCard $h 'spotify:spNoResults00000000004') ("Track card:  / No Results / The Late Hours / Sway / " +
-	"Status / Failed / No usable video was found. Choose one yourself. / No match on YouTube Music / " +
-	"$($NoMatchError -replace '\\"', '"' -replace '\\n', "`n") / $ChooseVideo / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
+Check 'No match: the reason, no output' (Wait-TrackCard $h 'spotify:spNoResults00000000004') ("Track card:  / No Results / The Late Hours / Sway / " +
+	"Status / Failed / No usable match was found. / No match on YouTube Music / $ChooseMatch / Source / Source / Spotify $MiddleDot Open track / Playlists / Her playlist / " +
 	"Key / spotify:spNoResults00000000004 / Audio / ID / No match found / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-nomatch.png") }
 $card = Get-InspectorCard $h
@@ -600,9 +607,8 @@ $labels = @(Get-DirectChildren $card 'WestieLib.Label' | Where-Object { [W]::IsW
 $explanation = [W]::RectIn(($labels | Where-Object { [W]::TextOf($_) -like 'No usable*' })[0], $card)
 $reasonLabel = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match on YouTube Music' })[0]
 $reason = [W]::RectIn($reasonLabel, $card)
-$box = [W]::RectIn(([W]::Children($card, 'WestieLib.OutputBox'))[0], $card)
-Check '  reason 8 under the explanation, box 4 under it, full width' "$($reason.Top - $explanation.Bottom) $($box.Top - $reason.Bottom) $($box.Left) $($box.Right)" (
-	"$(S 8) $(S 4) 0 $(Get-ClientWidth $card)")
+Check '  reason 8 under the explanation, no box' "$($reason.Top - $explanation.Bottom) $([W]::IsWindowVisible(([W]::Children($card, 'WestieLib.OutputBox'))[0]))" (
+	"$(S 8) False")
 $noVideo = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match found' })[0]
 Check '  reason and video in red' "$([W]::RedInk($h, $reasonLabel)) $([W]::RedInk($h, $noVideo))" 'True True'
 Select-TrackRow $h 5
@@ -647,7 +653,14 @@ Stop-App $app
 # A Spotify playlist whose tracks YouTube Music's search finds: the right song second, a live version before the
 # studio one, nothing at all, a search that fails, the video of a YouTube Music track, a video that a YouTube Music
 # playlist added later lists, and only another song of the same artist and length. Then two the search doesn't need:
-# a song another id of which a YouTube Music playlist added later lists, and one a synced playlist lists already.
+# a song another id of which a YouTube Music playlist added later lists, and one a synced playlist lists already. And
+# two the search finds under other names: an artist with a word stuck to it, and a cover by the track's own artists.
+# Then one each for the rules a review of real matches added: the remix by the track's remixer, a re-recording and a
+# language version over the original first, an artist that shares only a word, a title written without its space, a $
+# in a name, and a title that shares only half its words. Then how the Matcher decides: a guest only YouTube Music
+# names (to review), the plain song after its feat. version, only a live version of another length (no match), a guest
+# Spotify credits with "with" and YouTube Music with "feat.", a channel name for the artist, 7 s off on the same
+# album (accepted) and on another (to review), and an explicit song after its clean version.
 $MatchId = '5matchesmatchesmatches'
 $Web.SpotifyNames[$MatchId] = 'Matches'
 $Web.SpotifyItems[$MatchId] = [Collections.Generic.List[string]]@(
@@ -659,7 +672,24 @@ $Web.SpotifyItems[$MatchId] = [Collections.Generic.List[string]]@(
 	[FakeWeb]::Track('spJoinedLater000000006', 'Only Here', @('Solo'), 'Here', 65000),
 	[FakeWeb]::Track('spOtherTitle0000000007', 'Down Home Blues', @('Kenny'), 'Blues', 180000),
 	[FakeWeb]::Track('spLibraryLater00000008', 'Slow One', @('Turtle'), 'Slow', 300000),
-	[FakeWeb]::Track('spLibraryFirst00000009', $Cafe, @('Nova'), 'Lights', 191000)
+	[FakeWeb]::Track('spLibraryFirst00000009', $Cafe, @('Nova'), 'Lights', 191000),
+	[FakeWeb]::Track('spLetterArtist00000010', 'Inundated', @('Tora'), 'A Force Majeure', 182000),
+	[FakeWeb]::Track('spWithTail000000000011', 'Retrograde (Feki & Glasshouse Cover)', @('Feki', 'Glass House'), 'Retrograde', 220000),
+	[FakeWeb]::Track('spRuleRemixer000000012', 'Horns (StayLoose Remix)', @('Bryce Fox', 'StayLoose'), 'Horns', 204000),
+	[FakeWeb]::Track('spRuleOwnVersion000013', "Everything Has Changed (Taylor's Version)", @('Taylor Swift'), 'Red', 245000),
+	[FakeWeb]::Track('spRuleLanguage00000014', 'Love U Like That - Korean Version', @('Lauv'), 'Love U', 212000),
+	[FakeWeb]::Track('spRuleOtherArtist00015', 'Dance Monkey', @('Tones And I'), 'Kids', 209000),
+	[FakeWeb]::Track('spRuleSpacedTitle00016', 'Funkytown', @('Lipps Inc.'), 'Mouth', 240000),
+	[FakeWeb]::Track('spRuleDollar0000000017', 'Tik Tok', @('Ke$ha'), 'Animal', 200000),
+	[FakeWeb]::Track('spRuleHalfTitle0000018', 'Trixie Blues', @('Trixie Smith'), 'Blues', 193000),
+	[FakeWeb]::Track('spRuleOnlyGuest0000019', 'Glow', @('Ama'), 'Glow', 200000),
+	[FakeWeb]::Track('spRulePlainWins0000020', 'Shine', @('Ama'), 'Shine', 200000),
+	[FakeWeb]::Track('spRuleOnlyLive00000021', 'Pulse', @('Ama'), 'Pulse', 200000),
+	[FakeWeb]::Track('spRuleWithFeat00000022', 'Echo (with Zed)', @('Ama', 'Zed'), 'Echo', 200000),
+	[FakeWeb]::Track('spRuleChannel000000023', 'Drift', @('Ama'), 'Drift', 200000),
+	[FakeWeb]::Track('spRuleSameAlbum0000024', 'Tide', @('Ama'), 'Waves', 200000),
+	[FakeWeb]::Track('spRuleOtherAlbum000025', 'Reef', @('Ama'), 'Waves', 200000),
+	[FakeWeb]::Track('spRuleExplicit00000026', 'Burn', @('Ama'), 'Burn', 200000, $true)
 )
 $Web.YtmResults['Daniel Caesar H.E.R. Best Part'] = [Collections.Generic.List[string]]@(
 	[FakeWeb]::Song('9cHbvRUALrc', 'Pink + White', @('Frank Ocean'), 'Blonde', '3:05'),
@@ -675,11 +705,47 @@ $Web.YtmResults['KALEO Way Down We Go'] = [Collections.Generic.List[string]]@([F
 $Web.YtmResults['Solo Only Here'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackDDDDD6', 'Only Here', @('Solo'), 'Here', '1:05'))
 # Another id than the one PLslow1 lists
 $Web.YtmResults['Turtle Slow One'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('searchSlow1', 'Slow One', @('Turtle'), 'Slow', '5:00'))
+$Web.YtmResults['Tora Inundated'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('toraInundat', 'Inundated', @('ToraMusic'), 'A Force Majeure', '3:02'))
+$Web.YtmResults['Feki Glass House Retrograde (Feki & Glasshouse Cover)'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('retroGlass1', 'Retrograde with Glass House', @('Feki', 'Glass House'), 'Retrograde', '3:40')
+)
 $Web.YtmResults['Kenny Down Home Blues'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('bakersfield', 'Bakersfield Blues', @('Kenny'), 'Blues', '3:00'))
+$Web.YtmResults['Bryce Fox StayLoose Horns (StayLoose Remix)'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('hornsArcNth', 'Horns (Arc North Remix)', @('Arc North', 'Bryce Fox'), 'Horns', '3:24'),
+	[FakeWeb]::Song('hornsStayLs', 'Horns (StayLoose Remix)', @('Bryce Fox', 'StayLoose'), 'Horns', '3:24')
+)
+$Web.YtmResults["Taylor Swift Everything Has Changed (Taylor's Version)"] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('changedOrig', 'Everything Has Changed', @('Taylor Swift'), 'Red', '4:05'),
+	[FakeWeb]::Song('changedTays', "Everything Has Changed (Taylor's Version)", @('Taylor Swift'), 'Red', '4:05')
+)
+$Web.YtmResults['Lauv Love U Like That - Korean Version'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('loveUOrigin', 'Love U Like That', @('Lauv'), 'Love U', '3:32'),
+	[FakeWeb]::Song('loveUKorean', 'Love U Like That (Korean Version)', @('Lauv'), 'Love U', '3:32')
+)
+$Web.YtmResults['Tones And I Dance Monkey'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('tonesFive01', 'Dance Monkey', @('Tones Five'), 'Covers', '3:29'))
+$Web.YtmResults['Lipps Inc. Funkytown'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('funkyTown01', 'Funky Town', @('Lipps Inc.'), 'Mouth', '4:00'))
+$Web.YtmResults['Ke$ha Tik Tok'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('tikTokKesha', 'TiK ToK', @('Kesha'), 'Animal', '3:20'))
+$Web.YtmResults['Trixie Smith Trixie Blues'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('prayingBlue', 'Praying Blues', @('Trixie Smith'), 'Blues', '3:14'))
+$Web.YtmResults['Ama Glow'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('glowFeatZed', 'Glow (feat. Zed)', @('Ama', 'Zed'), 'Glow', '3:20'))
+$Web.YtmResults['Ama Shine'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('shineFeatZd', 'Shine (feat. Zed)', @('Ama', 'Zed'), 'Shine', '3:20'),
+	[FakeWeb]::Song('shineSolo01', 'Shine', @('Ama'), 'Shine', '3:20')
+)
+$Web.YtmResults['Ama Pulse'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('pulseLive01', 'Pulse (Live)', @('Ama'), 'Live', '4:20'))
+$Web.YtmResults['Ama Zed Echo (with Zed)'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('echoFeatZed', 'Echo (feat. Zed)', @('Ama'), 'Echo', '3:20'))
+$Web.YtmResults['Ama Drift'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('driftMusic1', 'Drift', @('Ama Music'), 'Drift', '3:20'))
+$Web.YtmResults['Ama Tide'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('tideAlbum01', 'Tide', @('Ama'), 'Waves', '3:27'))
+$Web.YtmResults['Ama Reef'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('reefSingle1', 'Reef', @('Ama'), 'Reef', '3:27'))
+$Web.YtmResults['Ama Burn'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('burnClean01', 'Burn', @('Ama'), 'Burn', '3:20'),
+	[FakeWeb]::Song('burnExplct1', 'Burn', @('Ama'), 'Burn', '3:20', $true)
+)
 $MatchFailures = 'spBrokenSearch00000004 search [HTTP 500 from 127.0.0.1] / spNoResults00000000003 noMatch [Searched "The Late Hours Sway With Me ' +
 	'(WCS Edit)": no results | Searched "The Late Hours Sway With Me": no results] / spOtherTitle0000000007 noMatch [Searched "Kenny Down Home Blues": ' +
-	'no usable results]'
-$FailedQueries = 'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / Kenny Down Home Blues'
+	'no usable results] / spRuleHalfTitle0000018 noMatch [Searched "Trixie Smith Trixie Blues": no usable results] / spRuleOnlyLive00000021 noMatch ' +
+	'[Searched "Ama Pulse": no usable results] / spRuleOtherArtist00015 noMatch [Searched "Tones And I Dance Monkey": no usable results]'
+$FailedQueries = 'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / Kenny Down Home Blues / ' +
+	'Tones And I Dance Monkey / Trixie Smith Trixie Blues / Ama Pulse'
 
 Install-FakeTools
 Write-SyncPlaylists 'ytm:PLtracks1', "spotify:$MatchId"
@@ -692,21 +758,46 @@ Send-Command $h 'Sync &all'
 Wait-Fetches $h $runs 1
 # Way Down We Go and Cafe Lights are songs PLtracks1 lists, so they take its videos without a search
 Check 'Sync all: the Spotify tracks searched, in playlist order' (Get-YtmQueriesSince $searches) ('Daniel Caesar H.E.R. Best Part / Gnarls Barkley Crazy / ' +
-	'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / Solo Only Here / Kenny Down Home Blues / Turtle Slow One')
-Check '  matches: the best result, not the first; the studio version; the library''s' (Get-SavedMatches) ('spClearMatch0000000001 zNhtz0Lygik 1 / ' +
+	'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / Solo Only Here / Kenny Down Home Blues / Turtle Slow One / ' +
+	'Tora Inundated / Feki Glass House Retrograde (Feki & Glasshouse Cover) / Bryce Fox StayLoose Horns (StayLoose Remix) / ' +
+	"Taylor Swift Everything Has Changed (Taylor's Version) / Lauv Love U Like That - Korean Version / Tones And I Dance Monkey / Lipps Inc. Funkytown / " +
+	'Ke$ha Tik Tok / Trixie Smith Trixie Blues / Ama Glow / Ama Shine / Ama Pulse / Ama Zed Echo (with Zed) / Ama Drift / Ama Tide / Ama Reef / Ama Burn')
+Check '  Tora as ToraMusic | the cover as Retrograde with Glass House' "$((Get-SavedState).sources.'spotify:spLetterArtist00000010'.match.videoId) | $(
+	@((Get-SavedMatches) -split ' / ' | Where-Object { $_ -like 'spWithTail*' }))" 'toraInundat | spWithTail000000000011 retroGlass1 1'
+Check '  the remix by StayLoose, the re-recording, the Korean version, Funky Town, Kesha' (Get-SavedJudgements '^spRule(Dollar|Language|OwnVersion|Remixer|Spaced)') (
+	'spRuleDollar0000000017 tikTokKesha 1 [] / spRuleLanguage00000014 loveUKorean 1 [] / spRuleOwnVersion000013 changedTays 1 [] / ' +
+	'spRuleRemixer000000012 hornsStayLs 1 [] / spRuleSpacedTitle00016 funkyTown01 1 []')
+Check '  the guest to review, the plain song, the credits, the channel, the albums, the explicit one' (
+	Get-SavedJudgements '^spRule(OnlyGuest|PlainWins|WithFeat|Channel|SameAlbum|OtherAlbum|Explicit)') (
+	'spRuleChannel000000023 driftMusic1 0.9 [] / spRuleExplicit00000026 burnExplct1 1 [] / spRuleOnlyGuest0000019 glowFeatZed 0.75 [version] / ' +
+	'spRuleOtherAlbum000025 reefSingle1 0.75 [length] / spRulePlainWins0000020 shineSolo01 1 [] / spRuleSameAlbum0000024 tideAlbum01 0.9 [] / ' +
+	'spRuleWithFeat00000022 echoFeatZed 1 []')
+Check '  the explicit flags, album and length the match keeps' "$((Get-SavedState).sources.'spotify:spRuleExplicit00000026'.explicit) $(
+	(Get-SavedState).sources.'spotify:spRuleExplicit00000026'.match.explicit) | $((Get-SavedState).sources.'spotify:spRuleSameAlbum0000024'.match.album) $(
+	(Get-SavedState).sources.'spotify:spRuleSameAlbum0000024'.match.durationMs)" 'True True | Waves 207000'
+Check '  matches: the best result, not the first; the studio version; the library''s' (@((Get-SavedMatches) -split ' / ' | Where-Object {
+	$_ -notlike 'spLetterArtist*' -and $_ -notlike 'spWithTail*' -and $_ -notlike 'spRule*' }) -join ' / ') ('spClearMatch0000000001 zNhtz0Lygik 1 / ' +
 	'spJoinedLater000000006 trackDDDDD6 1 / spLibraryFirst00000009 trackBBBBB2 1 / spLibraryLater00000008 searchSlow1 1 / ' +
 	'spLiveLoses00000000002 studioCrazy 1 / spMergesYtm00000000005 trackAAAAA1 1')
-Check '  failures: no results, a search that failed, and only another song' (Get-SavedFailures) $MatchFailures
+Check '  failures: no results, a search that failed, another song, another artist, half the title' (Get-SavedFailures) $MatchFailures
 Check '  tracks: Way Down We Go and Cafe Lights on both are one track each' (Get-SavedTracks) ('spBrokenSearch00000004 failed [spBrokenSearch00000004] True / ' +
 	'spClearMatch0000000001 pending [spClearMatch0000000001] True / spJoinedLater000000006 pending [spJoinedLater000000006] True / ' +
-	'spLibraryLater00000008 pending [spLibraryLater00000008] True / ' +
+	'spLetterArtist00000010 pending [spLetterArtist00000010] True / spLibraryLater00000008 pending [spLibraryLater00000008] True / ' +
 	'spLiveLoses00000000002 pending [spLiveLoses00000000002] True / spNoResults00000000003 failed [spNoResults00000000003] True / ' +
-	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / ' +
+	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / spRuleChannel000000023 pending [spRuleChannel000000023] True / ' +
+	'spRuleDollar0000000017 pending [spRuleDollar0000000017] True / spRuleExplicit00000026 pending [spRuleExplicit00000026] True / ' +
+	'spRuleHalfTitle0000018 failed [spRuleHalfTitle0000018] True / spRuleLanguage00000014 pending [spRuleLanguage00000014] True / ' +
+	'spRuleOnlyGuest0000019 pending [spRuleOnlyGuest0000019] True / spRuleOnlyLive00000021 failed [spRuleOnlyLive00000021] True / ' +
+	'spRuleOtherAlbum000025 pending [spRuleOtherAlbum000025] True / spRuleOtherArtist00015 failed [spRuleOtherArtist00015] True / ' +
+	'spRuleOwnVersion000013 pending [spRuleOwnVersion000013] True / spRulePlainWins0000020 pending [spRulePlainWins0000020] True / ' +
+	'spRuleRemixer000000012 pending [spRuleRemixer000000012] True / spRuleSameAlbum0000024 pending [spRuleSameAlbum0000024] True / ' +
+	'spRuleSpacedTitle00016 pending [spRuleSpacedTitle00016] True / spRuleWithFeat00000022 pending [spRuleWithFeat00000022] True / ' +
+	'spWithTail000000000011 pending [spWithTail000000000011] True / AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / ' +
 	'BBBBB2 pending [BBBBB2,spLibraryFirst00000009] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True')
 Check '  its row: one, both playlists, the album from Spotify' (@((Get-TrackRows $h) -split ' / ' | Where-Object { $_ -like '*Way Down We Go*' }) -join ' / ') (
 	" | Way Down We Go | KALEO | A/B | $TracksName, Matches | 3:34")
-Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 10) 'Waiting'
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 11 | Synced 0 | Waiting 8 | Needs review 0 | Failed 3 | Showing 11 of 11'
+Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 12) 'Waiting'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 28 | Synced 0 | Waiting 22 | Needs review 2 | Failed 6 | Showing 28 of 28'
 
 # A playlist with another id of Slow One: the Spotify track takes it and merges, the order of the playlists aside. The
 # playlist with the video Only Here was matched to: its source joins that track. Only the failed tracks are searched
@@ -725,7 +816,7 @@ Check '  Slow One: the Spotify track merged into the playlist''s' "$(@((Get-Save
 Check '  failures as before' (Get-SavedFailures) $MatchFailures
 Check '  the added playlist selected: Only Here among its rows' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
 	"1 | $RowShared / 2 |  | Only Here | Solo | Here | Matches, $SharedName | 1:05 | " +
-	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 11 in $SharedName")
+	"All 2 | Synced 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 28 in $SharedName")
 # Matches lists the track too, but that is another playlist: here it is no duplicate
 Check '  Only Here there: no duplicate' (Get-StatusTip $h 1 1) 'Waiting'
 Select-TrackRow $h 1
@@ -748,8 +839,8 @@ Check '  Cancel: the run ends, the failures as they were' "$(Test-Syncing $h) | 
 Stop-App $app
 
 "--- Run 7: matches to review"
-# Two songs whose best result is 25 s off: one alone, one whose title is the longer one of a YouTube Music playlist's
-# entry. Under 0.85 each, so they need review, and the second stays apart from that entry until it is confirmed.
+# Two songs whose best result is 25 s off, another cut: one alone, one whose title is the longer one of a YouTube Music
+# playlist's entry. Both need review, and the second stays apart from that entry until it is confirmed.
 $ReviewId = '6reviewreviewreviewrev'
 $Web.SpotifyNames[$ReviewId] = 'Reviews'
 $Web.SpotifyItems[$ReviewId] = [Collections.Generic.List[string]]@(
@@ -788,6 +879,8 @@ $queries = Get-SpotifyQueries
 Send-Command $h 'Sync &selected playlist'
 Wait-Fetches $h $queries 1 -Spotify
 Check 'Synced: both matched, neither confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 False / spReviewApart000000002 apartVid001 False'
+Check '  confidences and doubts: the cut, the cut with a longer title' (Get-SavedJudgements '^spReview') (
+	'spReviewAlone000000001 reviewVid01 0.75 [length] / spReviewApart000000002 apartVid001 0.65 [title,length]')
 Check '  the one with the entry''s video stays apart' (Get-SavedTracks) ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
 	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 pending [ytm:apartVid001] True')
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 2 | Synced 0 | Waiting 2 | Needs review 2 | Failed 0 | Duplicates 0 | Showing 2 of 3 in Reviews'
@@ -797,16 +890,22 @@ Update-MenuStates $h
 Check '  Confirm match grayed with nothing selected' ([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*') 'True'
 
 Select-TrackRow $h 0
-Check 'Tell Me: the note and Choose video' (Wait-TrackCard $h 'spotify:spReviewAlone000000001') ("Track card:  / Tell Me / Rae / Tell / " +
-	"Status / Needs review / $ReviewNote / $ChooseVideo / Source / Source / Spotify $MiddleDot Open track / Playlists / Reviews / " +
-	"Key / spotify:spReviewAlone000000001 / Audio / Matched / Tell Me / Artists / Rae / Length / 3:45 $MiddleDot Spotify 3:20 / " +
-	"ID / reviewVid01 / Chosen by / Matcher / Confidence / 84% / File / Not downloaded yet.")
+Check 'Tell Me: its doubt and Choose match' (Wait-TrackCard $h 'spotify:spReviewAlone000000001') ("Track card:  / Tell Me / Rae / Tell / " +
+	"Status / Needs review / $Bullet 0:25 longer / $ChooseMatch / Source / Source / Spotify $MiddleDot Open track / " +
+	"Playlists / Reviews / Key / spotify:spReviewAlone000000001 / Audio / Matched / Tell Me / Artists / Rae / Length / 3:45 $MiddleDot Spotify 3:20 / " +
+	"ID / reviewVid01 / Chosen by / Matcher / Confidence / 75% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-review.png") }
-$choose = @([W]::Children((Get-InspectorCard $h), 'Button') | Where-Object { [W]::TextOf($_) -eq $ChooseVideo })[0]
+$card = Get-InspectorCard $h
+$doubts = @(Get-DirectChildren $card 'WestieLib.Label' | Where-Object { [W]::TextOf($_) -eq "$Bullet 0:25 longer" })[0]
+# The card's title comes first
+$matched = @(Get-DirectChildren $card 'WestieLib.Label' | Where-Object { [W]::TextOf($_) -eq 'Tell Me' })[-1]
+Check '  in amber: the doubts, not the Audio rows' "$([W]::AmberInk($h, $doubts)) $([W]::AmberInk($h, $matched))" 'True False'
+$choose = @([W]::Children((Get-InspectorCard $h), 'Button') | Where-Object { [W]::TextOf($_) -eq $ChooseMatch })[0]
 Update-MenuStates $h
-Check '  enabled: Choose video | grayed: menu''s Confirm match' "$([W]::IsWindowEnabled($choose)) | $([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*')" 'True | False'
+Check '  enabled: Choose match | grayed: menu''s Confirm match' "$([W]::IsWindowEnabled($choose)) | $([W]::ItemsWithState([W]::GetMenu($h), 0x1) -like '*&Confirm match*')" 'True | False'
 $confidence = ([W]::Children((Get-InspectorCard $h), 'WestieLib.ConfidenceValue'))[0]
-Check '  confidence bar: yellow to 84%, then empty' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 92) - 1), $y, ((S 92) + 1), $y)) -join ' ') 'd9a400 d9a400 e6e6e6'
+# 75% of the bar's 110 is 82.5
+Check '  confidence bar: yellow to 75%, then empty' ([W]::PixelsIn($h, $confidence, @(0, $y, ((S 82) - 1), $y, ((S 82) + 2), $y)) -join ' ') 'd9a400 d9a400 e6e6e6'
 Send-Command $h '&Confirm match'
 for ($i = 0; $i -lt 50 -and (Get-SavedReviews) -notlike '*reviewVid01 True*'; $i++) { Start-Sleep -Milliseconds 100 }
 Check 'Track > Confirm match: saved' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 False'
@@ -814,7 +913,10 @@ Check '  tabs | its status' "$(Get-TrackSummary $h) | $(Get-StatusTip $h 0 1)" '
 Check '  its card: Waiting, no button' ((Wait-TrackCard $h 'spotify:spReviewAlone000000001') -like '*Status / Waiting / Downloads on the next sync. / Source / *') 'True'
 
 Select-TrackRow $h 1
-[void](Wait-TrackCard $h 'spotify:spReviewApart000000002')
+Check 'Apart Song: a line for each doubt' (Wait-TrackCard $h 'spotify:spReviewApart000000002') ("Track card:  / Apart Song / Rae / Apart / " +
+	"Status / Needs review / $Bullet Title differs slightly`n$Bullet 0:25 longer / $ChooseMatch / " +
+	"Source / Source / Spotify $MiddleDot Open track / Playlists / Reviews / Key / spotify:spReviewApart000000002 / Audio / Matched / Apart Song Extended / " +
+	"Artists / Rae / Length / 3:45 $MiddleDot Spotify 3:20 / ID / apartVid001 / Chosen by / Matcher / Confidence / 65% / File / Not downloaded yet.")
 Send-Command $h '&Confirm match'
 Check 'Confirm match: merged into the entry''s track' (Wait-SavedTracks '*apartVid001,spReview*') ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
 	'ytm:apartVid001 pending [ytm:apartVid001,spReviewApart000000002] True')
@@ -825,6 +927,6 @@ $searches = @($Web.YtmQueries()).Count
 $queries = Get-SpotifyQueries
 Send-Command $h 'Sync &selected playlist'
 Wait-Fetches $h $queries 1 -Spotify
-Check 'Synced again: confirmed matches aren''t searched again' "[$(Get-YtmQueriesSince $searches)] $(Get-SavedReviews)" (
+Check 'Synced again: matches aren''t searched again' "[$(Get-YtmQueriesSince $searches)] $(Get-SavedReviews)" (
 	'[] spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True')
 Stop-App $app

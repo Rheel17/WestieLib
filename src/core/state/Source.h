@@ -14,6 +14,8 @@ struct Source {
     std::vector<std::string> artists{};
     std::string album{};
     std::chrono::milliseconds duration{};
+    // Known for Spotify sources only
+    std::optional<bool> explicit_content{};
     // Spotify sources only
     std::optional<Match> match{};
     std::string track{};

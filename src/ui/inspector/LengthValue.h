@@ -26,8 +26,6 @@ private:
 
     std::wstring video_;
     std::wstring source_;
-    // A length that far off often gives away a live version or a cover
-    bool off_ = false;
     HFONT font_ = nullptr;
 };
 

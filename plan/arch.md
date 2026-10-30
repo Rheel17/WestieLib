@@ -158,10 +158,12 @@ The state separates what playlists list from what is on disk:
       "album": "Album",
       "year": 2017,
       "durationMs": 242733,
+      "explicit": false,
       "isrc": "USxxx0000000",
       "coverUrl": "https://i.scdn.co/image/...",
-      "match": { "videoId": "ccccccccccc", "confidence": 0.94,
-                 "title": "Title", "artists": [ "Artist One" ], "durationMs": 243000 },
+      "match": { "videoId": "ccccccccccc", "confidence": 1,
+                 "title": "Title", "artists": [ "Artist One" ], "album": "Album", "durationMs": 243000,
+                 "explicit": false },
       "track": "spotify:6r8k1vznHrzlEKYxxxxxxx"
     },
     "spotify:7yq3vB0cNvb1Xxxxxxxxxx": {
@@ -219,8 +221,9 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 |----------------------------------|----------------------------------------------------------------------------|
 | `title`, `artists`, `durationMs` | From the playlist                                                          |
 | `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
+| `explicit`                       | Spotify only: whether the track is explicit (`contentRating.label` `EXPLICIT`); left out when unknown |
 | `isrc`, `coverUrl`               | Spotify only. The playlist response has the cover but no ISRC; where the ISRC comes from is decided with the Matcher |
-| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), and the video's `title`, `artists` and `durationMs` as YouTube Music's search lists them, so a review shows what was matched |
+| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), `doubts` (why it needs review: `title`, `artist`, `version`, `length`, `explicit`; left out when there are none), and the video's `title`, `artists`, `album`, `durationMs` and `explicit` as YouTube Music lists them, so a review shows what was matched |
 | `track`                          | Key of the track this source belongs to                                    |
 
 **Track fields.**
@@ -278,7 +281,7 @@ confirms it, which then merges it. Meanwhile two tracks can share a video. A mer
 - The engine emits `TracksMerged`.
 
 Sources stay attached to their track until the track is removed, with one exception: choosing another video for one
-entry of a merged track (Choose video, `setVideoOverride` on a duplicate, with manual matching) moves that source out
+entry of a merged track (Choose a match, `setVideoOverride` on a duplicate, with manual matching) moves that source out
 into a track of its own, which gets the override. So a merge is never final.
 
 `set_video_override` (`src/core/matching/VideoOverride`) does it for an entry, a source, and a video:
@@ -379,9 +382,9 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   long as it needs, unchanged. `update` holds a second mutex for its whole run, so changes never interleave, and swaps
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
-  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `match` and
+  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `explicit`, `match` and
   `track`; and tracks with `sources`, `videoOverride`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
-  out, and a failure name from a later version reads as none. The other fields arrive with their features.
+  out, and a failure or doubt name from a later version reads as none. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
 
@@ -602,6 +605,15 @@ never refreshed.
 The Matcher turns a Spotify source into a YouTube Music `videoId`. It runs only for tracks that have no video
 override and no YouTube Music source (see Video resolution).
 
+A wrong video puts another recording in the library, which is worse than asking the user to confirm a right one. So
+the Matcher:
+- answers two questions apart: *the same song?* (the title and the artists) and *the same recording?* (the title's
+  version words, the length, the album and the explicit flag);
+- judges each piece of evidence on its own instead of adding scores up, so a good title can't make up for a wrong
+  length;
+- fails closed: a title word it can't explain counts as another recording. Its word lists name what can't change what
+  you hear, so a word missing from them costs a review, never a wrong match.
+
 1. **Queries.** `"<artists> <title>"`, then, when that finds nothing usable, `"<first artist> <bare title>"`, the
    title without bracketed parts, a ` - ` suffix or a `feat.` tail (skipped when it is the same query). The Spotify
    fetch has no ISRC, so there is no ISRC query.
@@ -611,52 +623,138 @@ override and no YouTube Music source (see Video resolution).
    `context.client` (`WEB_REMIX`, a compiled-in `clientVersion`, `hl: en`), the query, and the songs filter's `params`.
    One answer, about 0.5 to 1.7 s, holds some 20 songs. Each `musicResponsiveListItemRenderer` in a
    `musicShelfRenderer` gives `playlistItemData.videoId`, the title (column 0's runs), and column 1's runs, which
-   ` • ` splits into the artists (separated by `, ` and ` & ` runs), the album, and the length (`m:ss`). An answer
-   without a shelf has no results. `WESTIELIB_YTMUSIC_API` replaces `https://music.youtube.com`; the UI checks point
+   ` • ` splits into the artists (separated by `, ` and ` & ` runs), the album, and the length (`m:ss`). Its `badges`
+   hold `MUSIC_EXPLICIT_BADGE` for an explicit song. An answer without a shelf has no results. `WESTIELIB_YTMUSIC_API` replaces `https://music.youtube.com`; the UI checks point
    it at their fake server.
-3. **Normalize** titles and artists with `TextNormalizer` (`MatchText`): punctuation becomes spaces, apostrophes go,
-   `&` reads `and`. The words compared leave out bracketed parts, a ` - ` suffix such as `- Remastered 2011`, and a
-   `feat.` tail; the version words below are looked for in the whole title.
-4. **Score** each candidate (`match_score`) as a weighted sum of title similarity (0.45), artist similarity (0.35)
-   and length closeness (0.20). The words are compared as Dice coefficients. The artists score is how well the
-   first Spotify artist matches one of the candidate's, or a little less for another Spotify artist; a name that
-   starts the other (`Prince`, `Prince & The Revolution`) scores 0.9, but one somewhere inside it doesn't, since that
-   is more often a tribute (`The Hits Of Phil Collins`). The length scores fully within 2 s and nothing from 30 s.
-   Words such as `live`, `remix`, `cover`, `karaoke`, `sped up`, `slowed`, `instrumental`, `acoustic`, `stripped`,
-   `session`, `recorded at`, `piano`, `orchestral`, `demo`, `in the style of`, `made famous by` and `tribute` halve
-   the score when one title has them and the other doesn't. So does a title similarity under 0.5: the same artist's
-   other song of about the same length (`Down Home Blues`, `Bakersfield Blues`) would pass otherwise. A candidate
-   whose video already belongs to a track gets a small bonus, so the same song from both sources tends to end up as
-   one track. Ties go to YouTube Music's order.
-5. **Choose** the highest score.
-   - The source's `match` stores the video id, the score as the confidence, and the candidate's title, artists and
-     duration.
-   - A confidence under the review threshold, 0.85 for now (it is still being tuned), makes the track need review
-     (see Video resolution). It stays flagged until the match is confirmed or a video override is set.
-   - If the chosen video already belongs to another track, the two tracks merge instead of downloading, unless the
-     track needs review.
-   - When the searches return nothing, or no candidate reaches the minimum score (0.7, which a matching title and
-     length alone don't reach, as with a cover by another artist), the track fails with
-     `failure: noMatch` and the searched queries in `error`. A search that fails (no network, an HTTP error) fails
-     the track with `failure: search` and the reason in `error`. Either way the next sync tries again.
+3. **Facts.** Each song brings its title, artists, album, length and explicit flag. A YouTube Music source from a
+   playlist has no album and no explicit flag; a stored match keeps those of the result it came from.
+4. **Words** (`MatchWords`). `TextNormalizer` lowercases the text and drops accents (NFKD without its marks). Then:
+   - apostrophes go; every kind of quote, CJK quote marks too, becomes `"`, which the title parts read; `・`, `、`
+     and `。` become spaces; en and em dashes become `-`;
+   - a hyphen inside a word joins it (`re-recorded`, `JAY-Z`);
+   - `&` and `+` read `and`, `×` reads `x`, and `$` reads `s` (`Ke$ha`, `A$AP Rocky`).
 
-`Matcher` (`src/core/matching/`) runs the queries; `MatchText` and `MatchScore` are pure logic.
+   Words are the runs of letters and digits, with `pt`, `vol`, `ver`, `ft`, `featuring` and `versus` written out
+   (`part`, `volume`, `version`, `feat`, `vs`). Names and titles are also compared by their letters alone, so spacing
+   doesn't count (`Glasshouse`, `Glass House`; `Funkytown`, `Funky Town`).
+5. **Title parts** (`TitleParts`). A title is the song's **name** plus **parts**:
+   - the name is the text before the first ` - `, outside brackets;
+   - the parts are every bracket, at any depth, and every ` - ` suffix; a bracket inside a suffix belongs to it. A
+     part splits further at `;` and before a `feat` or `with` inside it (`Remix; feat. Cardi B`);
+   - a part that starts with `from` or `music from` names the work the song comes from (`From "Frozen"`, `Music from
+     the HBO Original Series`). It is left out, with the brackets it holds; a ` - ` suffix of that kind goes with the
+     brackets in its quotes (`- From "Tell Me Lies (Season 2)"`), not with one after them (`- from the series Arcane
+     League of Legends (Baby Tate Remix)`);
+   - in the name, a `feat` tail is a part too. A `with` tail (`Retrograde with Glass House`) and a `Name: ` lead
+     (`Einaudi: Experience`) stay aside: they leave the name when they name credited people (below), and are part of
+     it otherwise (`Dance With Me`, `Swan Lake, Op. 20, Act 2: No. 10`).
+6. **Credits** (`Credits`). A part is a credit when it holds only names and connector words (`feat`, `with`, `x`,
+   `vs`, `and`, `of`, `by`, `prod`, `produced`, `the`, `cover`, and `con`, `y`, `e`, `et`, `avec`, `mit`, `und`, `cu`,
+   `met`), with at least one name. A credit led by `feat` or `with` also counts when it starts with a known name, or a
+   known name starts with it (`feat. Count Basie And His Orchestra`, `feat. Gary Lightbody of Snow Patrol`).
+   An artist entry that holds several names knows each of them too, split at commas and at connectors such as `&`
+   (`Mike Griffin & The Unknown Blues Band`, `Kina Grannis, Kurt Hugo Schneider`). Spotify's metadata is the
+   reference, so which names are known depends on the side:
+   - the candidate's credits must name someone the Spotify track credits: one of its artists, or a name its title
+     credits. So `Levitating (feat. DaBaby)` is another recording than Spotify's solo `Levitating`, even when YouTube
+     Music lists DaBaby among the artists;
+   - the Spotify title's credits may name anyone either song credits, because YouTube Music often leaves guests out.
+
+   `cover` is a connector because the artists check verifies who performs. `remix` isn't: a remixer is listed as one
+   more artist, so the artists check can't tell remixes apart. A lead leaves the name when its words are a known name,
+   or that name's last words (a surname); a `with` tail leaves it when it is a credit.
+7. **Version words.** The words of a title's parts, without its credits, and without the words that don't change what
+   you hear, or whose change the length shows:
+   - edition and master: `remaster`, `remastered`, `master`, `reissue`, `mono`, `stereo`, `digital`, `digitally`,
+     `explicit`;
+   - release and cut: `version`, `original`, `album`, `single`, `edit`, `radio`, `extended`, `mix`, `short`, `long`,
+     `full`, `deluxe`, `edition`, `bonus`, `track`, `soundtrack`;
+   - upload: `official`, `video`, `audio`, `lyric`, `lyrics`, `visualizer`, `hd`;
+   - years (1900 to 2099), and any number in a part that holds one of the words above (`Digitally Remastered 95`,
+     `12" Version`).
+
+   Everything else is a version word: `live`, `remix` and the remixer, `acoustic`, `korean`, `taylors`, `classic`,
+   `moonlit witch`, `kya yehi pyaar hai`, `vf`, `cis`, `cappella`, a guest no one credits. Two titles have the same
+   version when their sets of version words are equal, or when those words, joined in order, have the same letters
+   (`StayLoose Remix`, `Stay Loose Remix`).
+8. **Evidence** (`MatchEvidence`), each piece judged on its own:
+
+   | Evidence | Levels |
+   |----------|--------|
+   | Name | **Same**: the same letters. **Close**: one word more or less, with 2 or more left, or 1 letter off from 8 letters on and 2 from 16 (`It Serves You Right…`, `It Serve You Right…`). **Other** |
+   | Artists | Against the candidate's artists and, for an entry that holds several, the names between its commas (`Kina Grannis, Kurt Hugo Schneider`). **Same**: the first Spotify artist has the letters of a candidate artist, a leading `the` aside. **Likely**: one of the two names starts the other, by words or from 4 letters (`Prince`, `Prince & The Revolution`; `Tora`, `ToraMusic`; `Lizzo`, `Lizzo Music`). **Doubtful**: one name sits inside the other, from 4 letters (`Ms. Lauryn Hill`), or only another Spotify artist matches (`Kygo, Parson James`, `Parson James`). **Other** |
+   | Version | the same, or not (above) |
+   | Length | **Same**: within 2 s. **Close**: within 5 s. **Near**: under 10 s. **Off**. **Unknown** when a side has none |
+   | Album | **Same**: the same letters in the album's name, its parts aside (`Night Visions (Deluxe)`). **Other**. **Unknown** when a side has none |
+   | Explicit | the same, not, or unknown |
+
+9. **Verdict** (`judge_match`, `src/core/matching/MatchJudgement`):
+   - **Reject**, not a match at all:
+     - another song: the name is Other;
+     - another artist: the artists are Other. Unless the name is Same, the version the same, and the length and the
+       album Same: then it is a review with an artist doubt, an alias such as `Cass Elliot` and `Mama Cass`;
+     - another recording: the version differs and the length isn't Same (a live version, another remix).
+   - **Review** when anything is in doubt (`MatchDoubt`, `src/core/state/MatchDoubt.h`):
+     - `title`: the name is Close;
+     - `artist`: the artists are Doubtful, unless the length and the album are both Same; or Likely, with neither a
+       Same length nor a Same album; or Other, rescued as above;
+     - `version`: the version differs, while the length is Same;
+     - `length`: the length is neither Same nor Close, nor Near with a Same album, so 10 s off is always in doubt;
+     - `explicit`: the explicit flags differ.
+   - **Accept** when nothing is in doubt.
+
+   The **confidence** is stored with the match and shown as a percentage. It follows from the verdict, so the review
+   threshold (0.85) falls between Accept and Review:
+
+   | Verdict | Confidence |
+   |---------|------------|
+   | Accept | 1, or 0.9 when the length or the artists aren't Same |
+   | Review | 0.75 with one doubt, 0.65 with two, 0.55 with more |
+   | Reject | 0.3 for another recording, 0.15 for another artist, 0.05 for another song |
+
+   **Ranking** (`match_rank`, `src/core/matching/MatchRank`) orders the candidates by, in turn: the verdict (Accept,
+   Review, Reject; among rejects another recording, then another artist, then another song); fewer doubts; stronger
+   artist evidence, since another artist may be a cover or a reupload while a length a few seconds off is often the
+   same recording; a closer length class; a video that a track already has, so the same song from both sources tends
+   to end up as one track; a Same album; the same explicit flag; stronger name evidence; a smaller length difference;
+   and last YouTube Music's order.
+10. **Choose.** The searches run in turn, their candidates pooled (each video once), until one gives an Accept. Then
+    the pool's best ranked candidate decides:
+    - Accept or Review: the source's `match` stores the video id, the confidence and doubts, and the candidate's
+      title, artists, album, length and explicit flag. A Review makes the track need review (see Video resolution)
+      until the match is confirmed or a video override is set. If an accepted video already belongs to another track,
+      the two tracks merge instead of downloading.
+    - Reject, or no results: the track fails with `failure: noMatch` and the searched queries in `error`. A search
+      that fails (no network, an HTTP error) fails the track with `failure: search` and the reason in `error`. Either
+      way the next sync tries again.
+
+`Matcher` (`src/core/matching/`) runs the queries. `MatchWords`, `TitleParts`, `Credits`, `NameMatch`, `SongFacts`,
+`MatchEvidence`, `MatchJudgement` and `MatchRank` are pure logic, which the unit checks hold against real cases
+(`docs/testing.md`).
+
+For the track card's list of doubts, `version_difference` (`MatchEvidence`) gives the version words only one of two titles
+has, as that title writes them and in its order, each once: `Korean` for `Love U Like That - Korean Version` against
+`Love U Like That`, `feat.` and `DaBaby` for `Levitating (feat. DaBaby)` against `Levitating`. It takes the titles and
+artists the match stores, so the UI never parses a title.
 
 **The library first.** YouTube Music keeps one recording under several video ids (a single, an album, a re-release),
 and a playlist can swap one for another. So a Spotify track and the YouTube Music playlist entry of the same song
 can end up with different videos, and never merge. Before it searches, a sync compares every Spotify track in the
 library that has no YouTube Music source a playlist lists (and isn't Removed or Kept) with the YouTube Music sources
-the playlists list (`library_matches`, `src/core/matching/LibraryMatches`): the same score, against the sources with
-the same bare title. When the best reaches 0.9, that video becomes the Spotify source's match, with the score as its
-confidence, and the track merges into that source's track (`apply_match`): the playlist owner's choice wins over a
-search result.
+the playlists list (`library_matches`, `src/core/matching/LibraryMatches`): the same judgement, against the sources
+whose name has the same letters, with or without a `with` tail (so `Funkytown` finds `Funky Town`). The best ranked
+Accept becomes the Spotify source's match, and the track merges into that source's track (`apply_match`): the
+playlist owner's choice wins over a search result. A Review leaves the track to the search.
 
 It looks at the whole library, not only at the playlists the sync fetched, so the order in which playlists are added
 or synced doesn't matter: a Spotify track the search matched earlier joins a YouTube Music playlist's entry on the
 first sync after one lists the song, and a Spotify track that comes after the entry merges before it is searched for.
 A downloaded track merges by the Merging rules, its own file going to the Recycle Bin; so far no track has a file.
 
-**Video search.** `searchVideos(source, query)` serves the UI's Choose a video dialog, for a Spotify source.
+A stored match keeps the confidence and doubts it got; a later change to the rules applies to new matches only. Until
+release, playlists are added again to match their tracks anew.
+
+**Video search.** `searchVideos(source, query)` serves the UI's Choose a match dialog, for a Spotify source.
 `VideoSearch` (`src/core/matching/VideoSearch`) runs it on its own worker thread, outside any sync run; a new search
 stops the one before, and a stopped one answers nothing. It answers with `VideoSearchResults`: the request's number,
 the candidates, and the error of a search that failed. Searching needs no tool: it is the Matcher's own search
@@ -664,15 +762,15 @@ the candidates, and the error of a search that failed. Searching needs no tool: 
 `src/core/matching/MatchQueries`).
 
 `video_candidates` (`src/core/matching/VideoCandidates`) makes the list from a fresh snapshot, each video once, by
-score (`match_score` against the source, at most 1), ties in this order:
+rank (`match_rank` of its judgement against the source), ties in this order:
 1. the source's match;
-2. the YouTube Music sources the playlists list (`listed_sources`, `src/core/state/ListedSources`) that score at
-   least 0.5;
+2. the YouTube Music sources the playlists list (`listed_sources`, `src/core/state/ListedSources`) that the
+   judgement doesn't reject;
 3. the search results.
 
-Each candidate has the video id, title, artists, album (none for a library source), length, score, whether it is the
-source's track's video, and the track that has it otherwise (`track_with_video`). A failed search still answers with
-the first two.
+Each candidate has the video id, title, artists, album (none for a library source), length, score (the judgement's
+confidence), whether it is the source's track's video, and the track that has it otherwise (`track_with_video`). A
+failed search still answers with the first two.
 
 **Video links.** `parse_video_link` (`src/core/matching/VideoLink`) turns a pasted link into a video id. It drops
 spaces around the text; `http://` or `https://` is optional, and host names ignore case.
@@ -685,6 +783,9 @@ spaces around the text; `http://` or `https://` is optional, and host names igno
 | the id alone | `5aM1xdk8lRw` |
 
 An id is 11 characters of `[A-Za-z0-9_-]`.
+
+The UI lists the doubts in the track card's Status section, and the verdict in Choose a match's `Match`
+column (`ui.md`).
 
 ### Downloader
 
@@ -915,7 +1016,7 @@ src/
         events/     CoreEvent, EventSink
         github/     the latest release of a repository, from GitHub's API
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
-        matching/   the Matcher: YouTube Music's search, comparable text, scores
+        matching/   the Matcher: YouTube Music's search, title words and parts, credits, evidence, verdict and rank
         playlists/  playlist links, the playlist look-up, addPlaylist
         settings/   Settings, SettingsStore
         sources/    SourceType, each source's playlist name, the Spotify embed page, the YouTube Music and Spotify fetches
@@ -928,7 +1029,9 @@ src/
     platform/win32/ Win32 implementations of the platform services
     ui/             Win32 windows, EventSink implementation
     main.cpp        wWinMain: wires platform services, core and UI together
-tests/              core unit tests with fake platform services and recorded tool output
+tests/
+    ui/             the UI checks, with a fake yt-dlp and a local stand-in for the web services
+    unit/           unit checks of the core's pure logic, so far the Matcher's rules against real cases
 config/
     remote.json     served to installations via raw.githubusercontent.com
 ```

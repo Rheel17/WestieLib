@@ -33,11 +33,11 @@ std::wstring current_text(const core::State& state, const core::Track& track) {
     std::optional<core::ResolvedVideo> video = core::resolved_video(state, track);
     if (!video) {
         bool failed = track.status == core::TrackStatus::Failed && track.failure == core::TrackFailure::NoMatch;
-        return failed ? L"The Matcher found no usable video." : L"The Matcher hasn't looked for a video yet.";
+        return failed ? L"The Matcher found no usable match." : L"The Matcher hasn't looked for a match yet.";
     }
     if (video->overridden) {
         std::string title = library_video_title(state, video->video_id).value_or(video->video_id);
-        return std::format(L"Current video: {}, chosen by you", platform::win32::to_utf16(title));
+        return std::format(L"Current match: {}, chosen by you", platform::win32::to_utf16(title));
     }
     auto source = state.sources.find(video->source);
     if (source == state.sources.end()) {
@@ -46,7 +46,7 @@ std::wstring current_text(const core::State& state, const core::Track& track) {
     if (const std::optional<core::Match>& match = source->second.match; match && !core::own_video(video->source)) {
         return std::format(L"Current match: {}, {}% confidence", platform::win32::to_utf16(match->title), std::lround(match->confidence * PercentPerWhole));
     }
-    return std::format(L"Current video: {}, from a YouTube Music playlist", platform::win32::to_utf16(source->second.title));
+    return std::format(L"Current match: {}, from a YouTube Music playlist", platform::win32::to_utf16(source->second.title));
 }
 
 }

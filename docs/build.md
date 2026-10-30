@@ -12,13 +12,18 @@ $ninja = "C:\Users\Levi van Rheenen\AppData\Local\Programs\CLion\bin\ninja\win\x
 & $cmake --build $build                # --clean-first shows every warning again
 ```
 
-The result is `$build\WestieLib.exe`: one statically linked executable with no DLL dependencies. The build must stay
-free of warnings (`-Wall -Wextra`). Count them with `Select-String ': warning'`; a plain `warning` match also hits
+The result is `$build\WestieLib.exe`: one statically linked executable with no DLL dependencies. Beside it the build
+makes `WestieLibTests.exe`, the unit checks (`docs/testing.md`). The build must stay free of warnings
+(`-Wall -Wextra`). Count them with `Select-String ': warning'`; a plain `warning` match also hits
 file names such as `Win32Error.cpp`.
 
 ## CMake
 
-- Every `.cpp` is listed by hand in `add_executable`; add new ones there. Headers aren't listed.
+- Every `.cpp` is listed by hand in `add_executable`; add new ones there. Headers aren't listed. The Matcher's rules
+  and the few platform files they use are listed once, in `MATCHING_SOURCES`, which both executables build: a new
+  `.cpp` the unit checks need goes there.
+- `WestieLibTests` is a console program (`main`, no `-municode`) from `tests/unit/` and `MATCHING_SOURCES`, with the
+  same definitions and warnings, linked statically with `normaliz`.
 - Include roots: `src/` (so `#include "ui/framework/Window.h"`), `res/`, and `<build>/generated/`.
 - Definitions: `UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00` (Windows 10).
 - `-municode` (entry point `wWinMain`), `-static`, WIN32 subsystem.

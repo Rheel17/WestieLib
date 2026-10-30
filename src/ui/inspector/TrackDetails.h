@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "core/sources/SourceType.h"
+#include "core/state/MatchDoubt.h"
 #include "core/state/State.h"
+#include "platform/TextNormalizer.h"
 #include "ui/tracks/TrackRows.h"
 
 namespace westie::ui {
@@ -37,6 +39,11 @@ struct TrackMatch {
     // The Spotify source's, which the video's is held against
     std::chrono::milliseconds source_duration{};
     double confidence = 0.0;
+    std::vector<core::MatchDoubt> doubts{};
+    std::optional<bool> explicit_content{};
+    // The version words only one of the two titles has, as it writes them
+    std::wstring source_words{};
+    std::wstring video_words{};
 };
 
 struct TrackDetails {
@@ -54,6 +61,6 @@ struct TrackDetails {
     std::wstring error{};
 };
 
-std::optional<TrackDetails> track_details(const core::State& state, const TrackRow& row);
+std::optional<TrackDetails> track_details(const core::State& state, const platform::TextNormalizer& normalizer, const TrackRow& row);
 
 }

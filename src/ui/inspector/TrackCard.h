@@ -48,7 +48,7 @@ private:
     SectionTitle status_section_;
     IconText status_;
     framework::Label explanation_;
-    framework::Label review_note_;
+    framework::Label doubts_;
     framework::Label reason_;
     OutputBox output_;
     framework::Button choose_;

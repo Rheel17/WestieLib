@@ -6,7 +6,9 @@
 #include <set>
 #include <utility>
 
-#include "core/matching/MatchScore.h"
+#include "core/matching/MatchJudgement.h"
+#include "core/matching/MatchRank.h"
+#include "core/matching/SongFacts.h"
 #include "core/state/ListedSources.h"
 #include "core/state/TrackVideos.h"
 
@@ -14,8 +16,10 @@ namespace westie::core {
 
 namespace {
 
-// Below it, a library song is too unlike the source to be worth a row
-constexpr double LibraryCandidateMinimum = 0.5;
+struct RankedCandidate {
+    VideoCandidate candidate{};
+    MatchRank rank{};
+};
 
 }
 
@@ -26,23 +30,35 @@ std::vector<VideoCandidate> video_candidates(
     if (source == state.sources.end()) {
         return {};
     }
-    ComparableSong wanted = comparable_song(normalizer, source->second.title, source->second.artists, source->second.duration);
-    std::vector<VideoCandidate> candidates;
+    const Source& wanted_source = source->second;
+    SongFacts wanted = song_facts(
+            normalizer, wanted_source.title, wanted_source.artists, wanted_source.album, wanted_source.duration, wanted_source.explicit_content
+    );
+    std::vector<RankedCandidate> ranked;
     std::set<std::string> seen;
     // A video that comes again keeps its first row
-    auto add = [&](VideoCandidate candidate, double minimum) {
+    auto add = [&](VideoCandidate candidate, std::optional<bool> explicit_content, bool unless_rejected) {
         if (seen.contains(candidate.video_id)) {
             return;
         }
-        candidate.score = std::min(match_score(wanted, comparable_song(normalizer, candidate.title, candidate.artists, candidate.duration)), 1.0);
-        if (candidate.score >= minimum) {
-            seen.insert(candidate.video_id);
-            candidates.push_back(std::move(candidate));
+        MatchJudgement judgement = judge_match(
+                wanted, song_facts(normalizer, candidate.title, candidate.artists, candidate.album, candidate.duration, explicit_content)
+        );
+        if (unless_rejected && judgement.verdict == MatchVerdict::Reject) {
+            return;
         }
+        candidate.verdict = judgement.verdict;
+        candidate.mismatch = judgement.mismatch;
+        candidate.doubts = judgement.doubts;
+        seen.insert(candidate.video_id);
+        ranked.push_back({.candidate = std::move(candidate), .rank = match_rank(judgement, false)});
     };
 
-    if (const std::optional<Match>& match = source->second.match) {
-        add({.video_id = match->video_id, .title = match->title, .artists = match->artists, .duration = match->duration}, 0.0);
+    if (const std::optional<Match>& match = wanted_source.match) {
+        add(
+                {.video_id = match->video_id, .title = match->title, .artists = match->artists, .album = match->album, .duration = match->duration},
+                match->explicit_content, false
+        );
     }
     for (const std::string& key : listed_sources(state)) {
         std::optional<std::string> video = own_video(key);
@@ -51,24 +67,30 @@ std::vector<VideoCandidate> video_candidates(
             continue;
         }
         const Source& song = listed->second;
-        add({.video_id = *video, .title = song.title, .artists = song.artists, .album = song.album, .duration = song.duration}, LibraryCandidateMinimum);
+        add({.video_id = *video, .title = song.title, .artists = song.artists, .album = song.album, .duration = song.duration}, song.explicit_content, true);
     }
     for (const SongResult& result : results) {
-        add({.video_id = result.video_id, .title = result.title, .artists = result.artists, .album = result.album, .duration = result.duration}, 0.0);
+        add(
+                {.video_id = result.video_id, .title = result.title, .artists = result.artists, .album = result.album, .duration = result.duration},
+                result.explicit_content, false
+        );
     }
 
     std::optional<ResolvedVideo> current;
-    if (auto track = state.tracks.find(source->second.track); track != state.tracks.end()) {
+    if (auto track = state.tracks.find(wanted_source.track); track != state.tracks.end()) {
         current = resolved_video(state, track->second);
     }
-    for (VideoCandidate& candidate : candidates) {
+    // Ties keep the order they were added in
+    std::ranges::stable_sort(ranked, std::greater{}, &RankedCandidate::rank);
+    std::vector<VideoCandidate> candidates;
+    for (RankedCandidate& entry : ranked) {
+        VideoCandidate& candidate = entry.candidate;
         candidate.current = current && current->video_id == candidate.video_id;
         if (!candidate.current) {
-            candidate.track = track_with_video(state, candidate.video_id, source->second.track).value_or("");
+            candidate.track = track_with_video(state, candidate.video_id, wanted_source.track).value_or("");
         }
+        candidates.push_back(std::move(candidate));
     }
-    // Ties keep the order they were added in
-    std::ranges::stable_sort(candidates, std::greater{}, &VideoCandidate::score);
     return candidates;
 }
 

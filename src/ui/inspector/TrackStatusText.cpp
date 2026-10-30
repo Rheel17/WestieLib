@@ -17,16 +17,15 @@ int status_icon(StatusTab status) {
 
 const wchar_t* status_explanation(StatusTab status, core::TrackFailure failure) {
     if (status == StatusTab::Failed && failure == core::TrackFailure::NoMatch) {
-        return L"No usable video was found. Choose one yourself.";
+        return L"No usable match was found.";
     }
     switch (status) {
     case StatusTab::Synced:  return L"The file is in the library and tagged.";
     case StatusTab::Failed:  return L"The last attempt failed. It's retried on the next sync.";
     case StatusTab::Removed: return L"No longer in any playlist. The file is still in the library.";
     case StatusTab::Kept:    return L"Kept after it left every playlist.";
-    // A note in amber, not an explanation. Until there are files to listen to, the video is what there is to check
-    case StatusTab::NeedsReview: return L"Low-confidence match. Check it on YouTube Music, then confirm it or choose another video.";
-    default:                     return L"Downloads on the next sync.";
+    // Needs review shows its doubts instead (doubt_list)
+    default: return L"Downloads on the next sync.";
     }
 }
 

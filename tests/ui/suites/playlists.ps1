@@ -175,7 +175,7 @@ function Check-AddingPlaylists($hwnd) {
 	$menu = [W]::GetMenu($hwnd)
 	Update-MenuStates $hwnd
 	Check '  grayed menu items' ([W]::ItemsWithState($menu, 0x1)) ('&Cancel, ' +
-		'&Confirm match, C&hoose video..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
+		'&Confirm match, C&hoose match..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
 
 	Send-Command $hwnd '&Add playlist...'
 	$dialog = Wait-OwnedWindow $hwnd

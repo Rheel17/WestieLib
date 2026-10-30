@@ -151,7 +151,7 @@ void ChooseVideoDialog::check_link() {
         std::optional<std::string> title = library_title_(*link_);
         link_line_ = {
             .icon = IDI_YTM,
-            .text = std::format(L"YouTube video · {}", platform::win32::to_utf16(*link_)),
+            .text = std::format(L"YouTube link · {}", platform::win32::to_utf16(*link_)),
             .source = title ? platform::win32::to_utf16(*title) : L"",
         };
     } else if (is_blank(text)) {

@@ -9,7 +9,7 @@
 
 namespace westie::ui {
 
-// What the Choose a video dialog opens with, for one Spotify entry
+// What the Choose a match dialog opens with, for one Spotify entry
 struct VideoChoice {
     std::string source{};
     // The logo and the title, then the artists, album and length in gray

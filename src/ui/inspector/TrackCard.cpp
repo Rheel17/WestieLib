@@ -9,6 +9,7 @@
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/inspector/CardLayout.h"
+#include "ui/inspector/DoubtList.h"
 #include "ui/inspector/TrackStatusText.h"
 #include "ui/tracks/RowStatusText.h"
 
@@ -39,10 +40,10 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         status_section_(hwnd(), L"Status"),
         status_(hwnd(), StatusStyle),
         explanation_(hwnd(), L"", {.color = framework::TextColor::Gray, .wrap = true}),
-        review_note_(hwnd(), status_explanation(StatusTab::NeedsReview, core::TrackFailure::None), {.color = framework::TextColor::Warning, .wrap = true}),
+        doubts_(hwnd(), L"", {.color = framework::TextColor::Warning, .wrap = true}),
         reason_(hwnd(), L"", {.color = framework::TextColor::Error}),
         output_(hwnd()),
-        choose_(hwnd(), {.text = L"Choose video…", .command = std::to_underlying(CommandId::ChooseVideo)}),
+        choose_(hwnd(), {.text = L"Choose match…", .command = std::to_underlying(CommandId::ChooseVideo)}),
         source_section_(hwnd(), L"Source"),
         first_source_key_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         first_source_(hwnd(), [this] { open_source(0); }),
@@ -69,7 +70,7 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
         section->set_font(fonts.semibold().handle());
     }
     for (framework::Label* label : {
-             &artists_, &album_, &explanation_, &review_note_, &reason_, &first_source_key_, &second_source_key_, &playlists_key_, &no_playlists_, &key_key_, &key_,
+             &artists_, &album_, &explanation_, &doubts_, &reason_, &first_source_key_, &second_source_key_, &playlists_key_, &no_playlists_, &key_key_, &key_,
              &file_,
          }) {
         label->set_font(fonts.regular().handle());
@@ -96,6 +97,7 @@ void TrackCard::set_contents(const TrackDetails& track) {
         status_.set(status_icon(track.row.status), row_status_word(track.row));
         explanation_.set_text(status_explanation(track.row.status, track.failure));
     }
+    doubts_.set_text(doubt_list(track.match));
     reason_.set_text(failure_reason(track.failure));
     output_.set_text(track.error);
 
@@ -135,18 +137,22 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
     layout.block(status_.hwnd(), dpi.scale(StatusGapDips), status_.height());
     bool review = track_.row.status == StatusTab::NeedsReview;
     // A duplicate explains whose duplicate it is instead
-    bool note = review && !track_.row.duplicate_of;
-    const framework::Label& explanation = note ? review_note_ : explanation_;
-    layout.hide((note ? explanation_ : review_note_).hwnd());
+    bool doubts = review && !track_.row.duplicate_of;
+    const framework::Label& explanation = doubts ? doubts_ : explanation_;
+    layout.hide((doubts ? explanation_ : doubts_).hwnd());
     layout.block(explanation.hwnd(), dpi.scale(ExplanationGapDips), explanation.height_for(width));
     if (track_.failure != core::TrackFailure::None) {
         layout.block(reason_.hwnd(), dpi.scale(ReasonGapDips), line_height_);
-        layout.block(output_.hwnd(), dpi.scale(OutputGapDips), output_.height_for(width));
     } else {
         layout.hide(reason_.hwnd());
+    }
+    // The searched queries say nothing that helps choose a match
+    if (track_.failure != core::TrackFailure::None && track_.failure != core::TrackFailure::NoMatch) {
+        layout.block(output_.hwnd(), dpi.scale(OutputGapDips), output_.height_for(width));
+    } else {
         layout.hide(output_.hwnd());
     }
-    // Such a track's entries are all Spotify tracks, so Choose video applies whenever the button shows, and it's never
+    // Such a track's entries are all Spotify tracks, so Choose match applies whenever the button shows, and it's never
     // disabled: a themed button fades in from the state it was last drawn in
     if (review || track_.failure == core::TrackFailure::NoMatch) {
         layout.buttons({&choose_});

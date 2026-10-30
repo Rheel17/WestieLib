@@ -38,6 +38,8 @@ constexpr std::string_view NotFoundType = "NotFound";
 constexpr std::string_view TrackWrapperType = "TrackResponseWrapper";
 constexpr std::string_view TrackType = "Track";
 constexpr std::string_view TrackUriPrefix = "spotify:track:";
+// contentRating.label of an explicit track; the others read NONE
+constexpr std::string_view ExplicitLabel = "EXPLICIT";
 constexpr std::string_view UnavailableMessage = "The playlist doesn't exist or is private.";
 
 // The parts of the fetchPlaylist answer the fetch uses
@@ -57,6 +59,10 @@ struct AlbumJson {
     std::string name{};
 };
 
+struct ContentRatingJson {
+    std::string label{};
+};
+
 struct DurationJson {
     std::int64_t total_milliseconds = 0;
 
@@ -72,12 +78,13 @@ struct TrackJson {
     ArtistsJson artists{};
     std::optional<AlbumJson> album_of_track{};
     DurationJson track_duration{};
+    std::optional<ContentRatingJson> content_rating{};
 
     struct glaze {
         using T = TrackJson;
         constexpr static auto value = glz::object(
                 "__typename", &T::type_name, "uri", &T::uri, "name", &T::name, "artists", &T::artists, "albumOfTrack", &T::album_of_track, "trackDuration",
-                &T::track_duration
+                &T::track_duration, "contentRating", &T::content_rating
         );
     };
 };
@@ -222,6 +229,7 @@ std::optional<SourceTrack> source_track(const ItemJson& item) {
         .artists = std::move(artists),
         .album = std::move(track.album_of_track).value_or(AlbumJson{}).name,
         .duration = std::chrono::milliseconds(track.track_duration.total_milliseconds),
+        .explicit_content = track.content_rating ? std::optional(track.content_rating->label == ExplicitLabel) : std::nullopt,
     };
 }
 

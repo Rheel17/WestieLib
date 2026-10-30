@@ -210,7 +210,7 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 .kv .v.bar .pbar { flex: 1; width: auto; margin-right: 0; }
 .stl { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .expl { color: var(--gray); margin-top: 3px; }
-.note { margin-top: 8px; padding: 6px 8px; background: var(--info); border: 1px solid var(--info-b); }
+.doubts { margin-top: 3px; color: var(--amber); }
 .errhd { margin-top: 8px; color: var(--red); }
 .errbox { margin-top: 4px; padding: 4px 6px; border: 1px solid #c5c5c5; background: #fff; font: 11px/15px Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; color: #222; }
 .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
@@ -321,6 +321,15 @@ const norm = s => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 const secs = s => { const [m, x] = s.split(':'); return +m * 60 + +x; };
 const mmss = n => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 const pct = x => `${Math.round(x * 100)}%`;
+// A line for each of the match's doubts, as in ui.md › Inspector
+const doubtLines = t => (t.doubts.length ? t.doubts : ['none']).map(doubt => ({
+	title: 'Title differs slightly',
+	artist: 'Other artists',
+	version: `Adds “${t.adds}”`,
+	length: `${mmss(Math.abs(t.md - t.dur))} ${t.md > t.dur ? 'longer' : 'shorter'}`,
+	explicit: 'Explicit version',
+	none: 'Low confidence',
+})[doubt]);
 const fileName = (artists, title) => `${artists.join(', ')} - ${title}.opus`.replace(/[<>:"/\\|?*]/g, '_');
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base', numeric: true });
 const btn = (label, cls = '', icon = '') => `<span class="btn ${cls}">${icon ? ic(icon) : ''}${esc(label)}</span>`;
@@ -350,7 +359,7 @@ const SONGS = [
 	["Water", "Tyla", "TYLA", 2023, "3:20", "H"],
 	["Best Part", "Daniel Caesar;H.E.R.", "Freudian", 2017, "3:29", "HSW", { conf: .96 }],
 	["Say So", "Doja Cat", "Hot Pink", 2019, "3:57", "H"],
-	["Crazy", "Gnarls Barkley", "St. Elsewhere", 2006, "2:58", "H", { review: .61, mt: "Crazy (Live at Coachella 2006)", mc: "Gnarls Barkley", md: "3:31" }],
+	["Crazy", "Gnarls Barkley", "St. Elsewhere", 2006, "2:58", "H", { review: .75, doubts: ['length'], mt: "Crazy", mc: "Gnarls Barkley", md: "3:31" }],
 	["Adorn", "Miguel", "Kaleidoscope Dream", 2012, "3:13", "HS"],
 	// The same recording again in Her playlist, from another Spotify release: the Matcher found the same video, so it
 	// is a duplicate of #3 there
@@ -361,14 +370,14 @@ const SONGS = [
 	["Peaches", "Justin Bieber;Daniel Caesar;Giveon", "Justice", 2021, "3:18", "H", { override: true }],
 	["Cuff It", "Beyoncé", "RENAISSANCE", 2022, "3:45", "H", { st: "failed" }],
 	["Get You", "Daniel Caesar;Kali Uchis", "Freudian", 2017, "4:38", "HS"],
-	["Feeling Good", "Michael Bublé", "It's Time", 2005, "3:57", "H", { review: .58, mt: "Feeling Good (Live)", mc: "Michael Bublé", md: "4:12" }],
+	["Feeling Good", "Michael Bublé", "It's Time", 2005, "3:57", "H", { review: .75, doubts: ['version'], adds: 'Live', mt: "Feeling Good (Live)", mc: "Michael Bublé", md: "3:58" }],
 	["Snooze", "SZA", "SOS", 2022, "3:21", "H"],
 	["Too Sweet", "Hozier", "Unheard", 2024, "4:11", "H"],
 	["Espresso", "Sabrina Carpenter", "Short n' Sweet", 2024, "2:55", "H"],
 	["Thinkin Bout You", "Frank Ocean", "channel ORANGE", 2012, "3:20", "HS"],
 	["Lose Control", "Teddy Swims", "I've Tried Everything But Therapy (Part 1)", 2023, "3:30", "H"],
 	["Come Through and Chill", "Miguel;J. Cole;Salaam Remi", "War & Leisure", 2017, "5:23", "H"],
-	["Halo", "Beyoncé", "I Am... Sasha Fierce", 2008, "4:21", "H", { review: .64, mt: "Halo (Acoustic Cover)", mc: "Covers Club", md: "3:52" }],
+	["Halo", "Beyoncé", "I Am... Sasha Fierce", 2008, "4:21", "H", { review: .65, doubts: ['artist', 'length'], mt: "Halo", mc: "The Hits Of Beyoncé", md: "4:47" }],
 	["Dangerous Woman", "Ariana Grande", "Dangerous Woman", 2016, "3:55", "H"],
 	["Into You", "Ariana Grande", "Dangerous Woman", 2016, "4:04", "H"],
 	["Kill Bill", "SZA", "SOS", 2022, "2:33", "H"],
@@ -485,6 +494,8 @@ function buildBase() {
 			t.chosen = x.override ? 'override' : 'matcher';
 			t.conf = x.review ?? x.conf ?? (0.86 + r() * 0.13);
 			t.review = !!x.review;
+			t.doubts = x.doubts || [];
+			t.adds = x.adds;
 			t.mt = x.mt || title;
 			t.mc = x.mc || artists.join(', ');
 			t.md = x.md ? secs(x.md) : t.dur + Math.round(r() * 4 - 2);
@@ -754,15 +765,16 @@ function trackInspector(s, t, cfg) {
 	const review = (t.status === 'downloaded' || t.status === 'pending') && t.review;
 	if (review) [icon, word, expl] = ['warn', 'Needs review', ''];
 	if (t.dup) [icon, word, expl] = ['duplicate', 'Duplicate', `Duplicate of track #${t.dupAt} in this playlist.`];
-	if (t.noMatch) expl = 'No usable video was found. Choose one yourself.';
+	if (t.noMatch) expl = 'No usable match was found.';
 	let st = `<div class="stl">${ic(icon, icon === 'syncing' ? 'spin' : '')}${word}</div>${expl ? `<div class="expl">${expl}</div>` : ''}`;
-	if (review) st += `<div class="note">Low-confidence match. Listen to the file, then confirm it or choose another video.</div>`;
-	if (t.error) st += `<div class="errhd">${t.errTitle}</div><div class="errbox">${esc(t.error.split('\n').slice(-2).join('\n'))}</div>`;
+	if (review) st += `<div class="doubts">${doubtLines(t).map(line => `<div>• ${line}</div>`).join('')}</div>`;
+	if (t.errTitle) st += `<div class="errhd">${t.errTitle}</div>`;
+	if (t.error && !t.noMatch) st += `<div class="errbox">${esc(t.error.split('\n').slice(-2).join('\n'))}</div>`;
 
 	// Actions sit right under the state they act on.
 	const acts = [];
-	if (review) acts.push(btn('Confirm match'), btn('Choose video…'));
-	if (t.noMatch) acts.push(btn('Choose video…'), btn('Retry'));
+	if (review) acts.push(btn('Confirm match'), btn('Choose match…'));
+	if (t.noMatch) acts.push(btn('Choose match…'), btn('Retry'));
 	else if (t.status === 'failed') acts.push(btn('Retry'));
 	if (t.status === 'orphaned') acts.push(btn('Keep'), btn('Move to Recycle Bin…'));
 	if (!t.noMatch && t.status !== 'orphaned' && t.status !== 'downloading') acts.push(btn('Edit track…'));
@@ -791,9 +803,9 @@ function trackInspector(s, t, cfg) {
 			['Spotify match', `Same ID · ${pct(t.conf)}`]);
 	} else {
 		if (t.chosen === 'matcher') {
-			const off = Math.abs(t.md - t.dur) > 5;
-			audio.push(['Matched', esc(t.mt)], ['Artists', esc(t.mc)],
-				['Length', `<span class="${off ? 'amber' : ''}">${mmss(t.md)}</span> <span class="gray">· Spotify ${mmss(t.dur)}</span>`]);
+			audio.push(['Matched', esc(t.mt)],
+				['Artists', esc(t.mc)],
+				['Length', `${mmss(t.md)} <span class="gray">· Spotify ${mmss(t.dur)}</span>`]);
 		}
 		audio.push(['ID', `<span class="link">${t.videoId}</span>`]);
 		audio.push(['Chosen by', { playlist: 'Playlist', matcher: 'Matcher', override: 'Override' }[t.chosen]]);
@@ -851,10 +863,10 @@ function logPane(s) {
 		['15:12:04', 'Info', 'Comp practice', `Fetched ${s.pl.comp.keys.length} tracks, ${s.pl.comp.keys.filter(k => s.tracks.get(k).queued).length} to download`],
 		['15:12:19', 'Info', 'Redbone', `Matched “Redbone” by Childish Gambino (${pct(t('Redbone').conf)})`],
 		['15:12:38', 'Info', 'Redbone', `Synced: ${t('Redbone').file}`],
-		['15:12:41', 'Info', 'Peaches', `Synced from the override video: ${t('Peaches').file}`],
+		['15:12:41', 'Info', 'Peaches', `Synced from the override: ${t('Peaches').file}`],
 		['15:12:58', 'Error', 'Cuff It', 'yt-dlp exited with code 1: Sign in to confirm your age'],
 		['15:13:12', 'Info', 'Get You', `Synced: ${t('Get You').file}`],
-		['15:13:30', 'Warning', 'Feeling Good', `Low-confidence match (${pct(t('Feeling Good').conf)}): “Feeling Good (Live)”. Flagged for review`],
+		['15:13:30', 'Warning', 'Feeling Good', `To review (${pct(t('Feeling Good').conf)}): “Feeling Good (Live)”. ${doubtLines(t('Feeling Good')).join(', ')}.`],
 		['15:13:52', 'Info', 'Feeling Good', `Synced: ${t('Feeling Good').file}`],
 		['15:14:10', 'Info', 'Snooze', `Synced: ${t('Snooze').file}`],
 		['15:14:13', 'Info', 'Too Sweet', 'Downloading'],
@@ -958,37 +970,37 @@ const dlgTitle = title => `<div class="dt"><span class="t">${title}</span><span 
 // holds the current match, the library's YouTube Music entries that come close, and the search results, by score.
 function chooseVideoDialog(t, found) {
 	const results = found ? [
-		['Feeling Good', 'Michael Bublé', '', '3:59', 0.96, 'library', 'sel'],
-		['Feeling Good (Live)', 'Michael Bublé', 'Caught in the Act', '4:12', 0.58, 'current'],
-		['Feeling Good', 'Nina Simone', 'I Put a Spell on You', '2:53', 0.55],
-		['Feeling Good (Acoustic Cover)', 'Covers Club', 'Acoustic Covers, Vol. 3', '3:40', 0.31],
-		['Feeling Good (Karaoke Version)', 'Ameritz Karaoke', 'Karaoke Hits 2005', '3:58', 0.30],
+		['Feeling Good', 'Michael Bublé', '', '3:59', 'Same recording', 'library', 'sel'],
+		['Feeling Good (Live)', 'Michael Bublé', 'Caught in the Act', '3:58', 'Check version', 'current'],
+		['Feeling Good', 'Nina Simone', 'I Put a Spell on You', '2:53', 'Other artist'],
+		['Feeling Good (Acoustic Cover)', 'Covers Club', 'Acoustic Covers, Vol. 3', '3:40', 'Other artist'],
+		['Feeling Good (Karaoke Version)', 'Ameritz Karaoke', 'Karaoke Hits 2005', '3:58', 'Other artist'],
 	] : [];
-	const rows = results.map(([title, artist, album, len, score, mark, sel]) => {
+	const rows = results.map(([title, artist, album, len, verdict, mark, sel]) => {
 		const off = Math.abs(secs(len) - t.dur) > 5;
 		return `<tr${sel ? ' class="sel"' : ''}><td class="c0">${esc(title)}${mark ? ` <span class="gray">(${mark === 'current' ? 'current' : 'in library'})</span>` : ''}</td>
-			<td>${esc(artist)}</td><td>${esc(album)}</td><td class="cl tm r${off ? ' amber' : ''}">${len}</td><td class="r">${pct(score)}</td><td class="fill"></td></tr>`;
+			<td>${esc(artist)}</td><td>${esc(album)}</td><td class="cl tm r${off ? ' amber' : ''}">${len}</td><td>${verdict}</td><td class="fill"></td></tr>`;
 	}).join('');
 	const query = found ? 'Michael Bublé Feeling Good' : 'The Late Hours Sway With Me (WCS Edit)';
 	const link = found
 		? `<div class="edit"><span class="cue">https://music.youtube.com/watch?v=…</span></div>`
 		: `<div class="edit focus"><span>https://www.youtube.com/watch?v=Qm4XtP0r8zA</span><span class="caret" style="margin-left:-3px"></span></div>
-			<div class="detect">${ic('ytm', 's14')}<span>YouTube video · Qm4XtP0r8zA</span></div>`;
-	return `<div class="dlg" style="width:640px">${dlgTitle('Choose a video')}
+			<div class="detect">${ic('ytm', 's14')}<span>YouTube link · Qm4XtP0r8zA</span></div>`;
+	return `<div class="dlg" style="width:640px">${dlgTitle('Choose a match')}
 		<div class="db">
 			<div class="srcline">${glyph(t.src)}<b>${esc(t.title)}</b><span class="gray">· ${esc(t.artists.join(', '))} · ${esc(t.album)} · ${mmss(t.dur)}</span></div>
-			<div class="gray" style="margin:2px 0 12px 18px">${found ? `Current match: ${esc(t.mt)}, ${pct(t.conf)} confidence` : 'The Matcher found no usable video.'}</div>
+			<div class="gray" style="margin:2px 0 12px 18px">${found ? `Current match: ${esc(t.mt)}, ${pct(t.conf)} confidence` : 'The Matcher found no usable match.'}</div>
 			<div class="lbl">Search YouTube Music:</div>
 			<div class="fld"><div class="edit" style="flex:1">${esc(query)}</div>${btn('Search')}</div>
 			<div class="lv mini" style="height:138px;position:relative"><table>
-				<colgroup><col style="width:240px"><col style="width:130px"><col style="width:140px"><col style="width:52px"><col style="width:48px"><col></colgroup>
-				<thead><tr><th>Title</th><th>Artists</th><th>Album</th><th class="r">Length</th><th class="r">Score</th><th class="fill"></th></tr></thead>
+				<colgroup><col style="width:200px"><col style="width:115px"><col style="width:115px"><col style="width:52px"><col style="width:110px"><col></colgroup>
+				<thead><tr><th>Title</th><th>Artists</th><th>Album</th><th class="r">Length</th><th>Match</th><th class="fill"></th></tr></thead>
 				<tbody>${rows}</tbody>
 			</table>${found ? '' : `<div class="lvempty">No results. Try fewer words, or paste a link below.</div>`}</div>
 			<div class="lbl" style="margin-top:12px">Or paste a YouTube or YouTube Music link:</div>
 			${link}
 		</div>
-		<div class="df">${btn('Open in browser')}<span style="flex:1"></span>${btn('Use this video', 'def')}${btn('Cancel')}</div></div>`;
+		<div class="df">${btn('Open in browser')}<span style="flex:1"></span>${btn('Use this match', 'def')}${btn('Cancel')}</div></div>`;
 }
 
 function editTrackDialog(t) {
@@ -998,7 +1010,7 @@ function editTrackDialog(t) {
 				<fieldset class="gbox cov"><legend>Cover art</legend>
 					${cover(t, 132)}
 					<div class="covbtns">${btn('Choose image…', 'sm')}${btn('Paste', 'sm')}${btn('Reset', 'sm dis')}</div>
-					<div class="gray" style="text-align:center;margin-top:6px">From the video thumbnail</div>
+					<div class="gray" style="text-align:center;margin-top:6px">From the YouTube thumbnail</div>
 				</fieldset>
 				<fieldset class="gbox tags"><legend>Tags</legend>
 					<div class="tgrid">
@@ -1011,7 +1023,7 @@ function editTrackDialog(t) {
 				</fieldset>
 			</div>
 			<fieldset class="gbox"><legend>Audio</legend>
-				<div class="fld"><span>YouTube link:</span><div class="edit" style="flex:1">https://music.youtube.com/watch?v=${t.videoId}</div>${btn('Choose video…')}</div>
+				<div class="fld"><span>YouTube link:</span><div class="edit" style="flex:1">https://music.youtube.com/watch?v=${t.videoId}</div>${btn('Choose match…')}</div>
 				<div class="gray">A different link downloads the audio again.</div>
 			</fieldset>
 		</div>
@@ -1084,34 +1096,35 @@ const SCREENS = [
 	{
 		id: 'review', title: 'Needs review', state: base,
 		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'] },
-		cap: 'The Needs review tab lists low-confidence matches. One is selected, and the inspector offers Confirm match, Choose video… and Edit track….',
+		cap: 'The Needs review tab lists the matches the Matcher wasn’t sure of. One is selected, and the inspector offers Confirm match, Choose match… and Edit track….',
 		notes: [
 			'Needs review is a subset of Synced and Waiting. The Matcher wasn’t sure it picked the right video, so the match doesn’t merge into another track until it is confirmed.',
-			'The Audio section shows what was matched. A length that is more than 5 seconds off is drawn in amber. This often gives away a live version or a cover.',
-			'Confirm match clears the flag (<code>confirmMatch</code>). Choose video… opens the dialog on the next screen.',
+			'The amber list says what the Matcher doubts, a line for each doubt: here the match’s title adds “Live”. Halo has two lines.',
+			'The Audio section shows what was matched.',
+			'Confirm match clears the flag (<code>confirmMatch</code>). Choose match… opens the dialog on the next screen.',
 			'The confidence bar is yellow, the color of a paused progress bar.',
 		],
 	},
 	{
-		id: 'choose', title: 'Choose a video: several options', state: base,
+		id: 'choose', title: 'Choose a match: several options', state: base,
 		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'], inactive: true, dialog: 'choose' },
-		cap: 'Choose video… (inspector, Track menu or Edit track) opens this dialog. It lists YouTube Music results for the track, and it also takes a pasted link.',
+		cap: 'Choose match… (inspector, Track menu or Edit track) opens this dialog. It lists YouTube Music results for the track, and it also takes a pasted link.',
 		notes: [
 			'The source track and the current match are at the top, so you can compare them at a glance.',
-			'The list starts from the Matcher’s queries, with the current match and the library’s YouTube Music entries that come close, sorted by score. You can edit the query and search again; like the Matcher, it searches songs. Here a WCS playlist’s entry is selected: choosing it merges the two tracks.',
+			'The list starts from the Matcher’s queries, with the current match and the library’s YouTube Music entries the Matcher doesn’t reject, in the Matcher’s ranking. Match says what it makes of each: Same recording, Check and its doubts, or Other recording, artist or song. You can edit the query and search again; like the Matcher, it searches songs. Here a WCS playlist’s entry is selected: choosing it merges the two tracks.',
 			'Lengths more than 5 seconds off the Spotify length are amber.',
 			'Open in browser plays the selected result on YouTube Music, so you can listen before you choose.',
-			'Use this video sets the video override (<code>setVideoOverride</code>) and downloads the track again. On the current match, it confirms the match instead.',
+			'Use this match sets the video override (<code>setVideoOverride</code>) and downloads the track again. On the current match, it confirms the match instead.',
 		],
 	},
 	{
-		id: 'nomatch', title: 'Choose a video: nothing found', state: base,
+		id: 'nomatch', title: 'Choose a match: nothing found', state: base,
 		cfg: { scope: 'all', tab: 'failed', sort: 'title', sel: ['Sway With Me (WCS Edit)'], inactive: true, dialog: 'nomatch' },
 		cap: 'This is the same dialog, for a track the Matcher couldn’t match at all. DJ edits are often not on YouTube Music.',
 		notes: [
-			'A track with no usable result fails with the reason <i>No match on YouTube Music</i>. Its inspector offers Choose video… first.',
+			'A track with no usable result fails with the reason <i>No match on YouTube Music</i>. Its inspector offers Choose match… first.',
 			'The empty list says what to try next. A ListView can show this text through its empty markup.',
-			'A pasted link is checked as you type. Use this video is enabled once the link points to a YouTube or YouTube Music video.',
+			'A pasted link is checked as you type. Use this match is enabled once the link points to a YouTube or YouTube Music video.',
 		],
 	},
 	{
@@ -1122,7 +1135,7 @@ const SCREENS = [
 			'Here the artists are being shortened to just Silk Sonic. A changed field gets a Reset link and shows the original value under it.',
 			'Edited tags survive later syncs. They are written to the file, and the file is renamed to match.',
 			'Cover art can come from an image file or from the clipboard. Reset goes back to the source cover.',
-			'A different YouTube link downloads the audio again. Choose video… opens the search dialog from the previous screens.',
+			'A different YouTube link downloads the audio again. Choose match… opens the search dialog from the previous screens.',
 		],
 	},
 	{

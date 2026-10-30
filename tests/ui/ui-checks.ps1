@@ -1,5 +1,6 @@
 # Drives WestieLib.exe through Win32 messages and checks it, in suites that each start the app a few times:
 #
+#   unit          the unit checks of the core's pure logic (WestieLibTests.exe, next to the exe); no app
 #   window        DPI awareness, icons, menus, the toolbar and status bar, the side panels' first-run content, sizes,
 #                 splitter drags and limits, the log pane, and saving and restoring the window state
 #   settings      the Settings dialog, the library folder, and settings.json
@@ -8,7 +9,7 @@
 #   playlists     adding, keeping, selecting, showing, removing and scrolling playlists, and state.json
 #   tracks        the track panel: filter bar, status tabs, result line and the table's columns
 #   sync          syncing YouTube Music and Spotify playlists into state.json and the track table, and matching
-#   choose-video  the Choose a video dialog: its candidates, searches and links, and the video it sets
+#   choose-video  the Choose a match dialog: its candidates, searches and links, and the video it sets
 #   painting      painting and blinking during splitter drags
 #   dpi           moving to a monitor with another DPI, and restoring there
 #
@@ -29,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Suites = 'window', 'settings', 'tools', 'add-playlist', 'playlists', 'tracks', 'sync', 'choose-video', 'painting', 'dpi'
+$Suites = 'unit', 'window', 'settings', 'tools', 'add-playlist', 'playlists', 'tracks', 'sync', 'choose-video', 'painting', 'dpi'
 # powershell -File passes "a,b" as one string
 $chosen = if ($Suite) { @($Suite -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { $Suites }
 $unknown = @($chosen | Where-Object { $_ -notin $Suites })

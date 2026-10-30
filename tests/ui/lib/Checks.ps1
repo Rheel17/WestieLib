@@ -535,7 +535,8 @@ function Write-ManyPlaylists([int]$count) {
 
 $MiddleDot = [char]0xB7
 # The track card's button
-$ChooseVideo = "Choose video$Ellipsis"
+$ChooseMatch = "Choose match$Ellipsis"
+$Bullet = [char]0x2022
 
 function Get-TrackPanel($hwnd) { Get-Panel $hwnd 'Tracks' }
 
@@ -614,7 +615,17 @@ function Wait-TrackCard($hwnd, [string]$key) {
 	Get-CardTexts $hwnd
 }
 
-function Get-SavedState { Get-Content $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json }
+# The app replaces the file when it saves, which holds it for a moment
+function Get-SavedState {
+	for ($i = 0; ; $i++) {
+		try {
+			return Get-Content $StateFile -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+		} catch {
+			if ($i -ge 20) { throw }
+			Start-Sleep -Milliseconds 50
+		}
+	}
+}
 
 # A sync enables Cancel until it ends
 function Test-Syncing($hwnd) {

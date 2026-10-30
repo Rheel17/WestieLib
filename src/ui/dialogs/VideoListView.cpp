@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <format>
 #include <utility>
 
 #include <uxtheme.h>
@@ -19,15 +17,14 @@ namespace westie::ui {
 
 namespace {
 
-constexpr int ArtistsWidthDips = 130;
-constexpr int AlbumWidthDips = 130;
+constexpr int ArtistsWidthDips = 115;
+constexpr int AlbumWidthDips = 115;
 constexpr int LengthWidthDips = 52;
-constexpr int ScoreWidthDips = 52;
+constexpr int MatchWidthDips = 110;
 // Off by more, a video is often a live version or a cover
 constexpr std::chrono::milliseconds LengthTolerance{5000};
-constexpr double PercentPerWhole = 100.0;
 
-enum class Column { Title, Artists, Album, Length, Score };
+enum class Column { Title, Artists, Album, Length, Match };
 
 std::wstring title_text(const core::VideoCandidate& candidate) {
     std::wstring title = platform::win32::to_utf16(candidate.title);
@@ -35,6 +32,35 @@ std::wstring title_text(const core::VideoCandidate& candidate) {
         return title + L" (current)";
     }
     return candidate.track.empty() ? title : title + L" (in library)";
+}
+
+const wchar_t* doubt_word(core::MatchDoubt doubt) {
+    switch (doubt) {
+    case core::MatchDoubt::Title:    return L"title";
+    case core::MatchDoubt::Artist:   return L"artist";
+    case core::MatchDoubt::Version:  return L"version";
+    case core::MatchDoubt::Length:   return L"length";
+    case core::MatchDoubt::Explicit: return L"explicit";
+    }
+    return L"";
+}
+
+std::wstring verdict_text(const core::VideoCandidate& candidate) {
+    if (candidate.verdict == core::MatchVerdict::Accept) {
+        return L"Same recording";
+    }
+    if (candidate.verdict == core::MatchVerdict::Review) {
+        std::wstring doubts;
+        for (core::MatchDoubt doubt : candidate.doubts) {
+            doubts += (doubts.empty() ? L"" : L", ") + std::wstring(doubt_word(doubt));
+        }
+        return L"Check " + doubts;
+    }
+    switch (candidate.mismatch) {
+    case core::MatchMismatch::Recording: return L"Other recording";
+    case core::MatchMismatch::Artist:    return L"Other artist";
+    default:                             return L"Other song";
+    }
 }
 
 bool length_off(std::chrono::milliseconds video, std::chrono::milliseconds source) {
@@ -68,7 +94,7 @@ void VideoListView::show(const std::vector<core::VideoCandidate>& candidates, st
         set_text(item, std::to_underlying(Column::Artists), artists_text(candidate.artists));
         set_text(item, std::to_underlying(Column::Album), platform::win32::to_utf16(candidate.album));
         set_text(item, std::to_underlying(Column::Length), candidate.duration.count() > 0 ? duration_text(candidate.duration) : L"");
-        set_text(item, std::to_underlying(Column::Score), std::format(L"{}%", std::lround(candidate.score * PercentPerWhole)));
+        set_text(item, std::to_underlying(Column::Match), verdict_text(candidate));
         length_off_.push_back(length_off(candidate.duration, source_duration));
     }
 }
@@ -111,7 +137,7 @@ void VideoListView::add_columns() {
     framework::Dpi dpi = framework::Dpi::of(list_);
     RECT client;
     platform::win32::check(GetClientRect(list_, &client), "GetClientRect");
-    int fixed = dpi.scale(ArtistsWidthDips) + dpi.scale(AlbumWidthDips) + dpi.scale(LengthWidthDips) + dpi.scale(ScoreWidthDips);
+    int fixed = dpi.scale(ArtistsWidthDips) + dpi.scale(AlbumWidthDips) + dpi.scale(LengthWidthDips) + dpi.scale(MatchWidthDips);
 
     struct ColumnSpec {
         const wchar_t* title = nullptr;
@@ -123,7 +149,7 @@ void VideoListView::add_columns() {
         {.title = L"Artists", .width = dpi.scale(ArtistsWidthDips)},
         {.title = L"Album", .width = dpi.scale(AlbumWidthDips)},
         {.title = L"Length", .width = dpi.scale(LengthWidthDips), .format = LVCFMT_RIGHT},
-        {.title = L"Score", .width = dpi.scale(ScoreWidthDips), .format = LVCFMT_RIGHT},
+        {.title = L"Match", .width = dpi.scale(MatchWidthDips)},
     }};
     for (int index = 0; std::cmp_less(index, columns.size()); ++index) {
         LVCOLUMNW column{};

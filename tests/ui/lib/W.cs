@@ -740,6 +740,25 @@ public static class W {
 		return red > 10;
 	}
 
+	// Whether a child's text is drawn in the warning color, #9D5D00. ClearType blends each
+	// channel of a text pixel between the text's color and the background's, so no pixel of amber text is darker in red
+	// or green than amber, while black and gray text have such pixels, and their colored fringes don't count.
+	public static bool AmberInk(IntPtr window, IntPtr child) {
+		RECT client;
+		GetClientRect(child, out client);
+		int dx, dy, ink = 0, dark = 0;
+		using (var bitmap = Capture(window, child, out dx, out dy)) {
+			for (int x = 0; x < client.Right; x++) {
+				for (int y = 0; y < client.Bottom; y++) {
+					var p = bitmap.GetPixel(x + dx, y + dy);
+					if (p.R < 230 || p.G < 230 || p.B < 230) ink++;
+					if (p.R < 130 || p.G < 70) dark++;
+				}
+			}
+		}
+		return ink > 10 && dark == 0;
+	}
+
 	[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
 	[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
 	[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
