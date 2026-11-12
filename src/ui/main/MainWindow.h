@@ -7,6 +7,8 @@
 
 #include <windows.h>
 
+#include "core/log/Log.h"
+#include "core/log/LogLine.h"
 #include "core/matching/VideoSearch.h"
 #include "core/matching/VideoSearchResults.h"
 #include "core/playlists/PlaylistLink.h"
@@ -73,7 +75,8 @@ public:
             core::PlaylistLookup& lookup,
             core::SyncEngine& sync,
             core::VideoSearch& video_search,
-            const platform::TextNormalizer& normalizer
+            const platform::TextNormalizer& normalizer,
+            core::Log& logger
     );
 
     void show(int show_command) override;
@@ -110,6 +113,7 @@ private:
     void confirm_match();
     void choose_video();
     void open_library_folder() const;
+    void open_log_folder() const;
     void open_playlist_page() const;
     void copy_playlist_link() const;
     void toggle_log();
@@ -132,6 +136,7 @@ private:
     void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);
     void apply_event(const core::VideoSearchResults& results);
+    void apply_event(const core::LogLine& line);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_activate(WORD state);
     void on_init_menu_popup(HMENU menu, bool window_menu) const;
@@ -154,6 +159,7 @@ private:
     core::SyncEngine& sync_;
     core::VideoSearch& video_search_;
     const platform::TextNormalizer& normalizer_;
+    core::Log& logger_;
     ToolBoard tool_board_;
     SyncBoard sync_board_;
     WindowPlacement placement_;

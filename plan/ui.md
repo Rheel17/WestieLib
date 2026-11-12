@@ -47,7 +47,7 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
   way; its height comes back when the window grows.
 - The infobar row is 32 px tall, right under the toolbar, and takes its height from the panels.
 - The window placement (normal bounds and maximized state), the panel widths, the log height, whether the log
-  shows and the track table's column widths are saved under `HKCU\Software\WestieLib\Window` when the window closes,
+  shows, the log's level and scope, and the track table's column widths are saved under `HKCU\Software\WestieLib\Window` when the window closes,
   and restored on the next start. A minimized window comes back restored, or maximized if it was maximized before.
 - The inspector is always shown. View › Log toggles the log pane.
 - Minimum window size is about 1100×680. The mockup draws the window at 1280×800, with a 250 px left panel and
@@ -180,8 +180,8 @@ Only one message shows at a time, in this priority order:
 row.
 
 So far it shows only fetch failures, one at a time: the first playlist, in the order they were added, whose last fetch
-failed and wasn't dismissed. A later failure of a dismissed playlist shows again. `Details` shows the log pane, which
-lists nothing yet; its lines come with the log.
+failed and wasn't dismissed. A later failure of a dismissed playlist shows again. `Details` shows the log pane, where
+the failure is an Error line.
 
 ```
 │ ⚠  Couldn't fetch "Slow & bluesy". It may be private or deleted.                         [Details]  ✕ │
@@ -620,11 +620,54 @@ a card that only changes (a sync reports progress) keeps its place.
 
 - Hidden on the first start; after that, it comes back as it was when the window closed. View › Log or Ctrl+L
   toggles it. It spans the full window width, between the panels and the status bar, and has its own splitter.
-- Its mini toolbar has `Log`, flat buttons `All │ Warnings & errors`, a `Selected track only` check box,
-  `Open log folder` and ✕.
-- A list view with the columns Time | Level | Playlist / Track | Message. Warnings show in amber, errors in red.
-  New lines scroll it to the bottom unless the user has scrolled up.
-- The full tool output goes only to the log file, not to this list.
+- It lists the lines of this run's log file (see `arch.md`, Log), the last 20,000 at most, minus the tool output,
+  which goes only to the file.
+
+```
+│ Log   Level [Info and up ▾]   All │ Selected playlist │ Selected track             [Open log folder]  ✕ │
+├─────────────────────────┬─────────┬──────────────────┬────────────────────────────────────────────────┤
+│ Time                    │ Level   │ Playlist / Track │ Message                                        │
+│ 2026-11-12 15:12:01.204 │ Info    │ —                │ Sync started: 4 playlists                      │
+│ 2026-11-12 15:12:03.871 │ Error   │ Slow & bluesy    │ Couldn't fetch the playlist: HTTP 404 from …   │
+│ 2026-11-12 15:13:30.016 │ Warning │ Feeling Good     │ Needs review (61%): "Feeling Good (Live)". …   │
+```
+
+**Toolbar.** A white strip, 28 px tall including a 1 px `#E5E5E5` rule along its bottom. From the left: 8 px, `Log` in
+semibold, 12 px, `Level`, 6 px, a drop-down list, 12 px, the scope's flat buttons, then against the right edge
+`Open log folder` (a compact button, like the infobar's `Details`), 6 px, and ✕ in a 24 px box, 4 px from the right
+edge.
+
+- **Level** picks the least severe level shown; every more severe level shows too. The list holds `Debug and up`,
+  `Info and up`, `Warnings and up` and `Errors only`, and starts at `Info and up`.
+
+  | Level   | Lines                                                                                       |
+  |---------|---------------------------------------------------------------------------------------------|
+  | Debug   | details for finding a fault: each yt-dlp run and its exit code, searches and their result counts |
+  | Info    | what the app did: a sync started and finished, a playlist fetched, a track matched, a tool installed, a playlist added |
+  | Warning | something the user may want to look at: a match that needs review, a fetch that waits for a tool |
+  | Error   | something that failed: a fetch, a match, a tool install, saving the state                    |
+
+- **Scope** is three flat buttons, `All │ Selected playlist │ Selected track`, drawn like the status filter's (see
+  Main panel), 20 px tall. One is always selected; it starts at `All`.
+  - `Selected playlist` shows the lines about the selected playlist and about the tracks it lists now. While All
+    tracks is selected, it shows every line, as All tracks is the whole library.
+  - `Selected track` shows the lines about the selected tracks: with several rows selected, the lines of any of them.
+    Without a selected track the list is empty and reads `Select a track to see its lines.` in gray.
+  - The scope follows the selection: selecting another playlist or track changes the lines.
+  - When two tracks merge, the lines of the merged one go with the track that survives.
+- `Open log folder` is Tools › Open log folder. ✕ hides the pane, like View › Log.
+- The level and the scope are saved with the window state.
+
+**List.** A list view with the columns Time (150 px), Level (70 px), Playlist / Track (160 px) and Message, which takes
+the rest of the width. Rows are 20 px tall.
+
+- Time is the local date and time to the millisecond: `2026-11-12 15:12:03.871`.
+- Level reads `Debug`, `Info`, `Warning` or `Error`. Warning rows are amber (`#9D5D00`) and Error rows red
+  (`#C42B1C`), in every column; Debug and Info rows are black.
+- Playlist / Track is the track's title when the line is about a track, else the playlist's name when it's about a
+  playlist, else `—`. It is the name when the line was written, so it stays after the playlist is removed.
+- New lines scroll the list to the bottom when it showed the last line; once the user has scrolled up, it stays.
+  Changing the level or the scope scrolls to the bottom.
 
 ## Status bar
 
@@ -847,13 +890,15 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 |---------|----------------|
 | Frame | HMENU + accelerator table; the menu bar painted through the undocumented `WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM` with the `Menu` theme; three custom splitters |
 | Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
-| Infobar | custom-painted child window holding push buttons |
+| Infobar | custom-painted child window holding push buttons and a close button |
+| Close button (infobar, log) | a small custom-painted window with the ✕ icon; hover `#E5F3FF`, pressed `#CCE4F7`, hot-tracked with `TrackMouseEvent`; it takes the mouse capture on `WM_LBUTTONDOWN` and acts on `WM_LBUTTONUP` inside it |
+| Log toolbar | a custom-painted strip (the rule) holding labels, a `CBS_DROPDOWNLIST` combo box, the status filter's `WC_TABCONTROL` with flat buttons, a compact push button and a close button |
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
 | Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`), with the hover colors `#E5F3FF` and a `#CCE8FF` frame (`#99D1FF` on a selected row) while the mouse is over it. It is hit-tested in `WM_LBUTTONDOWN`, takes the mouse capture until `WM_LBUTTONUP`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle while it can be clicked. The spinning sync icon is 12 icon resources (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |
-| Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks |
+| Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks. The log colors its rows through `clrText` at `CDDS_ITEMPREPAINT`, keeps to the bottom with `LVM_ENSUREVISIBLE`, and takes its empty text from `LVN_GETEMPTYMARKUP` |
 | Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the synced bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
 | Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also keeps the undo history (`EditHistory`), taking Ctrl+Z and Ctrl+Y (`WM_CHAR` `0x1A` and `0x19`) and swallowing the edit's own one-step undo: `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO` and Alt+Backspace. It swallows `WM_CONTEXTMENU` too |

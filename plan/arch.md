@@ -22,7 +22,7 @@ It is a single, statically linked Win32 executable written in C++26.
 |       |      ----> Matcher                                               |
 |       |      ----> Downloader ----> Tagger ----> Library                 |
 |       |                                                                  |
-|   StateStore      Settings      ToolManager      SelfUpdater             |
+|   StateStore      Settings      ToolManager      SelfUpdater   Log       |
 |                                                  RemoteConfig            |
 +--------------------------------------------------------------------------+
                                  |
@@ -57,7 +57,7 @@ It is a single, statically linked Win32 executable written in C++26.
         ffprobe.exe
         deno.exe
     work\<track key>\                     per-track scratch space during download
-    logs\<timestamp>.log                  one log per run, including full tool output
+    logs\<timestamp>.log                  one log per run, including the tool runs; the 20 newest are kept
 
 <library folder>\                          flat folder of finished .opus / .flac files
 
@@ -352,7 +352,8 @@ The cover art comes from the first of:
 |------------------|--------------------------------------------------------------------------------------|
 | `HttpClient`     | WinHTTP (`WinHttpClient`). `get` sends the request headers it is given and returns a body; `post` does the same with a request body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HttpError`, which keeps the status and reads `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
 | `ProcessRunner`  | `Win32ProcessRunner`. `run(program, arguments, stop)` starts the program with `CreateProcessW`, without a console window, and returns its exit code, stdout and stderr. Arguments and output are UTF-8; the arguments are quoted by the C runtime's rules. A child inherits only its own pipe ends and NUL as stdin (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so children started at the same time never hold each other's pipes open. It starts suspended, joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and only then runs. A `std::stop_token` cancels: its callback terminates the job, and the call throws `Cancelled`. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. So far it returns the whole output at the end; splitting it into lines as they arrive comes with the Downloader's progress. |
-| `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. |
+| `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. `open_for_append` hands out an `AppendFile`, which appends through a handle opened with `FILE_APPEND_DATA` and shared for reading and writing, so an editor can open the file meanwhile. `list_files` and `remove_file` serve the log's clean-up. |
+| `TimeZone`       | `Win32TimeZone`: a `system_clock` time as local time, to the millisecond (`SystemTimeToTzSpecificLocalTime`). The static MinGW build has no time zone database for `std::chrono::current_zone`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
 | `ArchiveExtractor` | miniz (`MinizArchiveExtractor`). Extracts the named files from a zip into a folder. miniz opens files by narrow name, so it gets a `FILE*` from `_wfopen`, and writes go through `CreateFileW`. A stop request ends it with `Cancelled`. |
 | `TextNormalizer` | `Win32TextNormalizer`, UTF-8 in and out: `NormalizeString` (NFKD), combining marks dropped (`GetStringTypeW`, `C3_NONSPACING`), lowercased with `LCMapStringEx` in the invariant locale. |
@@ -388,6 +389,39 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   out, and a failure or doubt name from a later version reads as none. The other fields arrive with their features.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
+
+### Log
+
+`Log` (`src/core/log/`) writes what the core does to this run's log file and sends each line to the UI as a `LogLine`.
+`main.cpp` makes it right after the event queue, before the workers, so they can log while they stop, and hands it to
+every component that logs.
+
+- At start it creates `logs\`, removes all but the 19 newest `.log` files, and opens `logs\<local time>.log`, named
+  like `2026-11-12_22-34-12.log`, so a folder of runs sorts by time.
+- `write(level, text, subject)` stamps the time, emits `LogLine`, and appends a line to the file. A mutex keeps lines
+  whole and in the same order in the file and the events, as the sync, tool, look-up and search workers and the UI
+  thread all write. Under it, `write` takes only the event queue's lock and calls back into no component, so a caller
+  may hold its own lock (the SyncEngine writes under its queue's).
+- Levels, from least to most severe: `Debug` (what helps find a fault: yt-dlp runs and their exit codes, searches and
+  their result counts), `Info` (what the app did), `Warning` (what the user may want to look at) and `Error` (what
+  failed).
+- A subject names what a line is about: a playlist key, a track key, or both, and the name to show for it (the
+  track's title, else the playlist's name). The name goes with the line, so it outlives a removed playlist.
+- A file line is UTF-8 and reads `<time> <LEVEL> <text>`, with ` [<name>; playlist <key>; track <key>]` after it when
+  it has a subject, leaving out the parts it doesn't have. The time is local, to the millisecond:
+  `2026-11-12 22:34:12.087 ERROR   Couldn't fetch the playlist: HTTP 404 from api-partner.spotify.com [Slow & bluesy;
+  playlist spotify:5aX8kq1sTn2Yz9wxxxxxxx]`. A text's further lines follow, indented by 4 spaces, so every line of
+  the file starts with a time or with spaces.
+- `write_tool_run` writes a tool run to the file only: a `TOOL` line with the command line, then indented by 4 spaces
+  the exit code, and `stderr:` with its lines indented by 8. Stdout follows the same way when the tool failed; after a
+  success only its size is written, as yt-dlp's JSON answers run to megabytes. A Debug line gives the command line and
+  the exit code in the pane.
+- So far it logs the sync (started, each fetch and match, failures, the end), the tools (installed, updated, failed),
+  the playlist look-up and the match search (at Debug, failures as warnings), and the commands that change the
+  state from the UI (a playlist added or removed, a match confirmed, a video chosen). A merge that sends no
+  `TracksMerged` writes its line about the track that is left.
+- When the file can't be opened or written, the lines still reach the UI, and the first such failure is an Error line
+  of its own.
 
 ### RemoteConfig
 
@@ -985,7 +1019,7 @@ downloads yet.
 | `ToolStatus`                   | tool, state, installed release, percent, error  |
 | `ToolsChecked`                 | when the releases were last looked up           |
 | `AppUpdate`                    | available version, update state                 |
-| `LogLine`                      | level, text, optional playlist id and track key |
+| `LogLine`                      | time, level, text, subject (optional playlist key and track key, and the name to show) |
 
 Events are emitted from any thread through an `EventSink` interface, as a `CoreEvent` (a `std::variant` of the event
 structs). The Win32 implementation, `CoreEventQueue` (`src/ui/events/`), appends each event to a queue behind a
@@ -1020,6 +1054,7 @@ src/
         events/     CoreEvent, EventSink
         github/     the latest release of a repository, from GitHub's API
         json/       what the JSON files share: write options, ISO 8601 times, UTF-8 paths
+        log/        Log, LogLine and the log's text formats
         matching/   the Matcher: YouTube Music's search, title words and parts, credits, evidence, verdict and rank
         playlists/  playlist links, the playlist look-up, addPlaylist
         settings/   Settings, SettingsStore

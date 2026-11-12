@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "core/github/Release.h"
+#include "core/log/LogLevel.h"
 #include "core/tools/ToolSource.h"
 #include "core/tools/ToolsChecked.h"
 #include "core/tools/ToolsRunChanged.h"
@@ -16,13 +17,14 @@
 
 namespace westie::core {
 
-ToolManager::ToolManager(ToolServices services, std::string github_api_url, ToolFolder& folder, EventSink& events) :
+ToolManager::ToolManager(ToolServices services, std::string github_api_url, ToolFolder& folder, EventSink& events, Log& log) :
         files_(services.files),
         folder_(folder),
         store_(services.files, folder.path() / L"tools.json"),
         releases_(services.http, std::move(github_api_url)),
         installer_(services, folder_),
-        events_(events) {}
+        events_(events),
+        log_(log) {}
 
 void ToolManager::run(bool update_installed) {
     // Emitted here rather than on the worker, so the UI knows of the run before anything else it reports
@@ -68,6 +70,9 @@ void ToolManager::update_tools(const std::stop_token& stop, bool update_installe
         } catch (const platform::Cancelled&) {
             throw;
         } catch (const std::exception& error) {
+            log_.write(
+                    LogLevel::Error, std::format("Couldn't {} {}: {}", status.release.empty() ? "install" : "update", tool_package_name(package), error.what())
+            );
             events_.emit(ToolStatus{.package = package, .state = ToolState::Failed, .release = status.release, .error = error.what()});
         }
     }
@@ -83,6 +88,7 @@ void ToolManager::update_tools(const std::stop_token& stop, bool update_installe
 void ToolManager::update_tool(ToolPackage package, const std::string& current, InstalledTools& installed, const std::stop_token& stop) {
     events_.emit(ToolStatus{.package = package, .state = ToolState::Checking, .release = current});
     std::string_view repository = tool_repository(package);
+    log_.write(LogLevel::Debug, std::format("Looking up the latest release of {}", repository));
     Release release = releases_.latest(repository, stop);
     installed.checked_at = std::chrono::system_clock::now();
 
@@ -98,11 +104,19 @@ void ToolManager::update_tool(ToolPackage package, const std::string& current, I
         };
         installed.tools[package] = installer_.install(package, *download, report, stop);
         store_.save(installed);
+        std::string_view name = tool_package_name(package);
+        log_.write(
+                LogLevel::Info,
+                current.empty() ? std::format("Installed {} {}", name, download->release) : std::format("Updated {} from {} to {}", name, current, download->release)
+        );
+    } else {
+        log_.write(LogLevel::Debug, std::format("{} {} is up to date", tool_package_name(package), current));
     }
     events_.emit(ToolStatus{.package = package, .state = ToolState::UpToDate, .release = installed.tools[package].release});
 }
 
 void ToolManager::report_failure(const char* error) {
+    log_.write(LogLevel::Error, std::format("Couldn't check the tools: {}", error));
     for (ToolPackage package : AllToolPackages) {
         events_.emit(ToolStatus{.package = package, .state = ToolState::Failed, .error = error});
     }

@@ -8,6 +8,7 @@
 #include <knownfolders.h>
 
 #include "Version.h"
+#include "core/log/Log.h"
 #include "core/matching/VideoSearch.h"
 #include "core/playlists/PlaylistLookup.h"
 #include "core/settings/Settings.h"
@@ -27,6 +28,7 @@
 #include "platform/win32/Win32FileOps.h"
 #include "platform/win32/Win32ProcessRunner.h"
 #include "platform/win32/Win32TextNormalizer.h"
+#include "platform/win32/Win32TimeZone.h"
 #include "platform/win32/WinHttpClient.h"
 #include "ui/FatalError.h"
 #include "ui/events/CoreEventQueue.h"
@@ -78,24 +80,27 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         // The window goes before the tool manager, the look-up and the sync, whose workers may still report into the queue
         // while they stop
         westie::ui::CoreEventQueue events;
+        // So is the log, which they write to
+        westie::platform::win32::Win32TimeZone time_zone;
+        westie::core::Log log(files, data / L"logs", time_zone, events);
         westie::core::ToolFolder tool_folder(data / L"tools");
         westie::core::ToolManager tools(
                 {.files = files, .http = http, .hasher = hasher, .archives = archives}, service_url(L"WESTIELIB_GITHUB_API", "https://api.github.com"),
-                tool_folder, events
+                tool_folder, events, log
         );
-        westie::core::YtDlp yt_dlp(tool_folder, files, processes);
+        westie::core::YtDlp yt_dlp(tool_folder, files, processes, log);
         westie::core::SpotifyUrls spotify{
             .web = service_url(L"WESTIELIB_SPOTIFY_URL", "https://open.spotify.com"),
             .api = service_url(L"WESTIELIB_SPOTIFY_API", "https://api-partner.spotify.com"),
         };
-        westie::core::PlaylistLookup lookup(yt_dlp, http, spotify.web, events);
+        westie::core::PlaylistLookup lookup(yt_dlp, http, spotify.web, events, log);
         std::string youtube_music = service_url(L"WESTIELIB_YTMUSIC_API", "https://music.youtube.com");
-        westie::core::SyncEngine sync(yt_dlp, tool_folder, http, normalizer, spotify, youtube_music, state, events);
-        westie::core::VideoSearch video_search(http, normalizer, youtube_music, state, events);
+        westie::core::SyncEngine sync(yt_dlp, tool_folder, http, normalizer, spotify, youtube_music, state, events, log);
+        westie::core::VideoSearch video_search(http, normalizer, youtube_music, state, events, log);
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;
-        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync, video_search, normalizer);
+        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync, video_search, normalizer, log);
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         // Started before the window shows, so its first paint already knows of the run
         tools.run(settings.auto_update_tools);

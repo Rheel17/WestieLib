@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "core/events/EventSink.h"
+#include "core/log/Log.h"
 #include "core/state/StateStore.h"
 #include "platform/HttpClient.h"
 #include "platform/TextNormalizer.h"
@@ -14,7 +15,9 @@ namespace westie::core {
 
 class VideoSearch {
 public:
-    VideoSearch(platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, const StateStore& state, EventSink& events);
+    VideoSearch(
+            platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, const StateStore& state, EventSink& events, Log& log
+    );
 
     // Without a query, it searches what the Matcher would. Returns the number the answer carries.
     int search(std::string source_key, std::optional<std::string> query);
@@ -28,6 +31,7 @@ private:
     std::string api_url_;
     const StateStore& state_;
     EventSink& events_;
+    Log& log_;
     int requests_ = 0;
     // Last, so the thread is joined before the members it uses go
     std::jthread worker_;

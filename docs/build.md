@@ -19,9 +19,9 @@ file names such as `Win32Error.cpp`.
 
 ## CMake
 
-- Every `.cpp` is listed by hand in `add_executable`; add new ones there. Headers aren't listed. The Matcher's rules
-  and the few platform files they use are listed once, in `MATCHING_SOURCES`, which both executables build: a new
-  `.cpp` the unit checks need goes there.
+- Every `.cpp` is listed by hand in `add_executable`; add new ones there. Headers aren't listed. The Matcher's rules,
+  the log's texts and the few platform files they use are listed once, in `MATCHING_SOURCES`, which both executables
+  build: a new `.cpp` the unit checks need goes there.
 - `WestieLibTests` is a console program (`main`, no `-municode`) from `tests/unit/` and `MATCHING_SOURCES`, with the
   same definitions and warnings, linked statically with `normaliz`.
 - Include roots: `src/` (so `#include "ui/framework/Window.h"`), `res/`, and `<build>/generated/`.

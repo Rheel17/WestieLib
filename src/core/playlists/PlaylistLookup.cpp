@@ -1,8 +1,10 @@
 #include "core/playlists/PlaylistLookup.h"
 
 #include <exception>
+#include <format>
 #include <utility>
 
+#include "core/log/LogLevel.h"
 #include "core/playlists/PlaylistLookedUp.h"
 #include "core/sources/SpotifyEmbedPage.h"
 #include "core/sources/YouTubeMusicPlaylistName.h"
@@ -11,8 +13,8 @@
 
 namespace westie::core {
 
-PlaylistLookup::PlaylistLookup(const YtDlp& yt_dlp, platform::HttpClient& http, std::string spotify_url, EventSink& events) :
-        yt_dlp_(yt_dlp), http_(http), spotify_url_(std::move(spotify_url)), events_(events) {}
+PlaylistLookup::PlaylistLookup(const YtDlp& yt_dlp, platform::HttpClient& http, std::string spotify_url, EventSink& events, Log& log) :
+        yt_dlp_(yt_dlp), http_(http), spotify_url_(std::move(spotify_url)), events_(events), log_(log) {}
 
 void PlaylistLookup::look_up(PlaylistLink link) {
     // Assigning stops the look-up before this one and waits for it to end
@@ -38,6 +40,7 @@ void PlaylistLookup::work(const std::stop_token& stop, const PlaylistLink& link)
         answer.outcome = PlaylistLookupOutcome::Failed;
         answer.error = error.what();
     }
+    log_answer(answer);
     // Only a newer look-up or the dialog's close stops one, and neither waits for its answer
     if (!stop.stop_requested()) {
         events_.emit(std::move(answer));
@@ -58,6 +61,15 @@ std::optional<std::string> PlaylistLookup::spotify_playlist_name(const PlaylistL
         return std::nullopt;
     }
     return std::move(page->name);
+}
+
+void PlaylistLookup::log_answer(const PlaylistLookedUp& answer) {
+    switch (answer.outcome) {
+    case PlaylistLookupOutcome::Found:       log_.write(LogLevel::Debug, std::format("Looked up {}: \"{}\"", answer.key, answer.name)); return;
+    case PlaylistLookupOutcome::Unavailable: log_.write(LogLevel::Debug, std::format("Looked up {}: no public playlist", answer.key)); return;
+    case PlaylistLookupOutcome::ToolMissing: log_.write(LogLevel::Debug, std::format("Looking up {} waits for yt-dlp", answer.key)); return;
+    case PlaylistLookupOutcome::Failed:      log_.write(LogLevel::Warning, std::format("Couldn't look up {}: {}", answer.key, answer.error)); return;
+    }
 }
 
 }

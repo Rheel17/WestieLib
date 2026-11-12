@@ -2,14 +2,19 @@
 
 #include <utility>
 
+#include "core/log/LogLevel.h"
+#include "core/log/LogSubject.h"
+
 namespace westie::core {
 
-bool add_playlist(StateStore& store, const PlaylistLink& link, std::string name, std::chrono::system_clock::time_point now) {
+bool add_playlist(StateStore& store, Log& log, const PlaylistLink& link, std::string name, std::chrono::system_clock::time_point now) {
     std::string key = link.key();
     if (store.snapshot()->playlists.contains(key)) {
         return false;
     }
+    LogSubject subject{.playlist = key, .name = name};
     store.update([&](State& state) { state.playlists[key] = {.url = link.url(), .name = std::move(name), .added_at = now}; });
+    log.write(LogLevel::Info, "Added the playlist", std::move(subject));
     return true;
 }
 

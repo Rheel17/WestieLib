@@ -56,7 +56,8 @@ MainWindow::MainWindow(
         core::PlaylistLookup& lookup,
         core::SyncEngine& sync,
         core::VideoSearch& video_search,
-        const platform::TextNormalizer& normalizer
+        const platform::TextNormalizer& normalizer,
+        core::Log& logger
 ) :
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
@@ -68,6 +69,7 @@ MainWindow::MainWindow(
         sync_(sync),
         video_search_(video_search),
         normalizer_(normalizer),
+        logger_(logger),
         placement_(hwnd()),
         icon_(IDI_APP_ICON),
         menu_bar_(hwnd(), GetSysColorBrush(COLOR_WINDOW)),
@@ -211,7 +213,7 @@ void MainWindow::add_playlist() {
     add_playlist_dialog_.emplace([this](const core::PlaylistLink& link) { return added_playlist_name(link); }, lookup_, tool_board_);
     std::optional<AddPlaylistRequest> request = add_playlist_dialog_->choose(hwnd());
     add_playlist_dialog_.reset();
-    if (!request || !core::add_playlist(state_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
+    if (!request || !core::add_playlist(state_, logger_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
         return;
     }
     selected_playlist_ = request->link.key();
@@ -353,6 +355,7 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::AddPlaylist:          add_playlist(); return;
     case CommandId::RemovePlaylist:       remove_playlist(); return;
     case CommandId::OpenLibraryFolder:    open_library_folder(); return;
+    case CommandId::OpenLogFolder:        open_log_folder(); return;
     case CommandId::OpenPlaylistPage:     open_playlist_page(); return;
     case CommandId::CopyPlaylistLink:     copy_playlist_link(); return;
     case CommandId::SyncAll:              sync_all(); return;
@@ -399,7 +402,7 @@ void MainWindow::remove_playlist() {
     if (!playlist || !confirm_remove_playlist(hwnd(), playlist->name)) {
         return;
     }
-    core::remove_playlist(state_, playlist->key);
+    core::remove_playlist(state_, logger_, playlist->key);
     selected_playlist_.reset();
     show_playlists();
 }
@@ -409,7 +412,7 @@ void MainWindow::confirm_match() {
     if (selected.size() != 1) {
         return;
     }
-    core::confirm_match(state_, selected.front().track);
+    core::confirm_match(state_, logger_, selected.front().track);
     show_playlists();
 }
 
@@ -431,13 +434,19 @@ void MainWindow::choose_video() {
     if (!video) {
         return;
     }
-    core::set_video_override(state_, source, *video);
+    core::set_video_override(state_, logger_, source, *video);
     show_playlists();
 }
 
 void MainWindow::open_library_folder() const {
     // The first sync creates the folder, so until then its nearest existing parent opens
     if (std::optional<std::filesystem::path> folder = platform::nearest_existing_folder(settings_.library_path)) {
+        platform::win32::open_with_shell(hwnd(), folder->wstring());
+    }
+}
+
+void MainWindow::open_log_folder() const {
+    if (std::optional<std::filesystem::path> folder = platform::nearest_existing_folder(logger_.folder())) {
         platform::win32::open_with_shell(hwnd(), folder->wstring());
     }
 }
@@ -579,6 +588,8 @@ void MainWindow::apply_event(const core::VideoSearchResults& results) {
         choose_video_dialog_->show_results(results);
     }
 }
+
+void MainWindow::apply_event(const core::LogLine&) {}
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
     // Only menus and accelerators send WM_COMMAND without a control

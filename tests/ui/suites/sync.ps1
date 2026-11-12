@@ -155,6 +155,24 @@ function Check-ListButton([string]$what, $hwnd, [int]$count) {
 	Check $what $button.Top ((Get-PlaylistRowTop $hwnd ($count + 1)) + (S 8))
 }
 
+function Get-LogFiles { @(Get-ChildItem (Join-Path $DataDir 'logs') -Filter '*.log' | Sort-Object Name) }
+
+# The newest log file's lines, with T for the time, whose format the unit checks cover
+function Get-LogLines { @(Get-Content (Get-LogFiles)[-1].FullName -Encoding UTF8 | ForEach-Object { $_ -replace '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ', 'T ' }) }
+
+# Its lines of the levels $levels names (INFO|ERROR, say)
+function Get-LogLevelLines([string]$levels) { @(Get-LogLines | Where-Object { $_ -match "^T ($levels) " }) -join ' / ' }
+
+# A tool run in it, from the line naming $pattern to the end of its indented lines
+function Get-LogToolRun([string]$pattern) {
+	$lines = Get-LogLines
+	$start = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($line) $line -match "^T TOOL +.*$pattern" })
+	if ($start -lt 0) { return '' }
+	$end = $start + 1
+	while ($end -lt $lines.Count -and $lines[$end].StartsWith(' ')) { $end++ }
+	$lines[$start..($end - 1)] -join ' / '
+}
+
 function Get-TrackSummary($hwnd) { "$([W]::TabTexts((Get-StatusTabs $hwnd))) | $([W]::TextOf((Get-ResultLine $hwnd)))" }
 
 $Cafe = "Caf$([char]0xE9) Lights"
@@ -231,6 +249,29 @@ $script:TallRows = 1, 2, 3
 Check-ListButton '  rows 1 to 3 a line taller: Add playlist under them' $h 4
 Check '  infobar: the failed fetch' (Get-InfobarText $h) "True $FetchMessage"
 Check '  the rows sync controls tooltips' "$([W]::TooltipText((Get-PlaylistList $h), 0)) / $([W]::TooltipText((Get-PlaylistList $h), 3))" "Sync $TracksName / Sync Named PLbroken1"
+
+# The log file has what the sync did, and each yt-dlp run
+Check 'Log: one file, named by the time' "$((Get-LogFiles).Count) $((Get-LogFiles)[0].Name -match '^\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d\.log$')" '1 True'
+Check '  what the sync did' (Get-LogLevelLines 'INFO|WARNING|ERROR') (
+	'T INFO    Sync started: 4 playlists / ' +
+	"T INFO    Fetched 4 tracks [$TracksName; playlist ytm:PLtracks1] / " +
+	"T INFO    Fetched 2 tracks [$SpotifyName; playlist $SyncSpotifyKey] / " +
+	"T INFO    Fetched 2 tracks [$SharedName; playlist ytm:PLshared1] / " +
+	"T ERROR   Couldn't fetch the playlist: $BrokenError [Named PLbroken1; playlist ytm:PLbroken1] / " +
+	'T INFO    Matched "Late Night Swing" by Ana, Ben (100%) [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
+	"T INFO    Matched `"$Senorita`" by Earth, Wind & Fire (100%) [$Senorita; track spotify:spTrackSenorita0000002] / " +
+	'T INFO    Sync finished')
+Check '  a failed yt-dlp run: its command, exit code and stderr' (Get-LogToolRun 'PLbroken1$') (
+	'T TOOL    yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLbroken1 / ' +
+	'    exit code 1 / ' +
+	'    stderr: / ' +
+	'        WARNING: [youtube:tab] YouTube Music is not directly supported / ' +
+	"        ERROR: [youtube:tab] PLbroken1: $BrokenError")
+Check '  a successful one: only the size of its output' ((Get-LogToolRun 'PLtracks1$') -replace '\d+ bytes', 'N bytes') (
+	'T TOOL    yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLtracks1 / ' +
+	'    exit code 0 / ' +
+	'    stdout: N bytes')
+Check '  the three runs at Debug too' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp *: exit code *' }).Count) 3
 
 # One selected track shows its card; a link to one of its playlists selects that playlist
 Select-TrackRow $h 5
@@ -441,6 +482,10 @@ Check 'yt-dlp downloading: syncing | nothing fetched' "$(Test-Syncing $h) $(Get-
 [void]$Web.AssetGate.Set()
 Wait-Fetches $h 0 1
 Check '  installed: the fetch goes ahead' (Get-SavedPlaylistSync) "ytm:PLtracks1 [$TracksName] AAAAA1,BBBBB2,CCCCC4,SHARE5,AAAAA1 synced True"
+$logged = Get-LogLevelLines 'INFO|WARNING'
+Check '  log: the wait, the install, the fetch' (
+	"$($logged -match 'T WARNING Waiting for yt-dlp to install \[Named PLtracks1; playlist ytm:PLtracks1\]') " +
+	"$($logged -match 'T INFO    Installed yt-dlp \S+') $($logged -match "T INFO    Fetched 4 tracks \[$TracksName; playlist ytm:PLtracks1\]")") 'True True True'
 Check '  rows' (Get-TrackRows $h) "$RowB / $RowC / $RowSharedAlone / $RowA"
 Wait-ToolsIdle $h
 Stop-App $app
@@ -604,7 +649,7 @@ Check 'No match: the reason, no output' (Wait-TrackCard $h 'spotify:spNoResults0
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-nomatch.png") }
 $card = Get-InspectorCard $h
 $labels = @(Get-DirectChildren $card 'WestieLib.Label' | Where-Object { [W]::IsWindowVisible($_) })
-$explanation = [W]::RectIn(($labels | Where-Object { [W]::TextOf($_) -like 'No usable*' })[0], $card)
+$explanation = [W]::RectIn(($labels | Where-Object { [W]::TextOf($_) -eq 'No match found.' })[0], $card)
 $reasonLabel = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match on YouTube Music' })[0]
 $reason = [W]::RectIn($reasonLabel, $card)
 Check '  reason 8 under the explanation, no box' "$($reason.Top - $explanation.Bottom) $([W]::IsWindowVisible(([W]::Children($card, 'WestieLib.OutputBox'))[0]))" (

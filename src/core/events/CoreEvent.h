@@ -2,6 +2,7 @@
 
 #include <variant>
 
+#include "core/log/LogLine.h"
 #include "core/matching/VideoSearchResults.h"
 #include "core/playlists/PlaylistLookedUp.h"
 #include "core/sync/PlaylistFetched.h"
@@ -21,6 +22,6 @@ namespace westie::core {
 
 using CoreEvent = std::variant<
         ToolsRunChanged, ToolStatus, ToolsChecked, PlaylistLookedUp, SyncQueued, PlaylistFetching, PlaylistPageFetched, PlaylistFetched, PlaylistFetchFailed,
-        TracksQueued, TrackStatusChanged, TracksMerged, SyncFinished, VideoSearchResults>;
+        TracksQueued, TrackStatusChanged, TracksMerged, SyncFinished, VideoSearchResults, LogLine>;
 
 }

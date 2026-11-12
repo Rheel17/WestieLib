@@ -6,14 +6,18 @@
 #include <set>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
 #include "core/events/EventSink.h"
+#include "core/log/Log.h"
+#include "core/log/LogSubject.h"
 #include "core/matching/Matcher.h"
 #include "core/playlists/PlaylistLink.h"
 #include "core/sources/PlaylistContents.h"
 #include "core/sources/SpotifyUrls.h"
+#include "core/state/Match.h"
 #include "core/state/StateStore.h"
 #include "core/state/Track.h"
 #include "core/tools/ToolFolder.h"
@@ -27,7 +31,7 @@ class SyncEngine {
 public:
     SyncEngine(
             const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-            std::string youtube_music_api, StateStore& state, EventSink& events
+            std::string youtube_music_api, StateStore& state, EventSink& events, Log& log
     );
 
     void sync(const std::vector<std::string>& playlists);
@@ -51,6 +55,7 @@ private:
     void queue_tracks(MatchQueue& queue);
     void match(const std::string& track, const std::stop_token& stop);
     void fail_match(const std::string& track, TrackFailure failure, std::string error);
+    void log_match(LogSubject subject, const Match& match, std::string_view from, bool merged);
 
     const YtDlp& yt_dlp_;
     ToolFolder& tools_;
@@ -60,6 +65,7 @@ private:
     Matcher matcher_;
     StateStore& state_;
     EventSink& events_;
+    Log& log_;
     // Guards the queue and whether a run goes, which the UI's sync and the run's end both change
     std::mutex mutex_;
     std::deque<std::string> queue_;

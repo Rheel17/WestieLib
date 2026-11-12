@@ -26,12 +26,14 @@ FetchContent_Declare(miniz
 	SYSTEM)
 FetchContent_MakeAvailable(miniz)
 
-# The Matcher's rules and what they use, which the unit checks build as well
+# The Matcher's rules, the log's texts and what they use, which the unit checks build as well
 set(MATCHING_SOURCES
+	src/core/log/LogText.cpp
 	src/core/matching/Credits.cpp
 	src/core/matching/MatchEvidence.cpp
 	src/core/matching/MatchJudgement.cpp
 	src/core/matching/MatchRank.cpp
+	src/core/matching/MatchText.cpp
 	src/core/matching/MatchWords.cpp
 	src/core/matching/NameMatch.cpp
 	src/core/matching/SongFacts.cpp
@@ -48,6 +50,8 @@ add_executable(WestieLib WIN32
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
+	src/core/log/Log.cpp
+	src/core/log/LogSubject.cpp
 	src/core/matching/ConfirmMatch.cpp
 	src/core/matching/LibraryMatches.cpp
 	src/core/matching/MatchQueries.cpp
@@ -104,8 +108,10 @@ add_executable(WestieLib WIN32
 	src/platform/win32/Pipe.cpp
 	src/platform/win32/RegistryKey.cpp
 	src/platform/win32/ShellOpen.cpp
+	src/platform/win32/Win32AppendFile.cpp
 	src/platform/win32/Win32FileOps.cpp
 	src/platform/win32/Win32ProcessRunner.cpp
+	src/platform/win32/Win32TimeZone.cpp
 	src/platform/win32/WinHttpClient.cpp
 	src/ui/ArtistsText.cpp
 	src/ui/DurationText.cpp
@@ -252,6 +258,7 @@ add_executable(WestieLibTests
 	tests/unit/main.cpp
 	tests/unit/Checks.cpp
 	tests/unit/JudgementChecks.cpp
+	tests/unit/LogChecks.cpp
 	tests/unit/MatchWordsChecks.cpp
 	tests/unit/NameChecks.cpp
 	tests/unit/TitlePartsChecks.cpp

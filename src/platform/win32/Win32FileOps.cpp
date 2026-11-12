@@ -6,6 +6,7 @@
 #include <windows.h>
 
 #include "platform/win32/UniqueHandle.h"
+#include "platform/win32/Win32AppendFile.h"
 #include "platform/win32/Win32Error.h"
 
 namespace westie::platform::win32 {
@@ -97,6 +98,24 @@ void Win32FileOps::remove_tree(const std::filesystem::path& path) {
 
 void Win32FileOps::move_replacing(const std::filesystem::path& from, const std::filesystem::path& to) {
     check(MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
+}
+
+std::unique_ptr<AppendFile> Win32FileOps::open_for_append(const std::filesystem::path& file) {
+    return std::make_unique<Win32AppendFile>(file);
+}
+
+std::vector<std::filesystem::path> Win32FileOps::list_files(const std::filesystem::path& folder) const {
+    std::vector<std::filesystem::path> files;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(folder)) {
+        if (entry.is_regular_file()) {
+            files.push_back(entry.path());
+        }
+    }
+    return files;
+}
+
+void Win32FileOps::remove_file(const std::filesystem::path& file) {
+    std::filesystem::remove(file);
 }
 
 }

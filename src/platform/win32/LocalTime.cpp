@@ -18,7 +18,7 @@ constexpr std::chrono::seconds FileTimeEpochOffset{11'644'473'600};
 
 }
 
-std::chrono::local_seconds to_local_time(std::chrono::system_clock::time_point time) {
+std::chrono::local_time<std::chrono::milliseconds> to_local_milliseconds(std::chrono::system_clock::time_point time) {
     ULARGE_INTEGER ticks{};
     // In ticks first: the offset in the system clock's nanoseconds doesn't fit 64 bits
     ticks.QuadPart = (std::chrono::duration_cast<FileTimeTicks>(time.time_since_epoch()) + FileTimeEpochOffset).count();
@@ -30,7 +30,12 @@ std::chrono::local_seconds to_local_time(std::chrono::system_clock::time_point t
     check(SystemTimeToTzSpecificLocalTime(nullptr, &utc_time, &local), "SystemTimeToTzSpecificLocalTime");
 
     std::chrono::year_month_day day{std::chrono::year(local.wYear), std::chrono::month(local.wMonth), std::chrono::day(local.wDay)};
-    return std::chrono::local_days(day) + std::chrono::hours(local.wHour) + std::chrono::minutes(local.wMinute) + std::chrono::seconds(local.wSecond);
+    return std::chrono::local_days(day) + std::chrono::hours(local.wHour) + std::chrono::minutes(local.wMinute) + std::chrono::seconds(local.wSecond) +
+           std::chrono::milliseconds(local.wMilliseconds);
+}
+
+std::chrono::local_seconds to_local_time(std::chrono::system_clock::time_point time) {
+    return std::chrono::floor<std::chrono::seconds>(to_local_milliseconds(time));
 }
 
 }

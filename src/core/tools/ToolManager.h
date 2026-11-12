@@ -6,6 +6,7 @@
 
 #include "core/events/EventSink.h"
 #include "core/github/GitHubReleases.h"
+#include "core/log/Log.h"
 #include "core/tools/InstalledTools.h"
 #include "core/tools/ToolFolder.h"
 #include "core/tools/ToolInstaller.h"
@@ -19,7 +20,7 @@ namespace westie::core {
 
 class ToolManager {
 public:
-    ToolManager(ToolServices services, std::string github_api_url, ToolFolder& folder, EventSink& events);
+    ToolManager(ToolServices services, std::string github_api_url, ToolFolder& folder, EventSink& events, Log& log);
 
     void run(bool update_installed);
     void stop() noexcept;
@@ -37,6 +38,7 @@ private:
     GitHubReleases releases_;
     ToolInstaller installer_;
     EventSink& events_;
+    Log& log_;
     // Last, so the thread is joined before the members it uses go
     std::jthread worker_;
 };

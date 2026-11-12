@@ -1,9 +1,11 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "platform/FileOps.h"
 
@@ -18,6 +20,9 @@ public:
     void create_folders(const std::filesystem::path& folder) override;
     void remove_tree(const std::filesystem::path& path) override;
     void move_replacing(const std::filesystem::path& from, const std::filesystem::path& to) override;
+    std::unique_ptr<AppendFile> open_for_append(const std::filesystem::path& file) override;
+    std::vector<std::filesystem::path> list_files(const std::filesystem::path& folder) const override;
+    void remove_file(const std::filesystem::path& file) override;
 };
 
 }

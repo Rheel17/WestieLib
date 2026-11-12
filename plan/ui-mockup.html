@@ -184,10 +184,12 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 
 /* ---------- log pane ---------- */
 .loghd { height: 28px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 8px; border-bottom: 1px solid var(--line); }
+/* 8 px, Log, 12 px, Level, 6 px, the list, 12 px, the scope; Open log folder, 6 px, ✕, 4 px */
 .loghd b { font-weight: 600; margin-right: 6px; }
+.loghd .combo { width: 128px; margin-right: 6px; }
+.loghd .scopes { display: flex; align-items: center; }
 .loghd .stab { height: 20px; }
 .loghd .sp { flex: 1; }
-.loghd .chk { margin-left: 10px; }
 
 /* ---------- inspector ---------- */
 .cover { position: relative; overflow: hidden; flex: none; margin: 0 auto 12px; }
@@ -855,32 +857,35 @@ function playlistCard(s, p) {
 // ---------- log pane ----------
 function logPane(s) {
 	const t = title => find(s, title);
+	// The level list starts at Info and up, so the Debug lines (yt-dlp runs, searches) don't show
 	const lines = [
-		['15:12:01', 'Info', '', 'Sync started: 4 playlists'],
-		['15:12:02', 'Info', 'WCS', `Fetched ${s.pl.wcs.keys.length} tracks, nothing to download`],
-		['15:12:03', 'Error', 'Slow & bluesy', "Couldn't fetch playlist: HTTP 404 from api-partner.spotify.com"],
-		['15:12:04', 'Info', 'Her playlist', `Fetched ${s.pl.her.keys.length} tracks, ${s.pl.her.keys.filter(k => s.tracks.get(k).queued).length} to download`],
-		['15:12:04', 'Info', 'Comp practice', `Fetched ${s.pl.comp.keys.length} tracks, ${s.pl.comp.keys.filter(k => s.tracks.get(k).queued).length} to download`],
-		['15:12:19', 'Info', 'Redbone', `Matched "Redbone" by Childish Gambino (${pct(t('Redbone').conf)})`],
-		['15:12:38', 'Info', 'Redbone', `Synced: ${t('Redbone').file}`],
-		['15:12:41', 'Info', 'Peaches', `Synced from the override: ${t('Peaches').file}`],
-		['15:12:58', 'Error', 'Cuff It', 'yt-dlp exited with code 1: Sign in to confirm your age'],
-		['15:13:12', 'Info', 'Get You', `Synced: ${t('Get You').file}`],
-		['15:13:30', 'Warning', 'Feeling Good', `To review (${pct(t('Feeling Good').conf)}): "Feeling Good (Live)". ${doubtLines(t('Feeling Good')).join(', ')}.`],
-		['15:13:52', 'Info', 'Feeling Good', `Synced: ${t('Feeling Good').file}`],
-		['15:14:10', 'Info', 'Snooze', `Synced: ${t('Snooze').file}`],
-		['15:14:13', 'Info', 'Too Sweet', 'Downloading'],
-		['15:14:16', 'Info', 'Espresso', 'Downloading'],
+		['15:12:01.204', 'Info', '', 'Sync started: 4 playlists'],
+		['15:12:02.517', 'Info', 'WCS', `Fetched ${s.pl.wcs.keys.length} tracks, nothing to download`],
+		['15:12:03.871', 'Error', 'Slow & bluesy', "Couldn't fetch the playlist: HTTP 404 from api-partner.spotify.com"],
+		['15:12:04.090', 'Info', 'Her playlist', `Fetched ${s.pl.her.keys.length} tracks, ${s.pl.her.keys.filter(k => s.tracks.get(k).queued).length} to download`],
+		['15:12:04.633', 'Info', 'Comp practice', `Fetched ${s.pl.comp.keys.length} tracks, ${s.pl.comp.keys.filter(k => s.tracks.get(k).queued).length} to download`],
+		['15:12:19.342', 'Info', 'Redbone', `Matched "Redbone" by Childish Gambino (${pct(t('Redbone').conf)})`],
+		['15:12:38.005', 'Info', 'Redbone', `Synced: ${t('Redbone').file}`],
+		['15:12:41.718', 'Info', 'Peaches', `Synced from the override: ${t('Peaches').file}`],
+		['15:12:58.256', 'Error', 'Cuff It', 'yt-dlp exited with code 1: Sign in to confirm your age'],
+		['15:13:12.940', 'Info', 'Get You', `Synced: ${t('Get You').file}`],
+		['15:13:30.016', 'Warning', 'Feeling Good', `Needs review (${pct(t('Feeling Good').conf)}): "Feeling Good (Live)". ${doubtLines(t('Feeling Good')).join(', ')}.`],
+		['15:13:52.481', 'Info', 'Feeling Good', `Synced: ${t('Feeling Good').file}`],
+		['15:14:10.377', 'Info', 'Snooze', `Synced: ${t('Snooze').file}`],
+		['15:14:13.802', 'Info', 'Too Sweet', 'Downloading'],
+		['15:14:16.159', 'Info', 'Espresso', 'Downloading'],
 	];
 	const cls = { Warning: 'lvl-warn', Error: 'lvl-err' };
+	const scopes = ['All', 'Selected playlist', 'Selected track'];
 	return `<div class="loghd"><b>Log</b>
-			<span class="stab on">All</span><span class="stsep"></span><span class="stab">Warnings &amp; errors</span>
-			<span class="chk"><i></i>Selected track only</span><span class="sp"></span>
+			<span>Level</span><div class="combo"><span>Info and up</span>${ic('chev', 's10')}</div>
+			<span class="scopes">${scopes.map((label, i) => `<span class="stab${i === 0 ? ' on' : ''}">${label}</span>`).join('<span class="stsep"></span>')}</span>
+			<span class="sp"></span>
 			${btn('Open log folder', 'sm')}<span class="xbtn">${ic('close', 's10')}</span></div>
 		<div class="lv compact"><table>
-			<colgroup><col style="width:70px"><col style="width:70px"><col style="width:140px"><col></colgroup>
+			<colgroup><col style="width:150px"><col style="width:70px"><col style="width:160px"><col></colgroup>
 			<thead><tr><th>Time</th><th>Level</th><th>Playlist / Track</th><th class="fill" style="padding:0 6px">Message</th></tr></thead>
-			<tbody>${lines.map(([tm, lvl, where, msg]) => `<tr class="${cls[lvl] || ''}"><td class="c0 tm">${tm}</td><td>${lvl}</td><td>${esc(where)}</td><td>${esc(msg)}</td></tr>`).join('')}</tbody>
+			<tbody>${lines.map(([tm, lvl, where, msg]) => `<tr class="${cls[lvl] || ''}"><td class="c0 tm">2026-11-12 ${tm}</td><td>${lvl}</td><td>${esc(where || '—')}</td><td>${esc(msg)}</td></tr>`).join('')}</tbody>
 		</table></div>`;
 }
 
