@@ -26,7 +26,7 @@ private:
     void on_init_dialog();
     INT_PTR on_static_color(HDC dc, HWND control) const;
     void on_command(WPARAM wparam);
-    void change_library_folder();
+    void browse_library_folder();
     void show_library_folder() const;
     void show_tool_list();
     void accept();

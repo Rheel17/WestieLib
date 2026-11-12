@@ -46,7 +46,7 @@ void SettingsDialog::on_init_dialog() {
     show_tool_list();
     platform::win32::check(SetDlgItemTextW(hwnd(), IDC_VERSION, L"WestieLib " WESTIELIB_VERSION_STRING), "SetDlgItemTextW");
     // The folder edit is the first tab stop, and focusing it would open the dialog with the whole path selected
-    SendMessageW(hwnd(), WM_NEXTDLGCTL, reinterpret_cast<WPARAM>(GetDlgItem(hwnd(), IDC_CHANGE_LIBRARY_FOLDER)), TRUE);
+    SendMessageW(hwnd(), WM_NEXTDLGCTL, reinterpret_cast<WPARAM>(GetDlgItem(hwnd(), IDC_BROWSE_LIBRARY_FOLDER)), TRUE);
 }
 
 INT_PTR SettingsDialog::on_static_color(HDC dc, HWND control) const {
@@ -62,13 +62,13 @@ void SettingsDialog::on_command(WPARAM wparam) {
     switch (LOWORD(wparam)) {
     case IDOK:                      accept(); return;
     case IDCANCEL:                  end(IDCANCEL); return;
-    case IDC_CHANGE_LIBRARY_FOLDER: change_library_folder(); return;
+    case IDC_BROWSE_LIBRARY_FOLDER: browse_library_folder(); return;
     case IDC_CHECK_FOR_UPDATES:     on_check_for_updates_(); return;
     default:                        return;
     }
 }
 
-void SettingsDialog::change_library_folder() {
+void SettingsDialog::browse_library_folder() {
     if (std::optional<std::filesystem::path> folder = pick_folder(hwnd(), L"Library folder", settings_.library_path)) {
         settings_.library_path = std::move(*folder);
         show_library_folder();

@@ -1,7 +1,6 @@
 #include "ui/inspector/SourceLink.h"
 
 #include <cstddef>
-#include <format>
 #include <utility>
 
 #include "platform/win32/Win32Error.h"
@@ -25,10 +24,6 @@ const wchar_t* source_name(core::SourceType type) {
     return L"";
 }
 
-const wchar_t* open_text(core::SourceType type) {
-    return type == core::SourceType::Spotify ? L"Open track" : L"Open";
-}
-
 }
 
 SourceLink::SourceLink(HWND parent, std::function<void()> on_click) :
@@ -43,10 +38,9 @@ void SourceLink::apply_dpi(framework::Dpi dpi, const framework::MessageFont& fon
 }
 
 void SourceLink::set_source(core::SourceType type) {
-    std::wstring name = std::format(L"{} · ", source_name(type));
-    platform::win32::check(SetWindowTextW(hwnd(), std::format(L"{}{}", name, open_text(type)).c_str()), "SetWindowTextW");
-    name_.set(source_logo_icon(type), std::move(name));
-    link_.set_text(open_text(type));
+    platform::win32::check(SetWindowTextW(hwnd(), source_name(type)), "SetWindowTextW");
+    name_.set(source_logo_icon(type), L"");
+    link_.set_text(source_name(type));
     layout();
 }
 

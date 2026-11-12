@@ -89,7 +89,7 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
 void TrackCard::set_contents(const TrackDetails& track) {
     title_.set_text(track.row.title);
     artists_.set_text(track.row.artists);
-    album_.set_text(track.row.album.empty() ? L"Album is read when it downloads" : track.row.album);
+    album_.set_text(track.row.album.empty() ? L"No album yet" : track.row.album);
     if (track.row.duplicate_of) {
         status_.set(IDI_DUPLICATE, row_status_word(track.row));
         explanation_.set_text(duplicate_explanation(*track.row.duplicate_of));

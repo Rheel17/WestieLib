@@ -15,7 +15,7 @@ void FetchFailureNotice::update(const std::vector<PlaylistRow>& rows) {
         Failure failure{row.key, *row.fetch_failed_at};
         if (!dismissed_.contains(failure)) {
             shown_ = std::move(failure);
-            message_ = std::format(L"Couldn’t fetch “{}”. It may be private or deleted.", row.name);
+            message_ = std::format(L"Couldn't fetch \"{}\". It may be private or deleted.", row.name);
             return;
         }
     }

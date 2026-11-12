@@ -342,8 +342,9 @@ The cover art comes from the first of:
 - `tools` has one entry per download, keyed by its name. The ffmpeg entry covers `ffmpeg.exe` and `ffprobe.exe`,
   which come from one archive. `digest` is the downloaded asset's.
 - `checkedAt` is when the releases were last looked up for an update, and is left out until then.
-- `ToolsStore` (`src/core/tools/`) reads and writes it through `FileOps`, in the same way as `SettingsStore`: pretty-printed,
-  unknown keys skipped. A file that doesn't read counts as no file, because the tools can always be downloaded again.
+- `ToolsStore` (`src/core/tools/`) reads and writes it through `FileOps`, in the same way as `SettingsStore`:
+  pretty-printed, unknown keys skipped. A file that doesn't read counts as no file, because the tools can always be
+  downloaded again.
 
 ## Platform services
 
@@ -391,7 +392,8 @@ A named mutex makes WestieLib single-instance, so exactly one process writes the
 ### RemoteConfig
 
 `RemoteConfig` fetches `https://raw.githubusercontent.com/Rheel17/WestieLib/main/config/remote.json` at startup and
-caches it as `remote.json`. A compiled-in default is used until the first successful fetch. It carries the Spotify GraphQL operation name and persisted-query hash:
+caches it as `remote.json`. A compiled-in default is used until the first successful fetch. It carries the Spotify
+GraphQL operation name and persisted-query hash:
 
 ```json
 {
@@ -445,9 +447,9 @@ download there until the next one.
 
 **Tool folder.** `ToolFolder` (`src/core/tools/`) knows the tools folder and each tool's files, and holds a
 `std::shared_mutex` per download. Whatever runs a tool holds the shared lock for as long as the process runs
-(`lock_for_use`), and `ToolInstaller` holds the exclusive one while it moves the new files in (`lock_for_replace`). So an
-update waits for running tools to end, and a tool never starts halfway through an update. `main.cpp` makes it, and hands
-it to ToolManager and to the components that run tools.
+(`lock_for_use`), and `ToolInstaller` holds the exclusive one while it moves the new files in (`lock_for_replace`). So
+an update waits for running tools to end, and a tool never starts halfway through an update. `main.cpp` makes it, and
+hands it to ToolManager and to the components that run tools.
 
 **yt-dlp.** `YtDlp` (`src/core/tools/`) runs yt-dlp through `ProcessRunner` under `lock_for_use`, always with
 `--ignore-config`, so a user's own yt-dlp configuration can't change its output. Without the executable it throws
@@ -624,8 +626,8 @@ the Matcher:
    One answer, about 0.5 to 1.7 s, holds some 20 songs. Each `musicResponsiveListItemRenderer` in a
    `musicShelfRenderer` gives `playlistItemData.videoId`, the title (column 0's runs), and column 1's runs, which
    ` • ` splits into the artists (separated by `, ` and ` & ` runs), the album, and the length (`m:ss`). Its `badges`
-   hold `MUSIC_EXPLICIT_BADGE` for an explicit song. An answer without a shelf has no results. `WESTIELIB_YTMUSIC_API` replaces `https://music.youtube.com`; the UI checks point
-   it at their fake server.
+   hold `MUSIC_EXPLICIT_BADGE` for an explicit song. An answer without a shelf has no results. `WESTIELIB_YTMUSIC_API`
+   replaces `https://music.youtube.com`; the UI checks point it at their fake server.
 3. **Facts.** Each song brings its title, artists, album, length and explicit flag. A YouTube Music source from a
    playlist has no album and no explicit flag; a stored match keeps those of the result it came from.
 4. **Words** (`MatchWords`). `TextNormalizer` lowercases the text and drops accents (NFKD without its marks). Then:
@@ -732,10 +734,10 @@ the Matcher:
 `MatchEvidence`, `MatchJudgement` and `MatchRank` are pure logic, which the unit checks hold against real cases
 (`docs/testing.md`).
 
-For the track card's list of doubts, `version_difference` (`MatchEvidence`) gives the version words only one of two titles
-has, as that title writes them and in its order, each once: `Korean` for `Love U Like That - Korean Version` against
-`Love U Like That`, `feat.` and `DaBaby` for `Levitating (feat. DaBaby)` against `Levitating`. It takes the titles and
-artists the match stores, so the UI never parses a title.
+For the track card's list of doubts, `version_difference` (`MatchEvidence`) gives the version words only one of two
+titles has, as that title writes them and in its order, each once: `Korean` for `Love U Like That - Korean Version`
+against `Love U Like That`, `feat.` and `DaBaby` for `Levitating (feat. DaBaby)` against `Levitating`. It takes the
+titles and artists the match stores, so the UI never parses a title.
 
 **The library first.** YouTube Music keeps one recording under several video ids (a single, an album, a re-release),
 and a playlist can swap one for another. So a Spotify track and the YouTube Music playlist entry of the same song
@@ -845,9 +847,10 @@ The Tagger also re-tags finished library files in place, after `editTrack` and a
 
 The Library places finished files and handles the library folder as a whole.
 
-- **File names.** `<ARTIST> - <TITLE>.<opus|flac>`, built from the effective metadata. Characters `<>:"/\|?*` and control characters become `_`, trailing dots
-  and spaces are trimmed, reserved device names (`CON`, `NUL`, `COM1`, ...) get a `_` suffix, and names are capped at
-  200 characters. A name that already belongs to another track gets ` (2)`, ` (3)`, ... appended.
+- **File names.** `<ARTIST> - <TITLE>.<opus|flac>`, built from the effective metadata. Characters `<>:"/\|?*` and
+  control characters become `_`, trailing dots and spaces are trimmed, reserved device names (`CON`, `NUL`, `COM1`, ...)
+  get a `_` suffix, and names are capped at 200 characters. A name that already belongs to another track gets ` (2)`,
+  ` (3)`, ... appended.
 - **Placement.** The tagged file moves from `work\` into the library with `MoveFileExW`, so the library only ever
   contains complete files.
 - **Rename.** When `editTrack` or a merge changes the effective artists or title, the file is renamed with the
@@ -869,8 +872,8 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
    - A new source becomes a new `pending` track with `addedAt`. The exception is a new YouTube Music source
      whose video already belongs to a track: it joins that track (see Merging).
    - On failure, the playlist gets `fetchError` / `fetchErrorAt` and keeps its previous source list, plus the pages
-     a Spotify fetch read before it failed, so none of its tracks become orphans. The engine emits `PlaylistFetchFailed`, and the run continues with the other
-     playlists.
+     a Spotify fetch read before it failed, so none of its tracks become orphans. The engine emits
+     `PlaylistFetchFailed`, and the run continues with the other playlists.
 2. **Orphans.** `downloaded` tracks with no source in any playlist become `orphaned`. The engine emits one
    `RemovalsPending` event with all of them.
 3. **Queue.** All `pending` and `failed` tracks are queued in playlist order. Workers start tracks
@@ -915,13 +918,14 @@ downloads yet.
   and the pruning to the end, so no track leaves a playlist halfway. Then the run emits `PlaylistPageFetched`.
 - A failed fetch stores `fetchError` / `fetchErrorAt` and emits `PlaylistFetchFailed`; the run goes on. The pages a
   Spotify fetch read before it failed stay, beside the playlist's earlier sources.
-- Without yt-dlp, a YouTube Music fetch emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs it
-  (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
+- Without yt-dlp, a YouTube Music fetch emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs
+  it (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
 - Once no playlist is left to fetch, the run first merges what the library matches (Matcher › The library first), in
-  one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match` (`TracksToMatch.cpp`) lists the tracks that
-  are `pending` or `failed`, have no override and no YouTube Music source, and whose first Spotify source has no match, in playlist
-  order (playlists by `addedAt`, then their sources), each once. The run emits `TracksQueued` with the ones it hasn't
-  queued yet, and matches them one at a time, saving after each:
+  one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match`
+  (`TracksToMatch.cpp`) lists the tracks that are `pending` or `failed`, have no override and no YouTube Music source,
+  and whose first Spotify source has no match, in playlist order (playlists by `addedAt`, then their sources), each
+  once. The run emits `TracksQueued` with the ones it hasn't queued yet, and matches them one at a time, saving after
+  each:
   - `apply_match` (`ApplyMatch.cpp`) stores the match, clears a failure (a failed track waits again), and merges the
     track into the one that already has that video (`track_with_video`, `merge_tracks`), unless the match needs
     review. The run emits `TracksMerged`, or `TrackStatusChanged`.

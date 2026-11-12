@@ -17,7 +17,7 @@ LastSyncLine last_sync_line(const PlaylistRow& row, std::chrono::system_clock::t
     }
 
     if (row.fetch_failed_at) {
-        std::wstring synced = row.last_sync ? L" · synced " + relative_day_text(*row.last_sync, now) : L"";
+        std::wstring synced = row.last_sync ? L", synced " + relative_day_text(*row.last_sync, now) : L"";
         return {.mark = SyncMark::FetchFailed, .warning = L"Couldn't fetch", .text = std::move(synced)};
     }
     std::wstring text = row.last_sync ? L"Synced " + relative_day_text(*row.last_sync, now) : L"Never synced";

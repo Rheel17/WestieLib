@@ -69,7 +69,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - So far it covers the Matcher's rules (`plan/arch.md`, Matcher): the words (`MatchWordsChecks`), title parts
   (`TitlePartsChecks`), names and credits (`NameChecks`), and in `JudgementChecks` a table of real cases from the
   user's library, the Spotify track against what YouTube Music listed, each with the verdict and doubts it must
-  get, then the confidences, the ranking of candidates, and the words `version_difference` gives the track card's doubt list.
+  get, then the confidences, the ranking of candidates, and the words `version_difference` gives the track card's doubt
+  list.
 - A rule change starts there: add the case that shows it, with the verdict it should get, and keep the rest passing.
   The Win32 normalizer runs for real, so the checks see the same words the app does.
 
@@ -94,19 +95,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
     `enableWatchFeedEntrypoint`, 401 without the playlist's token, `PersistedQueryNotFound` for `ErrorQueryIds`, the
     page of `SpotifyItems` that `offset` and `limit` ask for, and `NotFound` for ids without items. Pages after the
     first wait while `SpotifyPageGate` is reset, so the `sync` suite can look at the app between pages and cancel there.
-    `SpotifyFailures` makes the query for `"<playlist id> <offset>"` answer HTTP 500 that many more times. `Track`, `Episode`
-    and `LocalFile` build those items, with fields the app doesn't read too (`Track` takes an explicit flag as a last
-    argument, which sets `contentRating`), and `SpotifyQueries()` lists the queries
-    it got with their headers. Given a `YtDlp` to serve, it also answers yt-dlp's latest release on GitHub's API (other
-    repositories get 404), and holds the download back until `AssetGate` is set.
+    `SpotifyFailures` makes the query for `"<playlist id> <offset>"` answer HTTP 500 that many more times. `Track`,
+    `Episode` and `LocalFile` build those items, with fields the app doesn't read too (`Track` takes an explicit flag as
+    a last argument, which sets `contentRating`), and `SpotifyQueries()` lists the queries it got with their headers.
+    Given a `YtDlp` to serve, it also answers yt-dlp's latest release on GitHub's API (other repositories get 404), and
+    holds the download back until `AssetGate` is set.
   - `WESTIELIB_YTMUSIC_API` points at `FakeWeb` too, which answers YouTube Music's search
     (`POST /youtubei/v1/search`) in its shape, and HTTP 400 without the songs filter. A query gets the songs
     `YtmResults` lists for it (built with `Song`, whose explicit flag as a last argument adds the explicit badge; an
     empty list for no results), HTTP 500 when it is in `YtmBrokenQueries`, or else, when it is `"<artists> <title>"` of
-    an item `Track` built, that song as video `yt<track id>`, as explicit as the track; anything else has no results. So a check that only fetches Spotify playlists sees their tracks
-    matched and Waiting. `YtmQueries()` lists the searches, and each waits for `YtmGate`, which the `sync` suite
-    resets to look at the app while it matches and to cancel there. `Reset-Checks` empties both query lists
-    (`ForgetQueries`), so a suite sees only its own.
+    an item `Track` built, that song as video `yt<track id>`, as explicit as the track; anything else has no results. So
+    a check that only fetches Spotify playlists sees their tracks matched and Waiting. `YtmQueries()` lists the
+    searches, and each waits for `YtmGate`, which the `sync` suite resets to look at the app while it matches and to
+    cancel there. `Reset-Checks` empties both query lists (`ForgetQueries`), so a suite sees only its own.
   - The fake yt-dlp is a C# console program the script compiles (`lib/FakeYtDlp.cs`, with
     `Add-Type -OutputType ConsoleApplication`). It answers a playlist look-up (`--playlist-items 0`) and a fetch by
     the list id (the file lists them): songs for `PLtracks…` and `PLshared…`, which share one, with a ` - Topic`
@@ -118,10 +119,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   file or its backup would race.
 - A sync enables Cancel until it ends (`Test-Syncing`). The `sync` suite waits for one with `Wait-Fetches`: first until
   the fake yt-dlp has logged the fetches it expects, which comes after the window knows of the sync, then until Cancel
-  grays; with `-Spotify` it counts FakeWeb's Spotify queries instead. `Get-TrackRows` reads the table's rows through `ListViewRow`, and `Get-SavedPlaylistSync`,
-  `Get-SavedSources` and `Get-SavedTracks` read state.json, as do `Get-SavedMatches` and `Get-SavedJudgements` (the
-  matches with their confidence and doubts). They all read through `Get-SavedState`, which tries again for a moment
-  while the app is replacing the file.
+  grays; with `-Spotify` it counts FakeWeb's Spotify queries instead. `Get-TrackRows` reads the table's rows through
+  `ListViewRow`, and `Get-SavedPlaylistSync`, `Get-SavedSources` and `Get-SavedTracks` read state.json, as do
+  `Get-SavedMatches` and `Get-SavedJudgements` (the matches with their confidence and doubts). They all read through
+  `Get-SavedState`, which tries again for a moment while the app is replacing the file.
 - `Select-TrackRow` selects a table row with Home and Down (`WM_KEYDOWN`), not a click: the list checks a sent click
   against the real cursor, which is elsewhere, starts a drag, and the drag then takes the next click on a header.
   `Get-SelectedRows` lists the selected rows (`LVM_GETNEXTITEM`). `Choose-Source`, `Click-Tab` and `Click-Header`
@@ -226,15 +227,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - `Click-PlaylistRow` and `Click-AllTracks` send `WM_LBUTTONDOWN` and `WM_LBUTTONUP` (`Send-Click`), and
   `Press-ListKey` sends `WM_KEYDOWN` to the list, which acts on it whether or not it has the focus. `FocusOf` tells
   which window has the focus on the app's thread (`GetGUIThreadInfo`).
-- The inspector shows one card at a time, a panel named `Library card`, `Playlist card`, `Track card`
-  or `Selection card`
-  (`Get-InspectorCard`), or none on the first run. It follows the table's selection on a posted message, so after
-  selecting rows read it with `Wait-CardTexts`, which waits for the card it's given. From one track to another the
-  card's name stays, so the `sync` suite's `Wait-TrackCard` waits for the track's key instead; while the inspector
-  swaps cards, for a moment no card shows. `TextOf` and `RectIn` read another process's windows without waiting for its
-thread, so a read can come halfway through a layout; `Wait-TrackCard` (in `lib/Checks.ps1`, since both the `sync`
-and `choose-video` suites use it) waits until two reads agree. `Get-CardTexts` lists the card's name and its windows' texts from the top, left to right
-  within a row, and `Get-CardLayout` gives where the card, its title, its values and its buttons sit.
+- The inspector shows one card at a time, a panel named `Library card`, `Playlist card`, `Track card` or
+  `Selection card` (`Get-InspectorCard`), or none on the first run. It follows the table's selection on a posted
+  message, so after selecting rows read it with `Wait-CardTexts`, which waits for the card it's given. From one track
+  to another the card's name stays, so the `sync` suite's `Wait-TrackCard` waits for the track's key instead; while the
+  inspector swaps cards, for a moment no card shows. `TextOf` and `RectIn` read another process's windows without
+  waiting for its thread, so a read can come halfway through a layout; `Wait-TrackCard` (in `lib/Checks.ps1`, since
+  both the `sync` and `choose-video` suites use it) waits until two reads agree. `Get-CardTexts` lists the card's name
+  and its windows' texts from the top, left to right within a row, and `Get-CardLayout` gives where the card, its
+  title, its values and its buttons sit.
 - A context menu runs a modal loop, so post `WM_CONTEXTMENU` (`lparam` -1 for the keyboard's), then find the popup as
   the process's visible `#32768` window (`Wait-PopupMenu`). `MN_GETHMENU` gives its menu, which `Get-PopupItems`
   reads. The loop takes keys posted to any window of the app's thread: Esc closes it (`Close-PopupMenu`), an access
@@ -255,13 +256,14 @@ and `choose-video` suites use it) waits until two reads agree. `Get-CardTexts` l
 - The suites are dot-sourced into the runner's scope, so a suite's variables can overwrite the runner's: never name
   one `$before`, `$results`, `$name` or `$chosen`.
 - A TaskDialog's buttons aren't child windows. Post it `TDM_CLICK_BUTTON` (`WM_USER + 102`) with the button's id.
-- The checks never run Open in browser, the playlist card's link, a track card's `Open` links, Open library folder or
-  Copy URL: they would open a
-  browser or Explorer on the user's screen, or replace what's on their clipboard. Try those by hand.
+- The checks never run Open in browser, the playlist card's link, a track card's source links, Open library folder or
+  Copy link: they would open a browser or Explorer on the user's screen, or replace what's on their clipboard. Try
+  those by hand.
 - Blinking during a splitter drag only shows on screen: `PrintWindow` paints the window afresh, so it never catches a
   window between an erase and a paint. `WatchDrag` drags a splitter while a second thread keeps copying an area of
   the screen (`CopyFromScreen`, which returns what DWM composed), and counts the captures that blinked. A steady area
   blinks when any pixel differs from the capture before the drag, and moving text blinks when it loses a tenth of its
-  dark pixels. It says `covered` when another window lies over the area, because the screen then shows that window instead.
+  dark pixels. It says `covered` when another window lies over the area, because the screen then shows that window
+  instead.
 - Keep the scripts ASCII. Windows PowerShell reads a `.ps1` without a BOM as ANSI, so a `…` in it turns into
   mojibake. In the `.cs` files, write such characters as `(char)0x2026`.

@@ -28,13 +28,13 @@ should contain and how it should behave is specified in `plan/ui.md`; this file 
 `WindowPlacement` (`WindowPlacement.cpp`) handles the window's bounds and maximized state; `MainWindow` hands it the
 saved `Placement` and asks it for the current one.
 
-1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/settings/`) with the defaults and loads the `Settings`;
-   a `settings.json` that doesn't read ends the app there. Then it makes the `StateStore` (`src/core/state/`), which
-   loads `state.json`; one that doesn't read ends the app too. The files live in `%LOCALAPPDATA%\WestieLib`, or in
-   the folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the `CoreEventQueue`, the
-   `ToolFolder`, the `ToolManager`, `YtDlp`, the `PlaylistLookup` and the `SyncEngine`, so they outlive the window.
-   `MainWindow` gets the settings store, the loaded settings, the state store, the queue, the tool manager, the
-   look-up and the sync engine, and makes itself the queue's target.
+1. Before the window, `main.cpp` makes the `SettingsStore` (`src/core/settings/`) with the defaults and loads the
+   `Settings`; a `settings.json` that doesn't read ends the app there. Then it makes the `StateStore`
+   (`src/core/state/`), which loads `state.json`; one that doesn't read ends the app too. The files live in
+   `%LOCALAPPDATA%\WestieLib`, or in the folder `WESTIELIB_DATA_DIR` names, which the UI checks use. Then it makes the
+   `CoreEventQueue`, the `ToolFolder`, the `ToolManager`, `YtDlp`, the `PlaylistLookup` and the `SyncEngine`, so they
+   outlive the window. `MainWindow` gets the settings store, the loaded settings, the state store, the queue, the tool
+   manager, the look-up and the sync engine, and makes itself the queue's target.
 2. The constructor creates the window hidden, creates its children, sets the icons and attaches the menu.
 3. If `load_window_state()` finds saved state, the constructor takes the `PanelState` from it and calls
    `WindowPlacement::restore`, which runs `SetWindowPlacement` with `SW_HIDE` and the saved normal bounds. Without
@@ -71,7 +71,7 @@ saved `Placement` and asks it for the current one.
   at `100%` (`measure_tools`, again after each new font), so it never changes width. The ring's 25 steps are icon
   resources from `IDI_RING_0`, loaded at 12 DIPs.
 - `MainStatusBar::set_run` takes the `SyncBoard` and the latest last sync, which `MainWindow::show_run` finds among the
-  rows. Run reads `Ready · last sync today 14:05` (`Ready` before any), `Syncing 1 of 2` while a sync fetches, with a
+  rows. Run reads `Synced today 14:05` (`Ready` before any), `Syncing 1 of 2` while a sync fetches, with a
   `framework::ProgressBar` that `StatusBar::embed` places against the part's right edge, or the ⧗ and `Waiting for
   yt-dlp` (`waiting_for_text`, `src/ui/sync/WaitingText.cpp`) while the fetch waits for it. A part without text starts
   with its icon.
@@ -101,10 +101,11 @@ saved `Placement` and asks it for the current one.
     card's button) the selected one, and Add playlist's `Sync now` the new one. `Cancel` calls `SyncEngine::cancel`.
   - It also counts the playlists the run was given and the ones it has done, for the status bar.
   - Every sync event brings the window up to date from a new snapshot (`show_playlists`), `PlaylistPageFetched` too,
-    so a Spotify playlist's tracks show page by page: `mark_runs` tells each
-    `PlaylistRow` whether it's queued or being fetched, and what it waits for.
+    so a Spotify playlist's tracks show page by page: `mark_runs` tells each `PlaylistRow` whether it's queued or being
+    fetched, and what it waits for.
   - A row's sync control (`PlaylistEvents::on_sync`) syncs its playlist. Like `Sync all`, it works only while nothing
-    syncs; `update_commands` tells the list so (`set_sync_enabled`).- **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠, the rule and the
+    syncs; `update_commands` tells the list so (`set_sync_enabled`).
+- **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠, the rule and the
   close box itself, and holds the message `Label` (on the strip's color, `LabelStyle::background`) and `Details`.
   Its window class has the yellow brush, which the themed button's corners show. `FetchFailureNotice` picks the
   message from the rows: the first playlist with a fetch error that wasn't dismissed. Dismissing remembers the
@@ -139,7 +140,8 @@ saved `Placement` and asks it for the current one.
     it scrolls (`follow_cursor`), because rows that move under a still mouse get no `WM_MOUSEMOVE`.
   - `MainWindow::select_playlist` stores the key, hands it back through `PlaylistPanel::show_selection`, which tells the
     All tracks row whether it's selected and the list which key is, and updates the commands (`playlist_selected`).
-    The list keeps the key, not an index, and scrolls the selected row into view with its gaps (`VerticalScroll::reveal`).
+    The list keeps the key, not an index, and scrolls the selected row into view with its gaps
+    (`VerticalScroll::reveal`).
   - `show_playlists` drops a selection whose playlist is gone, and `add_playlist` selects the playlist it added. The
     selection isn't saved, so every start begins on All tracks.
 - `MainWindow` keeps a `framework::FocusMemory`: on `WM_ACTIVATE` with `WA_INACTIVE` it notes which child had the
@@ -158,19 +160,19 @@ saved `Placement` and asks it for the current one.
   the time since it started out of 1.2 s (`IDI_SPIN_0` to `IDI_SPIN_0 + 11`, from `res/make-glyphs.ps1`). With
   Windows' animations off it stands still.
 - `playlist_rows` (`PlaylistRows.cpp`) turns the state into `PlaylistRow`s, in the order the playlists were added,
-  with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name, and each one's `TrackCounts`. `MainWindow::show_playlists`
-  hands them to the panel.
+  with `YouTube Music playlist` / `Spotify playlist` for a playlist without a name, and each one's `TrackCounts`.
+  `MainWindow::show_playlists` hands them to the panel.
 - `AllTracksRow` is a window that paints the row: its look (hover, pressed or selected), glyph, name in semibold, and
   the counts.
 - `InspectorPanel` (`src/ui/inspector/`) shows a card at the top of its padding, or nothing on the first run.
   `MainWindow::show_inspector` picks from the state and the selections: no playlists, one selected track
-  (`track_details`), several (`status_counts` of their rows), a selected playlist (`playlist_row`), or else All tracks. It asks `TrackPanel::selected_rows`
-  itself, so it's right even while a change of the table's selection is still on its way: `TrackTable` reports each
-  `LVN_ITEMCHANGED` of a row's selected state and each `LVN_ODSTATECHANGED`, and `TrackPanel` posts itself one
-  `SelectionChangedMessage` for a burst of them (selecting all, or `restore` after new rows), which then calls
-  `show_inspector`. It runs whenever one of those changes, and when
-  the library folder or the track counts (`track_counts_`) change. `update_commands` hands the inspector the
-  `CommandState`, so the cards' buttons follow the same rules as the menus.
+  (`track_details`), several (`status_counts` of their rows), a selected playlist (`playlist_row`), or else All tracks.
+  It asks `TrackPanel::selected_rows` itself, so it's right even while a change of the table's selection is still on its
+  way: `TrackTable` reports each `LVN_ITEMCHANGED` of a row's selected state and each `LVN_ODSTATECHANGED`, and
+  `TrackPanel` posts itself one `SelectionChangedMessage` for a burst of them (selecting all, or `restore` after new
+  rows), which then calls `show_inspector`. It runs whenever one of those changes, and when the library folder or the
+  track counts (`track_counts_`) change. `update_commands` hands the inspector the `CommandState`, so the cards' buttons
+  follow the same rules as the menus.
   - `LibraryCard`, `PlaylistCard` and `TrackCard` are panels of `Label`s, `Button`s and small windows that paint
     themselves: `IconText` (a 16 px glyph and a line of text, with the gap and line height its style gives: the card
     titles, the track's status), `SectionTitle` (semibold text and the rule after it), `SyncedValue`
@@ -178,20 +180,21 @@ saved `Placement` and asks it for the current one.
     (`paint_fraction_bar`, the same bar for a match's confidence, then the percentage), `LengthValue` (the video's
     length, amber when it is more than 5 s off, then the Spotify length in gray), `OutputBox` (a bordered box of
     Consolas text, `FontSet::code`, that wraps), `CoverArt` (the track's cover, so far the placeholder), `SourceLink`
-    (an `IconText` with the source's logo and name, and an `Open` link), and `framework::LinkLabel`s. Every window's
+    (an `IconText` with the source's logo, then its name as a `LinkLabel`), and `framework::LinkLabel`s. Every window's
     text is what it shows, so the checks read the cards with `GetWindowTextW`.
   - `CardLayout` holds the measures from `plan/ui.md` (Inspector › Nothing selected) and stacks a card's parts from
     the top: title, subtitle, section, key–value rows and a row of buttons that wraps. `row_if` hides a row that isn't
     there, such as the playlist card's `Waiting`, `Failed` (red), `To review` (amber) and `Shared`, which show only
-    when they aren't zero. `Shared` counts the playlist's tracks that other playlists of its source list too. A card runs the same `arrange`
-    to place its children on `WM_SIZE` and, without `DeferredPositions`, to measure `height_for(width)`.
+    when they aren't zero. `Shared` counts the playlist's tracks that other playlists of its source list too. A card
+    runs the same `arrange` to place its children on `WM_SIZE` and, without `DeferredPositions`, to measure
+    `height_for(width)`.
   - The panel is `WS_VSCROLL` with a `framework::VerticalScroll`. Its content is the card's height plus the padding;
     scrolling moves the card window, not its children. Another card, or the same card for another track or
     playlist (`subject_`), starts at the top; a refresh of the same one keeps the scroll position.
   - `TrackCard` shows a `TrackDetails` (`track_details`): the table's `TrackRow`, the page of the first source of
     each kind (`core::source_page_url`), the playlists that list the track, in the left panel's order, its video
     (`core::resolved_video`, and who chose it), the first Spotify source's match, and a failure with the last two
-    lines of its error. Its links go through `InspectorEvents`: a source's `Open` and the video to `on_open_url`, a
+    lines of its error. Its links go through `InspectorEvents`: a source's name and the video to `on_open_url`, a
     playlist to `on_select_playlist`, which selects it as a click on its row does. The Audio section is an
     `AudioRows`: not a window, but the windows of its rows, which it creates on the card and places with the card's
     `CardLayout`.
@@ -252,11 +255,10 @@ saved `Placement` and asks it for the current one.
   `playlist_type_text` (`src/ui/PlaylistTypeText.cpp`) gives the source's name and `source_logo_icon`
   (`src/ui/SourceLogo.cpp`) its logo.
 - The line under the link is an `SS_OWNERDRAW` static that `paint_link_line` (`LinkLinePainter.cpp`) draws in
-  `WM_DRAWITEM`, loading the icon at the static's DPI, or drawing the spinner at that size. It draws into a memory bitmap
-  and copies that in one `BitBlt`, so the text doesn't blink as the spinner turns. A found name gives way to the
-  source's name, which stays whole.
-  The static's window text is the line's text with the source's name after a space, for screen readers and the UI
-  checks. `Add` is enabled only for a new playlist that was found.
+  `WM_DRAWITEM`, loading the icon at the static's DPI, or drawing the spinner at that size. It draws into a memory
+  bitmap and copies that in one `BitBlt`, so the text doesn't blink as the spinner turns. A found name gives way to the
+  source's name, which stays whole. The static's window text is the line's text with the source's name after a space,
+  for screen readers and the UI checks. `Add` is enabled only for a new playlist that was found.
 - On `Add` the dialog returns an `AddPlaylistRequest` with the found name. `core::add_playlist` stores it through
   `StateStore::update`, which saves `state.json` (keeping `state.json.bak`). Closing the dialog stops the look-up.
   With `Sync now`, the new playlist then goes to the `SyncEngine`.
@@ -268,9 +270,9 @@ saved `Placement` and asks it for the current one.
 ## Welcome screen
 
 - `WelcomePanel` (`src/ui/welcome/`) is the main column while there are no playlists; `layout_panels` hides the
-  `TrackPanel` meanwhile, and the other way round once there are. It paints the app icon and lays out its labels, the `LibraryFolderField` and the default
-  `Add your first playlist` button in one centered column. The button's click goes to `run_command`, as in the side
-  panels.
+  `TrackPanel` meanwhile, and the other way round once there are. It paints the app icon and lays out its labels, the
+  `LibraryFolderField` and the default `Add your first playlist` button in one centered column. The button's click goes
+  to `run_command`, as in the side panels.
 - `LibraryFolderField` is a panel with the `Edit`, `Browse…` and the hint `Label` under them. It keeps the folder in
   effect.
   - Text goes through `check_library_folder` (`LibraryFolderCheck.cpp`). That function cleans the text up with
@@ -290,9 +292,9 @@ saved `Placement` and asks it for the current one.
 
 ## Main panel
 
-`TrackPanel` (`src/ui/tracks/`) is the main column once there are playlists. From the top it stacks the `FilterBar`, the `StatusFilter` strip, the result line (a
-gray `Label`) and the `TrackTable`, with the paddings from `plan/ui.md` (Main panel), and paints the hairline above
-the table itself, through `BufferedPaint`.
+`TrackPanel` (`src/ui/tracks/`) is the main column once there are playlists. From the top it stacks the `FilterBar`, the
+`StatusFilter` strip, the result line (a gray `Label`) and the `TrackTable`, with the paddings from `plan/ui.md` (Main
+panel), and paints the hairline above the table itself, through `BufferedPaint`.
 
 - `FilterBar` is a panel with the search `Edit` (its cue banner, and the magnifier, an `IconView` inside the edit),
   the `Source` label (one line tall and centered, so its text stands level with the search field's), the `ComboBox` and

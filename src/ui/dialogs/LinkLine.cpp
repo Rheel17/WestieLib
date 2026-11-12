@@ -25,7 +25,7 @@ LinkLine link_line(const PlaylistLinkCheck& check, const LookupStatus& lookup) {
     int logo = source_logo_icon(check.link->type);
     std::wstring source = playlist_type_text(check.link->type);
     switch (lookup.state) {
-    case LookupState::WaitingForTools: return {.icon = IDI_TOOL_WAIT, .text = L"Waiting for required tools to be installed…", .gray = true};
+    case LookupState::WaitingForTools: return {.icon = IDI_TOOL_WAIT, .text = L"Waiting for yt-dlp", .gray = true};
     case LookupState::LookingUp:       return {.spinner = true, .text = std::format(L"Looking up the {}…", source), .gray = true};
     case LookupState::Found:           return {.icon = logo, .text = platform::win32::to_utf16(lookup.name), .source = std::move(source)};
     case LookupState::Unavailable:     return {.icon = IDI_WARN, .text = L"This playlist doesn't exist or is private."};

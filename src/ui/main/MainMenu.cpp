@@ -59,7 +59,7 @@ constexpr std::array ToolsItems = {
     command_item(CommandId::CheckForUpdates, L"Check for &updates"),
     framework::MenuSeparator,
     command_item(CommandId::RebuildLibrary, L"&Rebuild library from files…"),
-    command_item(CommandId::RelocateLibrary, L"Library folder &moved…"),
+    command_item(CommandId::RelocateLibrary, L"Locate library &folder…"),
     framework::MenuSeparator,
     command_item(CommandId::OpenLogFolder, L"Open &log folder"),
 };

@@ -23,7 +23,7 @@ bool confirm_remove_playlist(HWND owner, std::wstring_view name) {
     config.dwCommonButtons = TDCBF_CANCEL_BUTTON;
     config.pszWindowTitle = L"Remove playlist";
     config.pszMainInstruction = instruction.c_str();
-    config.pszContent = L"Synced tracks will not be deleted from your library.";
+    config.pszContent = L"Its synced files stay in the library.";
     config.cButtons = 1;
     config.pButtons = &remove;
     // Cancel is the default, so a stray Enter keeps the playlist

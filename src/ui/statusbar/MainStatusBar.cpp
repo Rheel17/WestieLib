@@ -100,7 +100,7 @@ void MainStatusBar::set_run(const SyncBoard& board, std::optional<std::chrono::s
     constexpr int Run = std::to_underlying(Part::Run);
     run_bar_shown_ = false;
     if (!board.running()) {
-        std::wstring text = last_sync ? L"Ready · last sync " + relative_day_text(*last_sync, std::chrono::system_clock::now()) : L"Ready";
+        std::wstring text = last_sync ? L"Synced " +relative_day_text(*last_sync, std::chrono::system_clock::now()) : L"Ready";
         status_bar_.set_text(Run, std::move(text));
     } else if (!board.waiting_for().empty()) {
         // The playlists are fetched one after another, so everything left waits with the one being fetched

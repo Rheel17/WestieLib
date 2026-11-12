@@ -25,7 +25,7 @@ void LengthValue::set_font(HFONT font) {
 
 void LengthValue::set_lengths(std::chrono::milliseconds video, std::chrono::milliseconds source) {
     video_ = duration_text(video);
-    source_ = std::format(L" · Spotify {}", duration_text(source));
+    source_ = std::format(L" (Spotify {})", duration_text(source));
     platform::win32::check(SetWindowTextW(hwnd(), (video_ + source_).c_str()), "SetWindowTextW");
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }

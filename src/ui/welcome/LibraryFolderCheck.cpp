@@ -26,7 +26,7 @@ std::wstring hint_text(FolderHint hint, const std::filesystem::path& default_fol
     case FolderHint::NotFullPath:   return std::format(L"Enter a full folder path, such as {}.", default_folder.native());
     case FolderHint::NoSuchDrive:   return L"That drive isn't on this PC.";
     case FolderHint::NotAFolder:    return L"That's a file, not a folder.";
-    case FolderHint::WillBeCreated: return L"This folder doesn't exist yet. WestieLib creates it when it first syncs.";
+    case FolderHint::WillBeCreated: return L"This folder doesn't exist yet. The first sync creates it.";
     default:                        return {};
     }
 }

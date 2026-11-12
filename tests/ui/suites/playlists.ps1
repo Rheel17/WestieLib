@@ -236,9 +236,8 @@ function Get-CardLayout($hwnd) {
 # between them. Ends on the card of row 1.
 function Check-Cards($hwnd) {
 	$folder = if (Test-Path $SettingsFile) { (Get-Content $SettingsFile -Raw | ConvertFrom-Json).libraryPath } else { $DefaultLibrary }
-	$dot = [char]0xB7
 	Click-AllTracks $hwnd
-	Check 'All tracks: inspector' (Get-CardTexts $hwnd) "Library card: All tracks / Library / Folder / $folder / Tracks / 0 tracks $dot 0 synced / Open library folder"
+	Check 'All tracks: inspector' (Get-CardTexts $hwnd) "Library card: All tracks / Library / Folder / $folder / Tracks / 0 tracks, 0 synced / Open library folder"
 	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 82) | buttons "
 	if ($Screenshot) { Save-Screenshot $hwnd ("$($Screenshot -replace '\.png$', '')-library.png") }
 	Click-PlaylistRow $hwnd 1
@@ -262,7 +261,7 @@ function Check-Cards($hwnd) {
 	Press-ListKey $hwnd 0x28
 }
 
-$PlaylistMenuItems = '&Sync, &Open in browser, &Copy URL, -, &Remove playlist...'
+$PlaylistMenuItems = '&Sync, &Open in browser, &Copy link, -, &Remove playlist...'
 
 # A right-click on a row selects it first and opens the playlist menu where it was clicked, with every item enabled.
 # Shift+F10 sends (-1, -1), and opens it at the selected row's bottom-left corner; with All tracks selected it shows

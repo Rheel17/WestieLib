@@ -68,7 +68,7 @@ void AudioRows::set_contents(const TrackDetails& track) {
         chosen_.set_text(chooser_text(track.video->chosen_by));
     } else {
         bool no_match = track.failure == core::TrackFailure::NoMatch;
-        no_video_.set_text(no_match ? L"No match found" : L"Chosen when it downloads");
+        no_video_.set_text(no_match ? L"No match found" : L"Not chosen yet");
         no_video_.set_color(no_match ? framework::TextColor::Error : framework::TextColor::Gray);
     }
     if (track.match) {
@@ -76,7 +76,7 @@ void AudioRows::set_contents(const TrackDetails& track) {
         artists_.set_text(track.match->artists);
         length_.set_lengths(track.match->duration, track.match->source_duration);
         confidence_.set_confidence(track.match->confidence, track.row.status == StatusTab::NeedsReview);
-        spotify_match_.set_text(std::format(L"Same ID · {}%", std::lround(track.match->confidence * PercentPerWhole)));
+        spotify_match_.set_text(std::format(L"Same ID ({}%)", std::lround(track.match->confidence * PercentPerWhole)));
     }
 }
 

@@ -31,7 +31,7 @@
 #define IDI_DUPLICATE             62
 #define IDD_SETTINGS              100
 #define IDC_LIBRARY_FOLDER        1000
-#define IDC_CHANGE_LIBRARY_FOLDER 1001
+#define IDC_BROWSE_LIBRARY_FOLDER 1001
 #define IDC_VERSION               1002
 #define IDC_TOOLS                 1003
 #define IDC_AUTO_UPDATE_TOOLS     1004

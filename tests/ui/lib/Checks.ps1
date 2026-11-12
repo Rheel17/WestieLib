@@ -450,7 +450,7 @@ $Web.SpotifyNames[$SlowSpotifyId] = 'Sunday Social'
 $YouTubeLink = 'https://music.youtube.com/playlist?list=PLx9k2_-Ab'
 $YouTubeName = "Caf$([char]0xE9) Check Mix"
 $NotSupported = 'Not a supported playlist link'
-$WaitingForTools = "Waiting for required tools to be installed$Ellipsis"
+$WaitingForTools = 'Waiting for yt-dlp'
 $Unavailable = 'This playlist doesn''t exist or is private.'
 $SpotifyFound = "$SpotifyName Spotify playlist"
 $YouTubeFound = "$YouTubeName YouTube Music playlist"
@@ -533,7 +533,6 @@ function Write-ManyPlaylists([int]$count) {
 	[IO.File]::WriteAllText($StateFile, '{"version": 1, "playlists": {' + ($entries -join ', ') + '}}')
 }
 
-$MiddleDot = [char]0xB7
 # The track card's button
 $ChooseMatch = "Choose match$Ellipsis"
 $Bullet = [char]0x2022

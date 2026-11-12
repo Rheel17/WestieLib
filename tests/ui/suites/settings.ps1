@@ -1,10 +1,10 @@
-# The Settings dialog, the library folder (the welcome screen's field, Browse, and Settings' Change...), and
+# The Settings dialog, the library folder (the welcome screen's field, Browse, and Settings' Browse...), and
 # settings.json: what is saved when, and a file that doesn't read. Dot-sourced by ui-checks.ps1.
 
 $HintNotFullPath = "Enter a full folder path, such as $DefaultLibrary."
 $HintNoSuchDrive = "That drive isn't on this PC."
 $HintNotAFolder = "That's a file, not a folder."
-$HintWillBeCreated = "This folder doesn't exist yet. WestieLib creates it when it first syncs."
+$HintWillBeCreated = "This folder doesn't exist yet. The first sync creates it."
 # Folders no test leaves behind: they're only typed, never created
 $Unique = [guid]::NewGuid().ToString('N').Substring(0, 8)
 $MissingFolder = "C:\WestieLib-check-$Unique"
@@ -123,7 +123,7 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 			Check '  the folder in effect, read-only' "$([W]::EditText($edit)) $readOnly" "$folder True"
 			$version = @([W]::Children($dialog, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like 'WestieLib *' })
 			Check '  the version' ($version -join ', ') "WestieLib $((Get-Item $Exe).VersionInfo.ProductVersion)"
-			Check '  starts on Change, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Change$([char]0x2026) 0"
+			Check '  starts on Browse, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Browse$([char]0x2026) 0"
 			$pattern = "yt-dlp \|  \| Failed: $LookupFailure / ffmpeg \|  \| Failed: $LookupFailure \| auto 1 \| Never checked \| check True"
 			$actual = Get-SettingsTools $dialog
 			Check-That '  tools, none installed' $actual ($actual -match "^$pattern$") $pattern
@@ -135,7 +135,7 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 	}
 }
 
-# Settings starts from a folder typed into the welcome field but not yet in effect. Change... opens the picker over the
+# Settings starts from a folder typed into the welcome field but not yet in effect. Browse... opens the picker over the
 # dialog, and a picked folder shows in the dialog at once but takes effect only on OK.
 function Check-SettingsLibraryFolder($hwnd) {
 	$music = [Environment]::GetFolderPath('MyMusic')
@@ -146,17 +146,17 @@ function Check-SettingsLibraryFolder($hwnd) {
 	Send-Command $hwnd '&Settings...'
 	$dialog = Wait-OwnedWindow $hwnd
 	$edit = ([W]::Children($dialog, 'Edit'))[0]
-	$change = [W]::GetDlgItem($dialog, 1001)
+	$browse = [W]::GetDlgItem($dialog, 1001)
 	Check 'Settings, with a folder typed into the field' ([W]::EditText($edit)) $typed
 
-	[void][W]::PostMessageW($change, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	[void][W]::PostMessageW($browse, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	$picker = Wait-OwnedWindow $dialog
-	Check '  Change opens the picker over the dialog' "$([W]::ClassOf($picker)) $([W]::TextOf($picker))" '#32770 Library folder'
+	Check '  Browse opens the picker over the dialog' "$([W]::ClassOf($picker)) $([W]::TextOf($picker))" '#32770 Library folder'
 	[void][W]::PostMessageW($picker, 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $picker
 	Check '  closing the picker keeps the folder' ([W]::EditText($edit)) $typed
 
-	[void][W]::PostMessageW($change, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+	[void][W]::PostMessageW($browse, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	$boxes = Select-InPicker (Wait-OwnedWindow $dialog) $music
 	Check "  a picked folder shows (Folder boxes: $boxes)" ([W]::EditText($edit)) $music
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)

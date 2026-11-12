@@ -45,7 +45,7 @@ $popups = @(
 	'Sync &all [F5], Sync &selected playlist, -, &Cancel',
 	'&Confirm match, C&hoose match..., &Edit track... [Enter], -, &Retry, &Keep, &Move to Recycle Bin..., -, &Show in folder, Open on &YouTube, Open source &page',
 	'&Log [Ctrl+L], -, &Columns...',
-	'&Settings... [Ctrl+Alt+S], Check for &updates, -, &Rebuild library from files..., Library folder &moved..., -, Open &log folder',
+	'&Settings... [Ctrl+Alt+S], Check for &updates, -, &Rebuild library from files..., Locate library &folder..., -, Open &log folder',
 	'&About WestieLib'
 )
 for ($i = 0; $i -lt $popups.Count; $i++) {

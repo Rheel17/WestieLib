@@ -122,7 +122,7 @@ $dialog = $open.Dialog
 Check '  the card''s button opens it' "$([W]::ClassOf($dialog)) $([W]::TextOf($dialog))" '#32770 Choose a match'
 Check '  the track | the current video | the query' (
 	"$([W]::TextOf([W]::GetDlgItem($dialog, 1200))) | $([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $([W]::EditText([W]::GetDlgItem($dialog, 1202)))") (
-	"Tell Me $MiddleDot Rae $MiddleDot Tell $MiddleDot 3:20 | Current match: Tell Me (Live), 78% confidence | Rae Tell Me")
+	"Tell Me by Rae (Tell, 3:20) | Current match: Tell Me (Live), 78% confidence | Rae Tell Me")
 # The result on the track's album ranks above the library's song, a cut 25 s longer below them, and the live version
 # above the karaoke by someone else
 Check '  the Matcher''s query searched: the results, the library''s song and the current match, ranked' (Wait-VideoRows $dialog $open.Before) (
@@ -137,9 +137,9 @@ Select-ListRow (Get-VideoList $dialog) 1
 Check '  a row selected: buttons enabled' (Get-ChoiceState $dialog) ' | True True'
 $links = @(
 	@{ Link = 'hello'; Line = 'Not a YouTube link | True True' },
-	@{ Link = ' https://youtu.be/libSong0001?si=x '; Line = "YouTube link $MiddleDot libSong0001 Tell Me | True True" },
-	@{ Link = 'MUSIC.youtube.com/watch?list=x&v=abcdefghijk'; Line = "YouTube link $MiddleDot abcdefghijk | True True" },
-	@{ Link = 'https://m.youtube.com/shorts/abcdefghijk'; Line = "YouTube link $MiddleDot abcdefghijk | True True" },
+	@{ Link = ' https://youtu.be/libSong0001?si=x '; Line = "YouTube video libSong0001 Tell Me | True True" },
+	@{ Link = 'MUSIC.youtube.com/watch?list=x&v=abcdefghijk'; Line = "YouTube video abcdefghijk | True True" },
+	@{ Link = 'https://m.youtube.com/shorts/abcdefghijk'; Line = "YouTube video abcdefghijk | True True" },
 	@{ Link = 'abcdefghij'; Line = 'Not a YouTube link | True True' },
 	@{ Link = ''; Line = ' | True True' }
 )
@@ -177,11 +177,11 @@ Check 'Track > Choose match, the library''s song: merged into its track' "$(Wait
 	"pending [ytm:libSong0001,$TellKey]   | -")
 
 Select-ListRow $table 1
-Check 'Lost Song, no match: the card offers Choose match' ((Wait-TrackCard $h $LostKey) -like "* / No usable match was found. / * / $ChooseMatch / Source / *") 'True'
+Check 'Lost Song, no match: the card offers Choose match' ((Wait-TrackCard $h $LostKey) -like "* / No match found. / * / $ChooseMatch / Source / *") 'True'
 $open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
 $dialog = $open.Dialog
 Check '  no current video, no results' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-VideoRows $dialog $open.Before)" (
-	'The Matcher found no usable match. | [] No results. Try fewer words, or paste a link below.')
+	'No match found. | [] No results. Try fewer words, or paste a link below.')
 Set-VideoLink $dialog 'https://www.youtube.com/watch?v=customVid01'
 Use-ThisVideo $dialog
 Check '  a pasted link: the override, no failure' (Wait-SavedTrack $LostKey '*customVid01*') "pending [$LostKey] customVid01 "

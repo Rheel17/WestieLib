@@ -12,7 +12,7 @@ std::wstring row_status_word(const TrackRow& row) {
 
 std::wstring row_status_tip(const TrackRow& row) {
     if (row.duplicate_of) {
-        return std::format(L"Duplicate of track #{} · {}", row.duplicate_of->position, status_word(row.status));
+        return std::format(L"Duplicate of track #{} ({})", row.duplicate_of->position, status_word(row.status));
     }
     return status_word(row.status);
 }

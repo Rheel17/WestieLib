@@ -19,12 +19,16 @@ namespace {
 constexpr double PercentPerWhole = 100.0;
 
 std::wstring heading_details(const core::Source& source) {
-    std::wstring details;
-    for (const std::wstring& part : {artists_text(source.artists), platform::win32::to_utf16(source.album), duration_text(source.duration)}) {
+    std::wstring album_and_length;
+    for (const std::wstring& part : {platform::win32::to_utf16(source.album), duration_text(source.duration)}) {
         if (!part.empty()) {
-            details += details.empty() ? L"· " : L" · ";
-            details += part;
+            album_and_length += album_and_length.empty() ? part : L", " + part;
         }
+    }
+    std::wstring artists = artists_text(source.artists);
+    std::wstring details = artists.empty() ? L"" : L"by " + artists;
+    if (!album_and_length.empty()) {
+        details += std::format(L"{}({})", details.empty() ? L"" : L" ", album_and_length);
     }
     return details;
 }
@@ -33,7 +37,7 @@ std::wstring current_text(const core::State& state, const core::Track& track) {
     std::optional<core::ResolvedVideo> video = core::resolved_video(state, track);
     if (!video) {
         bool failed = track.status == core::TrackStatus::Failed && track.failure == core::TrackFailure::NoMatch;
-        return failed ? L"The Matcher found no usable match." : L"The Matcher hasn't looked for a match yet.";
+        return failed ? L"No match found." : L"Not matched yet.";
     }
     if (video->overridden) {
         std::string title = library_video_title(state, video->video_id).value_or(video->video_id);

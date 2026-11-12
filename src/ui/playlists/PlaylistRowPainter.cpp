@@ -35,7 +35,7 @@ constexpr int SyncButtonDips = 20;
 // A hairline stays one pixel at every scale
 constexpr int HairlinePixels = 1;
 constexpr UINT LineFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS;
-constexpr std::wstring_view CountSeparator = L" · ";
+constexpr std::wstring_view CountSeparator = L", ";
 constexpr COLORREF FailedColor = RGB(0xC4, 0x2B, 0x1C);
 constexpr COLORREF WarningColor = RGB(0x9D, 0x5D, 0x00);
 constexpr COLORREF HotFill = RGB(0xE5, 0xF3, 0xFF);

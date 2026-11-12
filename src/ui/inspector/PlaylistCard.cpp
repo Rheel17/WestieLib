@@ -75,8 +75,7 @@ void PlaylistCard::set_contents(const PlaylistRow& playlist) {
     waiting_.set_text(std::format(L"{}", playlist.counts.waiting));
     failed_.set_text(std::format(L"{}", playlist.counts.failed));
     review_.set_text(std::format(L"{}", playlist.counts.to_review));
-    const wchar_t* tracks = playlist.shared == 1 ? L"track is" : L"tracks are";
-    shared_.set_text(std::format(L"{} {} also in other playlists", playlist.shared, tracks));
+    shared_.set_text(std::format(L"{}", playlist.shared));
     last_sync_.set_text(playlist.last_sync ? relative_day_text(*playlist.last_sync, std::chrono::system_clock::now()) : L"Never");
     counts_ = playlist.counts;
     shared_count_ = playlist.shared;
