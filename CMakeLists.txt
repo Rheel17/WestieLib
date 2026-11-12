@@ -143,6 +143,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/Animation.cpp
 	src/ui/framework/BufferedPaint.cpp
 	src/ui/framework/Button.cpp
+	src/ui/framework/CloseButton.cpp
 	src/ui/framework/ComboBox.cpp
 	src/ui/framework/CommonControls.cpp
 	src/ui/framework/Control.cpp
@@ -200,7 +201,12 @@ add_executable(WestieLib WIN32
 	src/ui/inspector/TrackCard.cpp
 	src/ui/inspector/TrackDetails.cpp
 	src/ui/inspector/TrackStatusText.cpp
+	src/ui/log/LogFilter.cpp
+	src/ui/log/LogLines.cpp
 	src/ui/log/LogPanel.cpp
+	src/ui/log/LogTable.cpp
+	src/ui/log/LogToolbar.cpp
+	src/ui/log/SelectedForLog.cpp
 	src/ui/main/MainAccelerators.cpp
 	src/ui/main/MainLayout.cpp
 	src/ui/main/MainMenu.cpp

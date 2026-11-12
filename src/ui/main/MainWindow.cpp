@@ -32,6 +32,7 @@
 #include "ui/framework/Size.h"
 #include "ui/framework/WindowClass.h"
 #include "ui/inspector/TrackDetails.h"
+#include "ui/log/SelectedForLog.h"
 #include "ui/main/MainMenu.h"
 #include "ui/main/WindowState.h"
 #include "ui/playlists/PlaylistMenu.h"
@@ -105,7 +106,13 @@ MainWindow::MainWindow(
                 }
         ),
         log_splitter_(hwnd(), framework::SplitterAxis::Y, [this](int top) { on_log_splitter_drag(top); }),
-        log_(hwnd()),
+        log_(
+                hwnd(),
+                {
+                    .on_open_folder = [this] { run_command(CommandId::OpenLogFolder); },
+                    .on_close = [this] { run_command(CommandId::ToggleLog); },
+                }
+        ),
         status_bar_(hwnd()) {
     apply_dpi(framework::Dpi::of(hwnd()));
     attach_menu();
@@ -115,6 +122,7 @@ MainWindow::MainWindow(
     if (std::optional<WindowState> state = load_window_state()) {
         panels_ = state->panels;
         tracks_.set_column_widths(state->column_dips);
+        log_.set_view(state->log_view);
         placement_.restore(state->placement);
     } else {
         placement_.apply_initial_size(InitialWindowDips);
@@ -179,6 +187,7 @@ void MainWindow::apply_dpi(framework::Dpi dpi) {
     tracks_.apply_dpi(dpi, fonts);
     welcome_.apply_dpi(dpi, fonts);
     inspector_.apply_dpi(dpi, fonts);
+    log_.apply_dpi(dpi, fonts);
     status_bar_.apply_dpi(dpi, fonts.regular());
     fonts_ = std::move(fonts);
 }
@@ -239,11 +248,12 @@ void MainWindow::show_scope() {
 }
 
 void MainWindow::show_inspector() {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    log_.set_selection(selected_for_log(*state_.snapshot(), selected_playlist_, selected));
     if (!has_playlists()) {
         inspector_.show_first_run();
         return;
     }
-    std::vector<TrackRow> selected = tracks_.selected_rows();
     if (selected.size() == 1) {
         if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), normalizer_, selected.front())) {
             inspector_.show_track(*track);
@@ -296,7 +306,7 @@ void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
 }
 
 void MainWindow::save_state() const {
-    save_window_state({.placement = placement_.current(), .panels = panels_, .column_dips = tracks_.column_widths()});
+    save_window_state({.placement = placement_.current(), .panels = panels_, .column_dips = tracks_.column_widths(), .log_view = log_.view()});
 }
 
 MainLayout MainWindow::current_layout() const {
@@ -573,7 +583,8 @@ void MainWindow::apply_event(const core::TrackStatusChanged&) {
     show_playlists();
 }
 
-void MainWindow::apply_event(const core::TracksMerged&) {
+void MainWindow::apply_event(const core::TracksMerged& event) {
+    log_.rename_track(event.merged, event.survivor);
     sync_board_.finish_track();
     show_playlists();
 }
@@ -589,7 +600,9 @@ void MainWindow::apply_event(const core::VideoSearchResults& results) {
     }
 }
 
-void MainWindow::apply_event(const core::LogLine&) {}
+void MainWindow::apply_event(const core::LogLine& line) {
+    log_.add(line);
+}
 
 void MainWindow::on_command(WPARAM wparam, LPARAM lparam) {
     // Only menus and accelerators send WM_COMMAND without a control

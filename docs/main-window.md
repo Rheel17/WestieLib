@@ -105,12 +105,29 @@ saved `Placement` and asks it for the current one.
     fetched, and what it waits for.
   - A row's sync control (`PlaylistEvents::on_sync`) syncs its playlist. Like `Sync all`, it works only while nothing
     syncs; `update_commands` tells the list so (`set_sync_enabled`).
-- **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠, the rule and the
-  close box itself, and holds the message `Label` (on the strip's color, `LabelStyle::background`) and `Details`.
+- **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠ and the rule
+  itself, and holds the message `Label` (on the strip's color, `LabelStyle::background`), `Details` and a
+  `framework::CloseButton` on the yellow.
   Its window class has the yellow brush, which the themed button's corners show. `FetchFailureNotice` picks the
   message from the rows: the first playlist with a fetch error that wasn't dismissed. Dismissing remembers the
   playlist with the time of its failure, so the next failure shows again. While there is a message, `current_layout`
   gives the infobar its height, and the panels start under it. `Details` shows the log pane.
+- **Log.** `LogPanel` (`src/ui/log/`) stacks `LogToolbar` (a panel that paints its rule, with the `Log` and `Level`
+  labels, the level `ComboBox`, the scope `TabStrip`, `Open log folder` and a `CloseButton`) over `LogTable`, which
+  wraps a `framework::ListView`. `LogLines` holds the lines (`core::LogLine`, their texts made ready to show), the last
+  20,000, and the ones the `LogFilter` shows: the `LogView` (least level and scope) and the `LogSelection`.
+  - `apply_event(LogLine)` adds a line; the list follows it to the bottom when it showed the last line, or while the
+    pane is hidden. `TracksMerged` moves the merged track's lines to the survivor (`rename_track`).
+  - `show_inspector`, which every selection and every refresh reaches, hands the log the selection
+    (`selected_for_log`: the selected playlist, the tracks it lists, the selected rows' tracks). `LogLines::set_filter`
+    refilters only when that changes what the scope shows, so the All scope costs nothing. Another playlist or track
+    goes to the bottom; the selected playlist's tracks changing as it syncs keeps the list where it is.
+  - The Message column takes what the others leave (`fit_message_column`), again after each resize and new line,
+    since the scroll bar may come or go.
+  - The empty text (`Select a track to see its lines.`) comes from `LVN_GETEMPTYMARKUP`. The list keeps the text it
+    was given until `LVM_RESETEMPTYTEXT`, which `show_lines` sends every time; it's also the list's window text, for
+    the UI checks.
+  - Its ✕ and `Open log folder` run `ToggleLog` and `OpenLogFolder`, which opens `core::Log::folder()`.
 - **State.** The sync's worker writes the state, so the window reads it through `StateStore::snapshot()`, a
   `std::shared_ptr<const State>` that stays as it is while the window uses it. Every function that shows the state
   takes one snapshot and works from it.
@@ -366,7 +383,9 @@ panel), and paints the hairline above the table itself, through `BufferedPaint`.
 
 - Bounds are `rcNormalPosition`: workspace coordinates in physical pixels, negative numbers as two's complement.
   Panel widths, the log height and the track table's column widths (`<Column>ColumnWidthDips`, one per `TrackColumn`)
-  are DIPs; `LogVisible` and `Maximized` are 0 or 1.
+  are DIPs; `LogVisible` and `Maximized` are 0 or 1. `LogLevel` is the least level the log shows (0 Debug to 3
+  Error) and `LogScope` its scope (0 All, 1 Selected playlist, 2 Selected track); a value out of range keeps the
+  default.
 - Without all four bounds the saved state is ignored. Other missing values fall back to their defaults.
 - `TrackTable` keeps every column's width in DIPs, # and the hidden columns too, and notes #'s before `show_scope`
   deletes it. `column_widths()` reads the shown columns from the header, so `save_state` gets the widths as the user

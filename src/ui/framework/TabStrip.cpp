@@ -15,7 +15,6 @@ namespace westie::ui::framework {
 
 namespace {
 
-constexpr int HeightDips = 22;
 constexpr int TextHeightPaddingDips = 6;
 constexpr int SidePaddingDips = 8;
 constexpr int SeparatorHeightDips = 14;
@@ -37,12 +36,13 @@ void paint_box(HDC dc, const RECT& bounds, COLORREF fill, COLORREF border) {
 
 }
 
-TabStrip::TabStrip(HWND parent) :
+TabStrip::TabStrip(HWND parent, int height_dips) :
         Control({
             .class_name = WC_TABCONTROLW,
             .style = WS_CHILD | WS_VISIBLE | WS_TABSTOP | TCS_BUTTONS | TCS_FLATBUTTONS,
             .parent = parent,
-        }) {
+        }),
+        height_dips_(height_dips) {
     // Otherwise a short text gets a wider tab than its padding gives it
     SendMessageW(hwnd(), TCM_SETMINTABWIDTH, 0, 0);
 }
@@ -78,7 +78,7 @@ int TabStrip::height() const noexcept {
 void TabStrip::apply_dpi(Dpi dpi, const MessageFont& font) {
     set_font(font.handle());
     font_ = font.handle();
-    height_ = std::max(dpi.scale(HeightDips), font.line_height() + dpi.scale(TextHeightPaddingDips));
+    height_ = std::max(dpi.scale(height_dips_), font.line_height() + dpi.scale(TextHeightPaddingDips));
     SendMessageW(hwnd(), TCM_SETPADDING, 0, MAKELPARAM(dpi.scale(SidePaddingDips), 0));
     SendMessageW(hwnd(), TCM_SETITEMSIZE, 0, MAKELPARAM(0, height_));
 }

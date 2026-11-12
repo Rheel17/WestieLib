@@ -273,6 +273,41 @@ Check '  a successful one: only the size of its output' ((Get-LogToolRun 'PLtrac
 	'    stdout: N bytes')
 Check '  the three runs at Debug too' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp *: exit code *' }).Count) 3
 
+# The log pane has the same lines, from Info up; the error in red
+$FetchedRows = "T | Info | $TracksName | Fetched 4 tracks / T | Info | $SpotifyName | Fetched 2 tracks / T | Info | $SharedName | Fetched 2 tracks"
+$ErrorRow = "T | Error | Named PLbroken1 | Couldn't fetch the playlist: $BrokenError"
+$LateRow = 'T | Info | Late Night Swing | Matched "Late Night Swing" by Ana, Ben (100%)'
+$SenoritaRow = "T | Info | $Senorita | Matched `"$Senorita`" by Earth, Wind & Fire (100%)"
+Send-Command $h '&Log'
+Start-Sleep -Milliseconds 200
+$logList = Get-LogList $h
+Check 'Log pane: the lines from Info up' (Get-LogRows $h) (
+	"T | Info | $([char]0x2014) | Sync started: 4 playlists / $FetchedRows / $ErrorRow / $LateRow / $SenoritaRow / T | Info | $([char]0x2014) | Sync finished")
+Check '  the times, to the millisecond' (@(0..7 | Where-Object { ([W]::ListViewRow($logList, $_) -split ' \| ')[0] -match '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$' }).Count) 8
+Check '  the error in red, no warning' "$([W]::RedInk($h, $logList)) $([W]::AmberInk($h, $logList))" 'True False'
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-log.png") }
+Choose-LogLevel $h 3
+Check 'Errors only' (Get-LogRows $h) $ErrorRow
+Choose-LogLevel $h 0
+Check 'Debug and up: the yt-dlp runs too' (@((Get-LogRows $h) -split ' / ' | Where-Object { $_ -like 'T | Debug | *yt-dlp --ignore-config*' }).Count) 3
+Choose-LogLevel $h 1
+Click-LogScope $h 1
+Check 'Selected playlist, with All tracks: every line' (@((Get-LogRows $h) -split ' / ').Count) 8
+Click-PlaylistRow $h 1
+Check '  the first playlist: its line' (Get-LogRows $h) "T | Info | $TracksName | Fetched 4 tracks"
+Click-PlaylistRow $h 2
+Check '  the Spotify playlist: its line and its tracks''' (Get-LogRows $h) "T | Info | $SpotifyName | Fetched 2 tracks / $LateRow / $SenoritaRow"
+Click-LogScope $h 2
+Check 'Selected track, none selected' "[$(Get-LogRows $h)] $([W]::TextOf($logList))" '[] Select a track to see its lines.'
+Select-TrackRow $h 0
+# The selection reaches the log on a posted message
+Start-Sleep -Milliseconds 200
+Check '  Late Night Swing: its line' "$(Get-LogRows $h) [$([W]::TextOf($logList))]" "$LateRow []"
+Click-LogScope $h 0
+Click-AllTracks $h
+Send-Command $h '&Log'
+Start-Sleep -Milliseconds 200
+
 # One selected track shows its card; a link to one of its playlists selects that playlist
 Select-TrackRow $h 5
 Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Shared Song / Both / No album yet / " +
@@ -322,7 +357,7 @@ Start-Sleep -Milliseconds 300
 Check 'Infobar Details: the log shows' (Get-LogVisibility $h) 'True True'
 Send-Command $h '&Log'
 Start-Sleep -Milliseconds 200
-Send-Click $infobar ((Get-ClientWidth $infobar) - (S 6) - (S 12)) ([int](((Get-ClientHeight $infobar) - 1) / 2))
+Send-Click ([W]::Children($infobar, 'WestieLib.CloseButton'))[0] (S 12) (S 12)
 Start-Sleep -Milliseconds 300
 Check '  its close box: gone, the panels move up' "$([W]::IsWindowVisible($infobar)) $((Get-RowPanels $h).Count)" 'False 3'
 $runs = Get-FetchRuns

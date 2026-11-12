@@ -3,6 +3,7 @@
 #include <map>
 #include <optional>
 
+#include "ui/log/LogFilter.h"
 #include "ui/main/MainLayout.h"
 #include "ui/main/WindowPlacement.h"
 #include "ui/tracks/TrackSort.h"
@@ -14,6 +15,7 @@ struct WindowState {
     PanelState panels{};
     // Only the columns with a saved width
     std::map<TrackColumn, int> column_dips{};
+    LogView log_view{};
 };
 
 std::optional<WindowState> load_window_state();

@@ -14,7 +14,7 @@ if (Get-Process WestieLib -ErrorAction SilentlyContinue) { throw 'WestieLib is r
 
 $KeyPath = 'HKCU:\Software\WestieLib\Window'
 $ColumnWidthDips = [ordered]@{ Number = 48; Status = 56; Title = 204; Artists = 156; Album = 132; Playlists = 114; Time = 48; Source = 60; Match = 70; File = 200 }
-$StateNames = @('Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible') +
+$StateNames = @('Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible', 'LogLevel', 'LogScope') +
 	@($ColumnWidthDips.Keys | ForEach-Object { "$($_)ColumnWidthDips" })
 # The app keeps its files here instead of %LOCALAPPDATA%\WestieLib, so the user's settings and tools stay untouched
 $DataDir = Join-Path ([IO.Path]::GetTempPath()) "WestieLib-checks-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
@@ -150,6 +150,39 @@ function Get-RowPanels($hwnd) {
 function Get-Panel($hwnd, [string]$name) { @(Get-MainPanels $hwnd | Where-Object { [W]::TextOf($_) -eq $name })[0] }
 
 function Get-LogPanel($hwnd) { Get-Panel $hwnd 'Log' }
+
+function Get-LogToolbar($hwnd) { (Get-DirectChildren (Get-LogPanel $hwnd) 'WestieLib.Panel')[0] }
+
+function Get-LogList($hwnd) { (Get-DirectChildren (Get-LogPanel $hwnd) 'SysListView32')[0] }
+
+function Get-LogLevelBox($hwnd) { ([W]::Children((Get-LogToolbar $hwnd), 'ComboBox'))[0] }
+
+function Get-LogScopeTabs($hwnd) { ([W]::Children((Get-LogToolbar $hwnd), 'SysTabControl32'))[0] }
+
+# The level chosen and the scope selected, from 0 (CB_GETCURSEL, TCM_GETCURSEL)
+function Get-LogView($hwnd) {
+	"$([W]::SendMessageW((Get-LogLevelBox $hwnd), 0x147, [IntPtr]::Zero, [IntPtr]::Zero)) $([W]::SendMessageW((Get-LogScopeTabs $hwnd), 0x130B, [IntPtr]::Zero, [IntPtr]::Zero))"
+}
+
+# Chooses a level as the user would: CB_SETCURSEL doesn't notify, so the toolbar gets CBN_SELCHANGE too
+function Choose-LogLevel($hwnd, [int]$index) {
+	$box = Get-LogLevelBox $hwnd
+	[void][W]::SendMessageW($box, 0x14E, [IntPtr]$index, [IntPtr]::Zero)
+	[void][W]::SendMessageW((Get-LogToolbar $hwnd), 0x111, [IntPtr](1 -shl 16), $box)
+}
+
+function Click-LogScope($hwnd, [int]$index) {
+	$tabs = Get-LogScopeTabs $hwnd
+	$r = [W]::SendForRect($tabs, 0x130A, [IntPtr]$index)
+	Send-Click $tabs ([int](($r.Left + $r.Right) / 2)) ([int](($r.Top + $r.Bottom) / 2))
+}
+
+# The log list's rows, with T for each time, whose format the unit checks cover
+function Get-LogRows($hwnd) {
+	$list = Get-LogList $hwnd
+	$count = [int][W]::SendMessageW($list, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
+	@(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) -replace '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ', 'T ' } }) -join ' / '
+}
 
 function Test-Upright($hwnd, $child) { $r = [W]::RectIn($child, $hwnd); ($r.Right - $r.Left) -lt ($r.Bottom - $r.Top) }
 
@@ -401,7 +434,10 @@ function Set-SavedAutoUpdate([bool]$on) {
 # Saves a window state for the next start, as the app would: a normal window at 100,100, 1280x800 at 96 DPI, the
 # default panel widths and the log hidden, with $values (names of the values, to DWORDs) instead
 function Set-SavedWindow([hashtable]$values) {
-	$state = [ordered]@{ Left = 100; Top = 100; Right = 1380; Bottom = 900; Maximized = 0; PlaylistsWidthDips = 250; InspectorWidthDips = 290; LogHeightDips = 168; LogVisible = 0 }
+	$state = [ordered]@{
+		Left = 100; Top = 100; Right = 1380; Bottom = 900; Maximized = 0; PlaylistsWidthDips = 250; InspectorWidthDips = 290; LogHeightDips = 168; LogVisible = 0
+		LogLevel = 1; LogScope = 0
+	}
 	foreach ($column in $ColumnWidthDips.Keys) { $state["$($column)ColumnWidthDips"] = $ColumnWidthDips[$column] }
 	foreach ($name in $values.Keys) { $state[$name] = $values[$name] }
 	if (-not (Test-Path $KeyPath)) { New-Item $KeyPath -Force | Out-Null }

@@ -1,6 +1,7 @@
 #include "ui/main/WindowState.h"
 
 #include <array>
+#include <utility>
 
 #include <windows.h>
 
@@ -20,6 +21,8 @@ constexpr wchar_t PlaylistsWidthValue[] = L"PlaylistsWidthDips";
 constexpr wchar_t InspectorWidthValue[] = L"InspectorWidthDips";
 constexpr wchar_t LogHeightValue[] = L"LogHeightDips";
 constexpr wchar_t LogVisibleValue[] = L"LogVisible";
+constexpr wchar_t LogLevelValue[] = L"LogLevel";
+constexpr wchar_t LogScopeValue[] = L"LogScope";
 
 struct ColumnValue {
     TrackColumn column = TrackColumn::Title;
@@ -57,6 +60,18 @@ std::map<TrackColumn, int> read_columns(const platform::win32::RegistryKey& key)
     return widths;
 }
 
+// A value from another version that names no level or scope keeps the default
+LogView read_log_view(const platform::win32::RegistryKey& key) {
+    LogView view;
+    if (std::optional<int> level = read_int(key, LogLevelValue); level && *level >= 0 && *level <= std::to_underlying(core::LogLevel::Error)) {
+        view.least = static_cast<core::LogLevel>(*level);
+    }
+    if (std::optional<int> scope = read_int(key, LogScopeValue); scope && *scope >= 0 && *scope <= std::to_underlying(LogScope::Track)) {
+        view.scope = static_cast<LogScope>(*scope);
+    }
+    return view;
+}
+
 }
 
 std::optional<WindowState> load_window_state() {
@@ -87,6 +102,7 @@ std::optional<WindowState> load_window_state() {
             .log_visible = read_int(*key, LogVisibleValue).value_or(defaults.log_visible) != 0,
         },
         .column_dips = read_columns(*key),
+        .log_view = read_log_view(*key),
     };
 }
 
@@ -102,6 +118,8 @@ void save_window_state(const WindowState& state) {
     write_int(key, InspectorWidthValue, state.panels.inspector_dips);
     write_int(key, LogHeightValue, state.panels.log_dips);
     write_int(key, LogVisibleValue, state.panels.log_visible);
+    write_int(key, LogLevelValue, std::to_underlying(state.log_view.least));
+    write_int(key, LogScopeValue, std::to_underlying(state.log_view.scope));
     for (const ColumnValue& value : ColumnValues) {
         if (auto width = state.column_dips.find(value.column); width != state.column_dips.end()) {
             write_int(key, value.name, width->second);

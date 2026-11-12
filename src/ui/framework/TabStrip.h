@@ -15,9 +15,11 @@
 
 namespace westie::ui::framework {
 
+constexpr int DefaultTabHeightDips = 22;
+
 class TabStrip final : public Control {
 public:
-    explicit TabStrip(HWND parent);
+    explicit TabStrip(HWND parent, int height_dips = DefaultTabHeightDips);
 
     void set_tabs(std::span<const std::wstring> texts, int selected);
     int selected() const;
@@ -36,6 +38,7 @@ private:
     void on_mouse_move(LPARAM point);
     void on_mouse_leave();
 
+    int height_dips_ = 0;
     std::vector<std::wstring> texts_;
     HFONT font_ = nullptr;
     int height_ = 0;
