@@ -13,7 +13,7 @@ $MergedKey = 'spotify:spMerged00000000000003'
 function Get-SavedTrack([string]$key) {
 	$track = (Get-SavedState).tracks.$key
 	if (-not $track) { return '-' }
-	"$($track.status) [$($track.sources -join ',')] $($track.videoOverride) $($track.failure)"
+	"$($track.status) [$($track.sources -join ',')] $($track.ytmOverride) $($track.failure)"
 }
 
 function Wait-SavedTrack([string]$key, [string]$like) {
@@ -32,11 +32,11 @@ function Click-CardButton($hwnd, [string]$text) {
 	[void][W]::PostMessageW($button, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 }
 
-function Get-VideoList($dialog) { [W]::GetDlgItem($dialog, 1204) }
+function Get-CandidateList($dialog) { [W]::GetDlgItem($dialog, 1204) }
 
 # The list's rows without the play column, which has no text, then what it reads while it has none (its window text)
-function Get-VideoRows($dialog) {
-	$list = Get-VideoList $dialog
+function Get-CandidateRows($dialog) {
+	$list = Get-CandidateList $dialog
 	$count = [int][W]::SendMessageW($list, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
 	$rows = @(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) -replace ' \| $', '' } }) -join ' / '
 	"[$rows] $([W]::TextOf($list))"
@@ -59,7 +59,7 @@ $AnchoredIds = [ordered]@{ heading = 1200; spotify = 1207; list = 1204; link = 1
 function Get-DialogLayout($dialog) {
 	$layout = @{}
 	foreach ($name in $AnchoredIds.Keys) { $layout[$name] = [W]::RectIn([W]::GetDlgItem($dialog, $AnchoredIds[$name]), $dialog) }
-	$layout['title'] = [int](([W]::ListViewColumns((Get-VideoList $dialog)) -split ' \| ')[0] -replace '^Title ', '')
+	$layout['title'] = [int](([W]::ListViewColumns((Get-CandidateList $dialog)) -split ' \| ')[0] -replace '^Title ', '')
 	$layout
 }
 
@@ -74,10 +74,10 @@ function Get-LayoutMoves($from, $to) {
 }
 
 # Waits for the searches the dialog started after $searched searches had reached FakeWeb, then for their answer
-function Wait-VideoRows($dialog, [int]$searched, [int]$count = 1) {
+function Wait-CandidateRows($dialog, [int]$searched, [int]$count = 1) {
 	for ($i = 0; $i -lt 50 -and @($Web.YtmQueries()).Count -lt $searched + $count; $i++) { Start-Sleep -Milliseconds 100 }
-	for ($i = 0; $i -lt 50 -and [W]::TextOf((Get-VideoList $dialog)) -like 'Searching*'; $i++) { Start-Sleep -Milliseconds 100 }
-	Get-VideoRows $dialog
+	for ($i = 0; $i -lt 50 -and [W]::TextOf((Get-CandidateList $dialog)) -like 'Searching*'; $i++) { Start-Sleep -Milliseconds 100 }
+	Get-CandidateRows $dialog
 }
 
 # The link's detection line, then whether the link's play button and Use this match are enabled
@@ -85,23 +85,23 @@ function Get-ChoiceState($dialog) {
 	"$([W]::TextOf([W]::GetDlgItem($dialog, 1206))) | $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1208))) $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1)))"
 }
 
-function Set-VideoLink($dialog, [string]$link) { [W]::SetEditText([W]::GetDlgItem($dialog, 1205), $link) }
+function Set-YtmLink($dialog, [string]$link) { [W]::SetEditText([W]::GetDlgItem($dialog, 1205), $link) }
 
-function Use-ThisVideo($dialog) {
+function Use-ThisResult($dialog) {
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
 }
 
-function Open-ChooseVideo($hwnd, [scriptblock]$open) {
+function Open-ChooseMatch($hwnd, [scriptblock]$open) {
 	$searched = @($Web.YtmQueries()).Count
 	& $open
 	$dialog = Wait-OwnedWindow $hwnd
 	[pscustomobject]@{ Dialog = $dialog; Before = $searched }
 }
 
-# A YouTube Music playlist with Tell Me, another song and the video of a merged track, and a Spotify playlist: Tell Me
+# A YouTube Music playlist with Tell Me, another song and the source of a merged track, and a Spotify playlist: Tell Me
 # matched to a live version (78%, to review, as an earlier Matcher left it), a song without a match, and one merged into
-# the YouTube Music track
+# the YouTube Music track. That one's match has the key an earlier version wrote, videoId.
 $playlists = '"ytm:PLlib1": {"url": "https://music.youtube.com/playlist?list=PLlib1", "name": "Library list", "addedAt": "2026-01-01T12:00:00Z", ' +
 	'"sources": ["ytm:libSong0001", "ytm:otherSong01", "ytm:sharedVid01"]}, ' +
 	"`"spotify:$PicksId`": {`"url`": `"https://open.spotify.com/playlist/$PicksId`", `"name`": `"Picks`", `"addedAt`": `"2026-01-02T12:00:00Z`", " +
@@ -111,7 +111,7 @@ $sources = @(
 	'"ytm:otherSong01": {"title": "Something Else", "artists": ["Nobody"], "durationMs": 100000, "track": "ytm:otherSong01"}',
 	'"ytm:sharedVid01": {"title": "Shared Song", "artists": ["Both"], "durationMs": 200000, "track": "ytm:sharedVid01"}',
 	("`"$TellKey`": {`"title`": `"Tell Me`", `"artists`": [`"Rae`"], `"album`": `"Tell`", `"durationMs`": 200000, " +
-		'"match": {"videoId": "reviewVid01", "confidence": 0.78, "title": "Tell Me (Live)", "artists": ["Rae"], "durationMs": 260000}, ' +
+		'"match": {"ytmId": "reviewVid01", "confidence": 0.78, "title": "Tell Me (Live)", "artists": ["Rae"], "durationMs": 260000}, ' +
 		"`"track`": `"$TellKey`"}"),
 	"`"$LostKey`": {`"title`": `"Lost Song`", `"artists`": [`"Gone`"], `"album`": `"Away`", `"durationMs`": 180000, `"track`": `"$LostKey`"}",
 	("`"$MergedKey`": {`"title`": `"Shared Song`", `"artists`": [`"Both`"], `"album`": `"Shared`", `"durationMs`": 200000, " +
@@ -135,7 +135,7 @@ $Web.YtmResults['Tell Me Rae'] = [Collections.Generic.List[string]]@([FakeWeb]::
 $Web.YtmResults['Gone Lost Song'] = New-Object Collections.Generic.List[string]
 [void]$Web.YtmBrokenQueries.Add('Broken query')
 
-"--- Run 1: choosing videos"
+"--- Run 1: choosing matches"
 [IO.File]::WriteAllText($StateFile, "{`"version`": 1, `"playlists`": {$playlists}, `"sources`": {$($sources -join ', ')}, `"tracks`": {$($tracks -join ', ')}}")
 $app = Start-App
 $h = $app.Hwnd
@@ -148,19 +148,19 @@ Check 'Tell Me, to review: the card offers Choose match' ((Wait-TrackCard $h $Te
 Update-MenuStates $h
 $grayed = [W]::ItemsWithState([W]::GetMenu($h), 0x1)
 Check '  menu: Confirm match and Choose match enabled' "$($grayed -like '*&Confirm match*') $($grayed -like '*C&hoose match*')" 'False False'
-$open = Open-ChooseVideo $h { Click-CardButton $h $ChooseMatch }
+$open = Open-ChooseMatch $h { Click-CardButton $h $ChooseMatch }
 $dialog = $open.Dialog
 Check '  the card''s button opens it' "$([W]::ClassOf($dialog)) $([W]::TextOf($dialog))" '#32770 Choose a match'
-Check '  the track | the current video | the query' (
+Check '  the track | the current match | the query' (
 	"$([W]::TextOf([W]::GetDlgItem($dialog, 1200))) | $([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $([W]::EditText([W]::GetDlgItem($dialog, 1202)))") (
 	"Tell Me by Rae (Tell, 3:20) | Current match: Tell Me (Live), 78% confidence | Rae Tell Me")
 # The result on the track's album ranks above the library's song, a cut 25 s longer below them, and the live version
 # above the karaoke by someone else
-Check '  the Matcher''s query searched: the results, the library''s song and the current match, ranked' (Wait-VideoRows $dialog $open.Before) (
+Check '  the Matcher''s query searched: the results, the library''s song and the current match, ranked' (Wait-CandidateRows $dialog $open.Before) (
 	'[Tell Me | Rae | Tell | 3:20 | Same recording / Tell Me (in library) | Rae |  | 3:21 | Same recording / Tell Me | Rae | Tell | 3:45 | Check length / ' +
 	'Tell Me (Live) (current) | Rae |  | 4:20 | Other recording / Tell Me (Karaoke) | Sing | Karaoke | 3:30 | Other artist] ' +
 	'No results. Try fewer words, or paste a link below.')
-Check '  columns after Title, the last for the play buttons' ([W]::ListViewColumns((Get-VideoList $dialog)) -replace '^Title \d+ \| ', '') (
+Check '  columns after Title, the last for the play buttons' ([W]::ListViewColumns((Get-CandidateList $dialog)) -replace '^Title \d+ \| ', '') (
 	"Artists $(S 115) | Album $(S 115) | Length $(S 52) | Match $(S 110) |  $(S 26)")
 Check '  opens at 900 x 600, the search field focused' "$(Get-DialogDips $dialog) $([W]::FocusOf($dialog) -eq [W]::GetDlgItem($dialog, 1202))" '900 x 600 True'
 $playButtons = foreach ($id in 1207, 1208) {
@@ -169,7 +169,7 @@ $playButtons = foreach ($id in 1207, 1208) {
 	"$([W]::TextOf($button)) $([W]::IsWindowEnabled($button)) $(([W]::GetWindowLongW($button, -16) -band 0x40) -ne 0)"
 }
 Check '  play buttons: Spotify enabled, the link''s waiting for a link' ($playButtons -join ' | ') 'Play on Spotify True True | Play on YouTube Music False True'
-if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-choose-video.png") }
+if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-choose-match.png") }
 $defaultLayout = Get-DialogLayout $dialog
 Set-DialogDips $dialog 1000 700
 Check 'Resized to 1000 x 700: what the anchors move' (Get-LayoutMoves $defaultLayout (Get-DialogLayout $dialog)) (
@@ -189,74 +189,76 @@ Check '  there, the controls stand where the template has them' ((Get-LayoutMove
 	'heading 0 0 W 0 | spotify W 0 W 0 | list 0 0 W H | link 0 H W H | play W H W H | ok W H W H | grip W H W H | title W')
 Set-DialogDips $dialog 1000 700
 Check '  nothing chosen yet: no line, buttons disabled' (Get-ChoiceState $dialog) ' | False False'
-Select-ListRow (Get-VideoList $dialog) 1
+Select-ListRow (Get-CandidateList $dialog) 1
 Check '  a row selected: Use this match enabled' (Get-ChoiceState $dialog) ' | False True'
 $links = @(
 	@{ Link = 'hello'; Line = 'Not a YouTube link | False True' },
-	@{ Link = ' https://youtu.be/libSong0001?si=x '; Line = "YouTube video libSong0001 Tell Me | True True" },
-	@{ Link = 'MUSIC.youtube.com/watch?list=x&v=abcdefghijk'; Line = "YouTube video abcdefghijk | True True" },
-	@{ Link = 'https://m.youtube.com/shorts/abcdefghijk'; Line = "YouTube video abcdefghijk | True True" },
+	@{ Link = ' https://youtu.be/libSong0001?si=x '; Line = "YouTube Music id libSong0001 Tell Me | True True" },
+	@{ Link = 'MUSIC.youtube.com/watch?list=x&v=abcdefghijk'; Line = "YouTube Music id abcdefghijk | True True" },
+	@{ Link = 'https://m.youtube.com/shorts/abcdefghijk'; Line = "YouTube Music id abcdefghijk | True True" },
 	@{ Link = 'abcdefghij'; Line = 'Not a YouTube link | False True' },
 	@{ Link = ''; Line = ' | False True' }
 )
 foreach ($case in $links) {
-	Set-VideoLink $dialog $case.Link
+	Set-YtmLink $dialog $case.Link
 	Check "  link '$($case.Link)'" (Get-ChoiceState $dialog) $case.Line
 }
 
 $searched = @($Web.YtmQueries()).Count
 [W]::SetEditText([W]::GetDlgItem($dialog, 1202), 'Tell Me Rae')
 [void][W]::PostMessageW([W]::GetDlgItem($dialog, 1203), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-Check 'Search: its results, the current match and the library''s song stay' (Wait-VideoRows $dialog $searched) (
+Check 'Search: its results, the current match and the library''s song stay' (Wait-CandidateRows $dialog $searched) (
 	'[Tell Me (in library) | Rae |  | 3:21 | Same recording / Tell Me | Rae | Other | 3:22 | Same recording / ' +
 	'Tell Me (Live) (current) | Rae |  | 4:20 | Other recording] No results. Try fewer words, or paste a link below.')
 $searched = @($Web.YtmQueries()).Count
 [W]::SetEditText([W]::GetDlgItem($dialog, 1202), 'Broken query')
 [void][W]::PostMessageW([W]::GetDlgItem($dialog, 1203), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-Check '  a search that fails' (Wait-VideoRows $dialog $searched) (
+Check '  a search that fails' (Wait-CandidateRows $dialog $searched) (
 	'[Tell Me (in library) | Rae |  | 3:21 | Same recording / Tell Me (Live) (current) | Rae |  | 4:20 | Other recording] ' +
 	'Couldn''t search YouTube Music: HTTP 500 from 127.0.0.1')
-Select-ListRow (Get-VideoList $dialog) 1
-Use-ThisVideo $dialog
+Select-ListRow (Get-CandidateList $dialog) 1
+Use-ThisResult $dialog
 for ($i = 0; $i -lt 50 -and -not (Get-SavedState).sources.$TellKey.match.confirmed; $i++) { Start-Sleep -Milliseconds 100 }
 Check 'Use this match on the current match: confirmed, nothing else' "$(Get-SavedTrack $TellKey) | $((Get-SavedState).sources.$TellKey.match.confirmed)" (
 	"pending [$TellKey]   | True")
 Check '  Waiting now' ((Wait-TrackCard $h $TellKey) -like '* / Status / Waiting / *') 'True'
+$sharedMatch = (Get-SavedState).sources.$MergedKey.match
+Check '  saved: the earlier version''s videoId as ytmId' "$($sharedMatch.ytmId) $($null -eq $sharedMatch.PSObject.Properties['videoId'])" 'sharedVid01 True'
 
-$open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
+$open = Open-ChooseMatch $h { Send-Command $h 'C&hoose match...' }
 $dialog = $open.Dialog
 Check 'Opened again: the size it was closed at' (Get-DialogDips $dialog) '1000 x 700'
-[void](Wait-VideoRows $dialog $open.Before)
+[void](Wait-CandidateRows $dialog $open.Before)
 # Under the result on the track's album
-Select-ListRow (Get-VideoList $dialog) 1
-Use-ThisVideo $dialog
+Select-ListRow (Get-CandidateList $dialog) 1
+Use-ThisResult $dialog
 Check 'Track > Choose match, the library''s song: merged into its track' "$(Wait-SavedTrack 'ytm:libSong0001' '*,spotify*') | $(Get-SavedTrack $TellKey)" (
 	"pending [ytm:libSong0001,$TellKey]   | -")
 
 Select-ListRow $table 1
 Check 'Lost Song, no match: the card offers Choose match' ((Wait-TrackCard $h $LostKey) -like "* / No match found. / * / $ChooseMatch / Source / *") 'True'
-$open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
+$open = Open-ChooseMatch $h { Send-Command $h 'C&hoose match...' }
 $dialog = $open.Dialog
-Check '  no current video, no results' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-VideoRows $dialog $open.Before)" (
+Check '  no current match, no results' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-CandidateRows $dialog $open.Before)" (
 	'No match found. | [] No results. Try fewer words, or paste a link below.')
-Set-VideoLink $dialog 'https://www.youtube.com/watch?v=customVid01'
-Use-ThisVideo $dialog
+Set-YtmLink $dialog 'https://www.youtube.com/watch?v=customVid01'
+Use-ThisResult $dialog
 Check '  a pasted link: the override, no failure' (Wait-SavedTrack $LostKey '*customVid01*') "pending [$LostKey] customVid01 "
 Check '  its card' ((Wait-TrackCard $h $LostKey) -like "* / Status / Waiting / * / ID / customVid01 / Chosen by / Override / File / *") 'True'
 
 Select-ListRow $table 2
 [void](Wait-TrackCard $h $MergedKey)
-$open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
+$open = Open-ChooseMatch $h { Send-Command $h 'C&hoose match...' }
 $dialog = $open.Dialog
-Check 'Shared Song, merged: the current video is the playlist''s' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-VideoRows $dialog $open.Before)" (
+Check 'Shared Song, merged: the current match is the playlist''s' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-CandidateRows $dialog $open.Before)" (
 	'Current match: Shared Song, from a YouTube Music playlist | [Shared Song (current) | Both |  | 3:20 | Same recording] ' +
 	'No results. Try fewer words, or paste a link below.')
-Set-VideoLink $dialog 'splitVid001'
-Use-ThisVideo $dialog
-Check '  another video: the entry splits out with it' "$(Wait-SavedTrack $MergedKey '*splitVid001*') | $(Get-SavedTrack 'ytm:sharedVid01')" (
+Set-YtmLink $dialog 'splitVid001'
+Use-ThisResult $dialog
+Check '  another YouTube Music id: the entry splits out with it' "$(Wait-SavedTrack $MergedKey '*splitVid001*') | $(Get-SavedTrack 'ytm:sharedVid01')" (
 	"pending [$MergedKey] splitVid001  | pending [ytm:sharedVid01]  ")
 
-# The tracks with a video of the user's aren't matched again
+# The tracks with a YouTube Music id of the user's aren't matched again
 $Web.SpotifyNames[$PicksId] = 'Picks'
 $Web.SpotifyItems[$PicksId] = [Collections.Generic.List[string]]@(
 	[FakeWeb]::Track('spTellMe00000000000001', 'Tell Me', @('Rae'), 'Tell', 200000),
@@ -269,23 +271,24 @@ Send-Command $h 'Sync &selected playlist'
 for ($i = 0; $i -lt 50 -and @($Web.SpotifyQueries()).Count -le $spotify; $i++) { Start-Sleep -Milliseconds 100 }
 for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
 Start-Sleep -Milliseconds 300
-Check 'Synced: no search, the videos kept' "$(@($Web.YtmQueries()).Count - $searches) | $(Get-SavedTrack $LostKey) | $(Get-SavedTrack $MergedKey)" (
+Check 'Synced: no search, the overrides kept' "$(@($Web.YtmQueries()).Count - $searches) | $(Get-SavedTrack $LostKey) | $(Get-SavedTrack $MergedKey)" (
 	"0 | pending [$LostKey] customVid01  | pending [$MergedKey] splitVid001 ")
 Stop-App $app
 $saved = Get-ItemProperty $KeyPath
 Check '  saved: the dialog''s size' "$($saved.ChooseMatchWidthDips) x $($saved.ChooseMatchHeightDips)" '1000 x 700'
 
-"--- Run 2: the saved size"
+"--- Run 2: the saved size, and an override with the key an earlier version wrote"
 Set-SavedWindow @{ ChooseMatchWidthDips = 820; ChooseMatchHeightDips = 560 }
+[IO.File]::WriteAllText($StateFile, ([IO.File]::ReadAllText($StateFile) -replace '"ytmOverride": "customVid01"', '"videoOverride": "customVid01"'))
 $app = Start-App
 $h = $app.Hwnd
 $script:TallRows = 1, 2
 Click-PlaylistRow $h 2
 Select-ListRow (Get-TrackTable $h) 1
-[void](Wait-TrackCard $h $LostKey)
-$open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
+Check 'The earlier version''s videoOverride reads as the override' ((Wait-TrackCard $h $LostKey) -like '* / ID / customVid01 / Chosen by / Override / *') 'True'
+$open = Open-ChooseMatch $h { Send-Command $h 'C&hoose match...' }
 Check 'Choose a match opens at the saved size' (Get-DialogDips $open.Dialog) '820 x 560'
-[void](Wait-VideoRows $open.Dialog $open.Before)
+[void](Wait-CandidateRows $open.Dialog $open.Before)
 [void][W]::PostMessageW([W]::GetDlgItem($open.Dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 Wait-Closed $open.Dialog
 Stop-App $app

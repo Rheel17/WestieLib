@@ -11,7 +11,7 @@ struct SourceTrack {
     std::string key{};
     std::string title{};
     std::vector<std::string> artists{};
-    // Only Spotify's playlist has it; a YouTube Music source gets its album when its video is downloaded
+    // Only Spotify's playlist has it; a YouTube Music source gets its album when it is downloaded
     std::optional<std::string> album{};
     std::chrono::milliseconds duration{};
     // Only Spotify's playlist has it

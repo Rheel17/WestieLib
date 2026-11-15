@@ -10,7 +10,7 @@
 
 #include "ResourceIds.h"
 #include "core/matching/ConfirmMatch.h"
-#include "core/matching/VideoOverride.h"
+#include "core/matching/YtmOverride.h"
 #include "core/sources/SourceType.h"
 #include "core/playlists/AddPlaylist.h"
 #include "core/playlists/RemovePlaylist.h"
@@ -22,8 +22,8 @@
 #include "ui/commands/CommandMenu.h"
 #include "ui/dialogs/AboutDialog.h"
 #include "ui/dialogs/AddPlaylistDialog.h"
-#include "ui/dialogs/ChooseVideoDialog.h"
-#include "ui/dialogs/VideoChoice.h"
+#include "ui/dialogs/ChooseMatchDialog.h"
+#include "ui/dialogs/MatchChoice.h"
 #include "ui/dialogs/RemovePlaylistDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/framework/DeferredPositions.h"
@@ -56,7 +56,7 @@ MainWindow::MainWindow(
         core::ToolManager& tools,
         core::PlaylistLookup& lookup,
         core::SyncEngine& sync,
-        core::VideoSearch& video_search,
+        core::CandidateSearch& candidate_search,
         const platform::TextNormalizer& normalizer,
         core::Log& logger
 ) :
@@ -68,7 +68,7 @@ MainWindow::MainWindow(
         tools_(tools),
         lookup_(lookup),
         sync_(sync),
-        video_search_(video_search),
+        candidate_search_(candidate_search),
         normalizer_(normalizer),
         logger_(logger),
         placement_(hwnd()),
@@ -123,7 +123,7 @@ MainWindow::MainWindow(
         panels_ = state->panels;
         tracks_.set_column_widths(state->column_dips);
         log_.set_view(state->log_view);
-        choose_video_dips_ = state->choose_video_dips.value_or(ChooseVideoDialog::DefaultWindowDips);
+        choose_match_dips_ = state->choose_match_dips.value_or(ChooseMatchDialog::DefaultWindowDips);
         placement_.restore(state->placement);
     } else {
         placement_.apply_initial_size(InitialWindowDips);
@@ -312,7 +312,7 @@ void MainWindow::save_state() const {
             .panels = panels_,
             .column_dips = tracks_.column_widths(),
             .log_view = log_.view(),
-            .choose_video_dips = choose_video_dips_,
+            .choose_match_dips = choose_match_dips_,
     });
 }
 
@@ -385,7 +385,7 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::About:                show_about_dialog(hwnd()); return;
     case CommandId::FocusSearch:          tracks_.focus_search(); return;
     case CommandId::ConfirmMatch:         confirm_match(); return;
-    case CommandId::ChooseVideo:          choose_video(); return;
+    case CommandId::ChooseMatch:          choose_match(); return;
     default:                              return;
     }
 }
@@ -433,29 +433,29 @@ void MainWindow::confirm_match() {
     show_playlists();
 }
 
-void MainWindow::choose_video() {
+void MainWindow::choose_match() {
     std::vector<TrackRow> selected = tracks_.selected_rows();
     if (selected.size() != 1) {
         return;
     }
-    std::optional<VideoChoice> choice = video_choice(*state_.snapshot(), selected.front().key);
+    std::optional<MatchChoice> choice = match_choice(*state_.snapshot(), selected.front().key);
     if (!choice) {
         return;
     }
     std::string source = choice->source;
-    choose_video_dialog_.emplace(
+    choose_match_dialog_.emplace(
             std::move(*choice),
-            video_search_,
-            [this](const std::string& video_id) { return library_video_title(*state_.snapshot(), video_id); },
-            choose_video_dips_
+            candidate_search_,
+            [this](const std::string& ytm_id) { return library_result_title(*state_.snapshot(), ytm_id); },
+            choose_match_dips_
     );
-    std::optional<std::string> video = choose_video_dialog_->choose(hwnd());
-    choose_video_dips_ = choose_video_dialog_->window_dips();
-    choose_video_dialog_.reset();
-    if (!video) {
+    std::optional<std::string> ytm_id = choose_match_dialog_->choose(hwnd());
+    choose_match_dips_ = choose_match_dialog_->window_dips();
+    choose_match_dialog_.reset();
+    if (!ytm_id) {
         return;
     }
-    core::set_video_override(state_, logger_, source, *video);
+    core::set_ytm_override(state_, logger_, source, *ytm_id);
     show_playlists();
 }
 
@@ -605,9 +605,9 @@ void MainWindow::apply_event(const core::SyncFinished&) {
     show_playlists();
 }
 
-void MainWindow::apply_event(const core::VideoSearchResults& results) {
-    if (choose_video_dialog_) {
-        choose_video_dialog_->show_results(results);
+void MainWindow::apply_event(const core::CandidateSearchResults& results) {
+    if (choose_match_dialog_) {
+        choose_match_dialog_->show_results(results);
     }
 }
 
@@ -697,7 +697,7 @@ void MainWindow::on_destroy() {
     // The workers wind down while the window goes, and whatever they still report stays in the queue
     tools_.stop();
     lookup_.stop();
-    video_search_.stop();
+    candidate_search_.stop();
     sync_.cancel();
     events_.set_target(nullptr);
     save_state();

@@ -12,8 +12,8 @@
 
 namespace westie::core {
 
-struct VideoCandidate {
-    std::string video_id{};
+struct MatchCandidate {
+    std::string ytm_id{};
     std::string title{};
     std::vector<std::string> artists{};
     std::string album{};
@@ -22,15 +22,15 @@ struct VideoCandidate {
     MatchVerdict verdict = MatchVerdict::Reject;
     MatchMismatch mismatch = MatchMismatch::Song;
     std::vector<MatchDoubt> doubts{};
-    // The video the source's track has
+    // Whether the source's track has this YouTube Music id
     bool current = false;
-    // Another track that has the video, which choosing it merges into
+    // Another track that has this YouTube Music id, which choosing it merges into
     std::string track{};
 };
 
 // For a Spotify source: its match, the library's YouTube Music sources the Matcher doesn't reject, and the search
-// results, each video once, the best first
-std::vector<VideoCandidate> video_candidates(
+// results, each YouTube Music id once, the best first
+std::vector<MatchCandidate> match_candidates(
         const State& state, const platform::TextNormalizer& normalizer, const std::string& source_key, const std::vector<SongResult>& results
 );
 

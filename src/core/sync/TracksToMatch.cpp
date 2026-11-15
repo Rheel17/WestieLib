@@ -6,16 +6,16 @@
 #include <utility>
 
 #include "core/sources/SourceType.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 
 namespace westie::core {
 
 bool needs_match(const State& state, const Track& track) {
-    // The user chose an override's video
-    if ((track.status != TrackStatus::Pending && track.status != TrackStatus::Failed) || !track.video_override.empty()) {
+    // The user chose an override
+    if ((track.status != TrackStatus::Pending && track.status != TrackStatus::Failed) || !track.ytm_override.empty()) {
         return false;
     }
-    // The playlist owner chose a YouTube Music source's video
+    // The playlist owner chose a YouTube Music source
     if (first_source_of(track, SourceType::YouTubeMusic) != nullptr) {
         return false;
     }

@@ -74,10 +74,10 @@ struct ColumnJson {
 };
 
 struct PlaylistItemDataJson {
-    std::string video_id{};
+    std::string ytm_id{};
 
     struct glaze {
-        constexpr static auto value = glz::object("videoId", &PlaylistItemDataJson::video_id);
+        constexpr static auto value = glz::object("videoId", &PlaylistItemDataJson::ytm_id);
     };
 };
 
@@ -207,11 +207,11 @@ std::optional<std::chrono::milliseconds> duration_of(std::string_view text) {
 }
 
 std::optional<SongResult> song_of(const ItemRendererJson& item) {
-    if (!item.playlist_item_data || item.playlist_item_data->video_id.empty() || item.flex_columns.size() < 2) {
+    if (!item.playlist_item_data || item.playlist_item_data->ytm_id.empty() || item.flex_columns.size() < 2) {
         return std::nullopt;
     }
     SongResult song{
-        .video_id = item.playlist_item_data->video_id,
+        .ytm_id = item.playlist_item_data->ytm_id,
         .explicit_content = std::ranges::any_of(
                 item.badges, [](const BadgeJson& badge) { return badge.inline_badge && badge.inline_badge->icon.icon_type == ExplicitBadge; }
         ),

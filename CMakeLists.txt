@@ -56,10 +56,10 @@ add_executable(WestieLib WIN32
 	src/core/matching/LibraryMatches.cpp
 	src/core/matching/MatchQueries.cpp
 	src/core/matching/Matcher.cpp
-	src/core/matching/VideoCandidates.cpp
-	src/core/matching/VideoLink.cpp
-	src/core/matching/VideoOverride.cpp
-	src/core/matching/VideoSearch.cpp
+	src/core/matching/MatchCandidates.cpp
+	src/core/matching/YouTubeMusicLink.cpp
+	src/core/matching/YtmOverride.cpp
+	src/core/matching/CandidateSearch.cpp
 	src/core/matching/YouTubeMusicSearch.cpp
 	src/core/playlists/AddPlaylist.cpp
 	src/core/playlists/PlaylistLink.cpp
@@ -81,7 +81,7 @@ add_executable(WestieLib WIN32
 	src/core/state/PruneTracks.cpp
 	src/core/state/SplitSource.cpp
 	src/core/state/StateStore.cpp
-	src/core/state/TrackVideos.cpp
+	src/core/state/TrackYtmIds.cpp
 	src/core/sync/ApplyFetch.cpp
 	src/core/sync/ApplyMatch.cpp
 	src/core/sync/SyncEngine.cpp
@@ -127,7 +127,7 @@ add_executable(WestieLib WIN32
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/dialogs/AddPlaylistDialog.cpp
-	src/ui/dialogs/ChooseVideoDialog.cpp
+	src/ui/dialogs/ChooseMatchDialog.cpp
 	src/ui/dialogs/FolderPicker.cpp
 	src/ui/dialogs/LinkLine.cpp
 	src/ui/dialogs/LinkLinePainter.cpp
@@ -138,8 +138,8 @@ add_executable(WestieLib WIN32
 	src/ui/dialogs/RowPlayButtons.cpp
 	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/dialogs/ToolListView.cpp
-	src/ui/dialogs/VideoChoice.cpp
-	src/ui/dialogs/VideoListView.cpp
+	src/ui/dialogs/MatchChoice.cpp
+	src/ui/dialogs/CandidateListView.cpp
 	src/ui/events/CoreEventQueue.cpp
 	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/Animation.cpp

@@ -194,7 +194,7 @@ saved `Placement` and asks it for the current one.
     themselves: `IconText` (a 16 px glyph and a line of text, with the gap and line height its style gives: the card
     titles, the track's status), `SectionTitle` (semibold text and the rule after it), `SyncedValue`
     (`paint_sync_bar`, from `src/ui/SyncBar.cpp`, which the playlist rows use too, then the counts), `ConfidenceValue`
-    (`paint_fraction_bar`, the same bar for a match's confidence, then the percentage), `LengthValue` (the video's
+    (`paint_fraction_bar`, the same bar for a match's confidence, then the percentage), `LengthValue` (the result's
     length, amber when it is more than 5 s off, then the Spotify length in gray), `OutputBox` (a bordered box of
     Consolas text, `FontSet::code`, that wraps), `CoverArt` (the track's cover, so far the placeholder), `SourceLink`
     (an `IconText` with the source's logo, then its name as a `LinkLabel`), and `framework::LinkLabel`s. Every window's
@@ -209,9 +209,9 @@ saved `Placement` and asks it for the current one.
     scrolling moves the card window, not its children. Another card, or the same card for another track or
     playlist (`subject_`), starts at the top; a refresh of the same one keeps the scroll position.
   - `TrackCard` shows a `TrackDetails` (`track_details`): the table's `TrackRow`, the page of the first source of
-    each kind (`core::source_page_url`), the playlists that list the track, in the left panel's order, its video
-    (`core::resolved_video`, and who chose it), the first Spotify source's match, and a failure with the last two
-    lines of its error. Its links go through `InspectorEvents`: a source's name and the video to `on_open_url`, a
+    each kind (`core::source_page_url`), the playlists that list the track, in the left panel's order, its YouTube
+    Music id (`core::resolved_ytm_id`, and who chose it), the first Spotify source's match, and a failure with the last two
+    lines of its error. Its links go through `InspectorEvents`: a source's name and the YouTube Music id to `on_open_url`, a
     playlist to `on_select_playlist`, which selects it as a click on its row does. The Audio section is an
     `AudioRows`: not a window, but the windows of its rows, which it creates on the card and places with the card's
     `CardLayout`.

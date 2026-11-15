@@ -103,10 +103,10 @@ Pretty-printed UTF-8, read and written with glaze. Fields appear in struct decla
 
 The state separates what playlists list from what is on disk:
 
-- A **source** is one entry in an online catalog: a YouTube Music video or a Spotify track. Its key is
-  `<source>:<source id>`, e.g. `ytm:<videoId>` or `spotify:<trackId>`. Playlists list source keys, and a source
+- A **source** is one entry in an online catalog: a YouTube Music entry or a Spotify track. Its key is
+  `<source>:<source id>`, e.g. `ytm:<ytmId>` or `spotify:<trackId>`. Playlists list source keys, and a source
   that appears in several playlists has one entry.
-- A **track** is one audio file in the library, made from one YouTube video. It has one or more sources. The
+- A **track** is one audio file in the library, made from one YouTube Music id. It has one or more sources. The
   same song in a YouTube Music playlist and a Spotify playlist is one track with two sources and one file.
 
 ```json
@@ -161,7 +161,7 @@ The state separates what playlists list from what is on disk:
       "explicit": false,
       "isrc": "USxxx0000000",
       "coverUrl": "https://i.scdn.co/image/...",
-      "match": { "videoId": "ccccccccccc", "confidence": 1,
+      "match": { "ytmId": "ccccccccccc", "confidence": 1,
                  "title": "Title", "artists": [ "Artist One" ], "album": "Album", "durationMs": 243000,
                  "explicit": false },
       "track": "spotify:6r8k1vznHrzlEKYxxxxxxx"
@@ -178,7 +178,7 @@ The state separates what playlists list from what is on disk:
   "tracks": {
     "ytm:aaaaaaaaaaa": {
       "sources": [ "ytm:aaaaaaaaaaa" ],
-      "videoId": "aaaaaaaaaaa",
+      "ytmId": "aaaaaaaaaaa",
       "edits": { "album": "Album (Deluxe)" },
       "status": "downloaded",
       "file": "Artist - Title.opus",
@@ -186,7 +186,7 @@ The state separates what playlists list from what is on disk:
     },
     "spotify:6r8k1vznHrzlEKYxxxxxxx": {
       "sources": [ "spotify:6r8k1vznHrzlEKYxxxxxxx", "ytm:ccccccccccc" ],
-      "videoId": "ccccccccccc",
+      "ytmId": "ccccccccccc",
       "status": "downloaded",
       "file": "Artist One, Artist Two - Title.opus",
       "addedAt": "2026-10-11T14:05:00Z"
@@ -203,7 +203,7 @@ The state separates what playlists list from what is on disk:
 ```
 
 In this example, the WCS playlist (YouTube Music) and Her playlist (Spotify) both contain "Title". The Matcher
-picked the same video (`ccccccccccc`) that WCS lists, so the two sources share one track and one file.
+picked the same YouTube Music id (`ccccccccccc`) that WCS lists, so the two sources share one track and one file.
 
 **Playlist fields.**
 - The key is `ytm:<list id>` or `spotify:<playlist id>`, and `url` is the canonical link built from it (see Playlist
@@ -220,10 +220,10 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | Field                            | Meaning                                                                    |
 |----------------------------------|----------------------------------------------------------------------------|
 | `title`, `artists`, `durationMs` | From the playlist                                                          |
-| `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source's video has been downloaded |
+| `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source has been downloaded |
 | `explicit`                       | Spotify only: whether the track is explicit (`contentRating.label` `EXPLICIT`); left out when unknown |
 | `isrc`, `coverUrl`               | Spotify only. The playlist response has the cover but no ISRC; where the ISRC comes from is decided with the Matcher |
-| `match`                          | Spotify only: the Matcher's result, with `videoId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), `doubts` (why it needs review: `title`, `artist`, `version`, `length`, `explicit`; left out when there are none), and the video's `title`, `artists`, `album`, `durationMs` and `explicit` as YouTube Music lists them, so a review shows what was matched |
+| `match`                          | Spotify only: the Matcher's result, with `ytmId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), `doubts` (why it needs review: `title`, `artist`, `version`, `length`, `explicit`; left out when there are none), and the result's `title`, `artists`, `album`, `durationMs` and `explicit` as YouTube Music lists them, so a review shows what was matched |
 | `track`                          | Key of the track this source belongs to                                    |
 
 **Track fields.**
@@ -231,8 +231,8 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | Field              | Meaning                                                                         |
 |--------------------|---------------------------------------------------------------------------------|
 | `sources`          | Its source keys, in the order they joined. The first one created the track; its key is the **track key**, which never changes |
-| `videoId`          | The YouTube video the file was made from                                        |
-| `videoOverride`    | See Video resolution                                                            |
+| `ytmId`          | The YouTube Music id the file was made from                                     |
+| `ytmOverride`    | See YouTube Music id resolution                                                 |
 | `edits`            | User edits from `editTrack`: any of `title`, `artists`, `album`, `year`, and `cover: true` for a custom cover in `covers\`. They win over source values, and syncs never overwrite them |
 | `status`           | See below                                                                       |
 | `failure`, `error` | Set with `failed`. One of `noMatch` (no usable candidate; `error` lists the searched queries), `search` (the search itself failed, for example without a network; `error` holds why), or `download` (a tool failed; `error` holds its last output lines) |
@@ -249,50 +249,50 @@ picked the same video (`ccccccccccc`) that WCS lists, so the two sources share o
 | `orphaned`   | None of its sources is in a playlist anymore; waiting for a keep/remove decision |
 | `kept`       | None of its sources is in a playlist anymore; kept by choice           |
 
-**Video resolution.** A track's video is the first of:
-1. its `videoOverride`;
-2. the video of its first YouTube Music source, because the playlist owner chose it;
+**YouTube Music id resolution.** A track's YouTube Music id is the first of:
+1. its `ytmOverride`;
+2. the id of its first YouTube Music source, because the playlist owner chose it;
 3. the Matcher's result for its first Spotify source.
 
-`resolved_video` (`src/core/state/TrackVideos`) gives the video, the source it comes from (for an override, the
+`resolved_ytm_id` (`src/core/state/TrackYtmIds`) gives the id, the source it comes from (for an override, the
 track's first source), and whether it is the override.
 
-A track **needs review** when its video comes from a match that isn't `confirmed` and whose confidence is under the
+A track **needs review** when its YouTube Music id comes from a match that isn't `confirmed` and whose confidence is under the
 review threshold (see Matcher › Choose). The flag isn't stored, so a new threshold applies to the matches already
-made. Resolution runs for tracks without a file, and again when the override changes. Setting `videoOverride`
-re-downloads the track (or merges it, see below), and clears `failure`; the track's video then no longer comes from
+made. Resolution runs for tracks without a file, and again when the override changes. Setting `ytmOverride`
+re-downloads the track (or merges it, see below), and clears `failure`; the track's YouTube Music id then no longer comes from
 the match, so it no longer needs review.
 
 `needs_review` (`src/core/state/MatchReview`) gives it, for a match and for a track.
 
-**Merging.** No two tracks share a video. A video gets resolved in three ways:
+**Merging.** No two tracks share a YouTube Music id. An id gets resolved in three ways:
 - a fetch adds a YouTube Music source;
 - the Matcher finishes;
-- a video override is set.
+- an override is set.
 
-Each time, if another track already has that video, the two tracks merge. A track that needs review doesn't count:
-its match may be wrong, so it neither merges into a track with its video nor takes one in, until `confirmMatch`
-confirms it, which then merges it. Meanwhile two tracks can share a video. A merge goes like this:
-- The track that had the video first survives. The other track's sources move into it, and its entry is
+Each time, if another track already has that id, the two tracks merge. A track that needs review doesn't count:
+its match may be wrong, so it neither merges into a track with its id nor takes one in, until `confirmMatch`
+confirms it, which then merges it. Meanwhile two tracks can share an id. A merge goes like this:
+- The track that had the id first survives. The other track's sources move into it, and its entry is
   deleted.
 - If the deleted track had a file, that file goes to the Recycle Bin.
 - The surviving track keeps its own `edits`, and takes the other track's edits for fields it hasn't edited.
 - When the merge changes the effective metadata or cover, the file is re-tagged and renamed.
 - The engine emits `TracksMerged`.
 
-Sources stay attached to their track until the track is removed, with one exception: choosing another video for one
-entry of a merged track (Choose a match, `setVideoOverride` on a duplicate, with manual matching) moves that source out
+Sources stay attached to their track until the track is removed, with one exception: choosing another result for one
+entry of a merged track (Choose a match, `setYtmOverride` on a duplicate, with manual matching) moves that source out
 into a track of its own, which gets the override. So a merge is never final.
 
-`set_video_override` (`src/core/matching/VideoOverride`) does it for an entry, a source, and a video:
-- The video the track has already changes nothing, except that a match that needs review is confirmed
+`set_ytm_override` (`src/core/matching/YtmOverride`) does it for an entry, a source, and a YouTube Music id:
+- The id the track has already changes nothing, except that a match that needs review is confirmed
   (`confirm_match`).
-- When the source is the one the track's video comes from, the override is the whole track's. Otherwise the source
+- When the source is the one the track's id comes from, the override is the whole track's. Otherwise the source
   first moves into a track of its own (`split_source`, `src/core/state/SplitSource`): keyed by the source when it
   isn't the track key, or else the track keeps it and its other sources move into a track keyed by the first of them.
   The new track takes the old one's status and `addedAt`.
-- The track gets `videoOverride`, loses its failure, and a failed one waits again. When another track already has
-  the video, it merges into that one.
+- The track gets `ytmOverride`, loses its failure, and a failed one waits again. When another track already has
+  the id, it merges into that one.
 
 A track with an override is never matched again, neither by a sync's search nor from the library.
 
@@ -323,7 +323,7 @@ by these rules, the length in the same order; so far there are no `edits`. The t
 The cover art comes from the first of:
 1. the custom cover;
 2. the first Spotify source's `coverUrl`;
-3. the video thumbnail.
+3. the YouTube Music thumbnail.
 
 ### tools.json
 
@@ -385,8 +385,10 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
   `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `explicit`, `match` and
-  `track`; and tracks with `sources`, `videoOverride`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
+  `track`; and tracks with `sources`, `ytmOverride`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
   out, and a failure or doubt name from a later version reads as none. The other fields arrive with their features.
+- Earlier versions wrote `ytmId` and `ytmOverride` as `videoId` and `videoOverride`. Those keys still read, and the
+  next save writes the new ones.
 
 A named mutex makes WestieLib single-instance, so exactly one process writes the state.
 
@@ -418,7 +420,7 @@ every component that logs.
   the exit code in the pane.
 - So far it logs the sync (started, each fetch and match, failures, the end), the tools (installed, updated, failed),
   the playlist look-up and the match search (at Debug, failures as warnings), and the commands that change the
-  state from the UI (a playlist added or removed, a match confirmed, a video chosen). A merge that sends no
+  state from the UI (a playlist added or removed, a match confirmed, a match chosen). A merge that sends no
   `TracksMerged` writes its line about the track that is left.
 - When the file can't be opened or written, the lines still reach the UI, and the first such failure is an Error line
   of its own.
@@ -504,7 +506,7 @@ tools it needs (ui.md, Vocabulary › Waiting for tools):
 | `SpotifySource` fetch                  | –              |
 | `YouTubeMusicSource` fetch             | yt-dlp         |
 | Matcher                                | –              |
-| `searchVideos`                         | –              |
+| `searchCandidates`                     | –              |
 | Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg |
 
 A step whose tool isn't available stays queued, and the track stays `pending` with a `waitingFor` list of tool names
@@ -542,13 +544,13 @@ the available version through an event.
 
 ```cpp
 struct SourceTrack {
-	std::string key;                       // source key: "ytm:<videoId>" / "spotify:<trackId>"
+	std::string key;                       // source key: "ytm:<ytmId>" / "spotify:<trackId>"
 	std::string title;
 	std::vector<std::string> artists;
 	std::string album;
 	std::optional<std::string> isrc;
 	std::optional<std::string> coverUrl;
-	std::optional<std::string> videoId;    // set by YouTubeMusicSource
+	std::optional<std::string> ytmId;    // set by YouTubeMusicSource
 	std::chrono::milliseconds duration;
 };
 
@@ -593,7 +595,7 @@ A new look-up stops the one before, and so does `stop()`; a stopped look-up answ
   the UI checks point it at a fake server of their own, so they never reach the network.
 
 **YouTubeMusicSource** runs `yt-dlp --flat-playlist -J <url>` and maps each entry to a `SourceTrack` with its
-`videoId`. The album and year of these sources come from yt-dlp's info JSON at download time.
+`ytmId`. The album and year of these sources come from yt-dlp's info JSON at download time.
 
 - `fetch_youtube_music_playlist` (`src/core/sources/YouTubeMusicPlaylist.cpp`) does it. A playlist of about 1000
   entries takes yt-dlp some 7 s and 1.2 MB of JSON.
@@ -638,10 +640,10 @@ never refreshed.
 
 ### Matcher
 
-The Matcher turns a Spotify source into a YouTube Music `videoId`. It runs only for tracks that have no video
-override and no YouTube Music source (see Video resolution).
+The Matcher turns a Spotify source into a YouTube Music `ytmId`. It runs only for tracks that have no
+override and no YouTube Music source (see YouTube Music id resolution).
 
-A wrong video puts another recording in the library, which is worse than asking the user to confirm a right one. So
+A wrong match puts another recording in the library, which is worse than asking the user to confirm a right one. So
 the Matcher:
 - answers two questions apart: *the same song?* (the title and the artists) and *the same recording?* (the title's
   version words, the length, the album and the explicit flag);
@@ -653,7 +655,7 @@ the Matcher:
 1. **Queries.** `"<artists> <title>"`, then, when that finds nothing usable, `"<first artist> <bare title>"`, the
    title without bracketed parts, a ` - ` suffix or a `feat.` tail (skipped when it is the same query). The Spotify
    fetch has no ISRC, so there is no ISRC query.
-2. **Search.** YouTube Music's own search, not yt-dlp: yt-dlp's flat search results carry only the video id and
+2. **Search.** YouTube Music's own search, not yt-dlp: yt-dlp's flat search results carry only the id and
    title, and extracting each candidate in full costs about 2 s. `search_youtube_music_songs`
    (`src/core/matching/YouTubeMusicSearch`) sends `POST <api>/youtubei/v1/search?prettyPrint=false` with
    `context.client` (`WEB_REMIX`, a compiled-in `clientVersion`, `hl: en`), the query, and the songs filter's `params`.
@@ -751,14 +753,14 @@ the Matcher:
    **Ranking** (`match_rank`, `src/core/matching/MatchRank`) orders the candidates by, in turn: the verdict (Accept,
    Review, Reject; among rejects another recording, then another artist, then another song); fewer doubts; stronger
    artist evidence, since another artist may be a cover or a reupload while a length a few seconds off is often the
-   same recording; a closer length class; a video that a track already has, so the same song from both sources tends
+   same recording; a closer length class; a YouTube Music id that a track already has, so the same song from both sources tends
    to end up as one track; a Same album; the same explicit flag; stronger name evidence; a smaller length difference;
    and last YouTube Music's order.
-10. **Choose.** The searches run in turn, their candidates pooled (each video once), until one gives an Accept. Then
+10. **Choose.** The searches run in turn, their candidates pooled (each id once), until one gives an Accept. Then
     the pool's best ranked candidate decides:
-    - Accept or Review: the source's `match` stores the video id, the confidence and doubts, and the candidate's
-      title, artists, album, length and explicit flag. A Review makes the track need review (see Video resolution)
-      until the match is confirmed or a video override is set. If an accepted video already belongs to another track,
+    - Accept or Review: the source's `match` stores the YouTube Music id, the confidence and doubts, and the candidate's
+      title, artists, album, length and explicit flag. A Review makes the track need review (see YouTube Music id resolution)
+      until the match is confirmed or an override is set. If an accepted id already belongs to another track,
       the two tracks merge instead of downloading.
     - Reject, or no results: the track fails with `failure: noMatch` and the searched queries in `error`. A search
       that fails (no network, an HTTP error) fails the track with `failure: search` and the reason in `error`. Either
@@ -773,9 +775,9 @@ titles has, as that title writes them and in its order, each once: `Korean` for 
 against `Love U Like That`, `feat.` and `DaBaby` for `Levitating (feat. DaBaby)` against `Levitating`. It takes the
 titles and artists the match stores, so the UI never parses a title.
 
-**The library first.** YouTube Music keeps one recording under several video ids (a single, an album, a re-release),
+**The library first.** YouTube Music keeps one recording under several ids (a single, an album, a re-release),
 and a playlist can swap one for another. So a Spotify track and the YouTube Music playlist entry of the same song
-can end up with different videos, and never merge. Before it searches, a sync compares every Spotify track in the
+can end up with different ids, and never merge. Before it searches, a sync compares every Spotify track in the
 library that has no YouTube Music source a playlist lists (and isn't Removed or Kept) with the YouTube Music sources
 the playlists list (`library_matches`, `src/core/matching/LibraryMatches`): the same judgement, against the sources
 whose name has the same letters, with or without a `with` tail (so `Funkytown` finds `Funky Town`). The best ranked
@@ -790,25 +792,25 @@ A downloaded track merges by the Merging rules, its own file going to the Recycl
 A stored match keeps the confidence and doubts it got; a later change to the rules applies to new matches only. Until
 release, playlists are added again to match their tracks anew.
 
-**Video search.** `searchVideos(source, query)` serves the UI's Choose a match dialog, for a Spotify source.
-`VideoSearch` (`src/core/matching/VideoSearch`) runs it on its own worker thread, outside any sync run; a new search
-stops the one before, and a stopped one answers nothing. It answers with `VideoSearchResults`: the request's number,
+**Candidate search.** `searchCandidates(source, query)` serves the UI's Choose a match dialog, for a Spotify source.
+`CandidateSearch` (`src/core/matching/CandidateSearch`) runs it on its own worker thread, outside any sync run; a new search
+stops the one before, and a stopped one answers nothing. It answers with `CandidateSearchResults`: the request's number,
 the candidates, and the error of a search that failed. Searching needs no tool: it is the Matcher's own search
 (`search_youtube_music_songs`), for the query, or without one for each of the Matcher's queries (`match_queries`,
 `src/core/matching/MatchQueries`).
 
-`video_candidates` (`src/core/matching/VideoCandidates`) makes the list from a fresh snapshot, each video once, by
+`match_candidates` (`src/core/matching/MatchCandidates`) makes the list from a fresh snapshot, each id once, by
 rank (`match_rank` of its judgement against the source), ties in this order:
 1. the source's match;
 2. the YouTube Music sources the playlists list (`listed_sources`, `src/core/state/ListedSources`) that the
    judgement doesn't reject;
 3. the search results.
 
-Each candidate has the video id, title, artists, album (none for a library source), length, score (the judgement's
-confidence), whether it is the source's track's video, and the track that has it otherwise (`track_with_video`). A
+Each candidate has the YouTube Music id, title, artists, album (none for a library source), length, score (the judgement's
+confidence), whether it is the source's track's id, and the track that has it otherwise (`track_with_ytm_id`). A
 failed search still answers with the first two.
 
-**Video links.** `parse_video_link` (`src/core/matching/VideoLink`) turns a pasted link into a video id. It drops
+**YouTube Music links.** `parse_ytm_link` (`src/core/matching/YouTubeMusicLink`) turns a pasted link into a YouTube Music id. It drops
 spaces around the text; `http://` or `https://` is optional, and host names ignore case.
 
 | Accepted | Example |
@@ -833,7 +835,7 @@ yt-dlp -f "bestaudio[acodec=opus]/bestaudio" -x --audio-format <format>
        --ffmpeg-location <tools> --js-runtimes deno:<tools>\deno.exe
        --newline --progress-template "download:%(progress._percent_str)s"
        --no-playlist -o "<work>\%(id)s.%(ext)s"
-       https://music.youtube.com/watch?v=<videoId>
+       https://music.youtube.com/watch?v=<ytmId>
 ```
 
 - **Format.** `<format>` comes from `settings.format` at download time.
@@ -847,7 +849,7 @@ yt-dlp -f "bestaudio[acodec=opus]/bestaudio" -x --audio-format <format>
 - **Cover art.** The first of these that applies:
   1. a custom cover from `edits` (`covers\<track key>.jpg`);
   2. when the track has a Spotify source, its Spotify image (square, 640 px), fetched with `HttpClient`;
-  3. the video thumbnail, center-cropped to a square with `ffmpeg -vf "crop=min(iw\,ih):min(iw\,ih)"`.
+  3. the YouTube Music thumbnail, center-cropped to a square with `ffmpeg -vf "crop=min(iw\,ih):min(iw\,ih)"`.
 
   No cover is fetched when `embedCover` is off.
 - **Metadata.** The info JSON fills the album and year of the track's YouTube Music sources: `track` (falling
@@ -867,13 +869,13 @@ effective metadata, so `edits` win over source values:
 | `DATE`                   | `year`                                                        |
 | `ISRC`                   | ISRC, when known                                              |
 | `WESTIELIB_SOURCE`       | every source key of the track, one value each, track key first |
-| `WESTIELIB_VIDEOID`      | YouTube video id the audio came from                          |
+| `WESTIELIB_YTMID`        | YouTube Music id the audio came from                          |
 
 **Cover art** is the front cover (picture type 3), as a JPEG. It is written only when `embedCover` is on:
 - in Opus files, as `METADATA_BLOCK_PICTURE`;
 - in FLAC files, as a native `PICTURE` block.
 
-`WESTIELIB_SOURCE` and `WESTIELIB_VIDEOID` make every file self-identifying, which powers state rebuilds.
+`WESTIELIB_SOURCE` and `WESTIELIB_YTMID` make every file self-identifying, which powers state rebuilds.
 
 The Tagger also re-tags finished library files in place, after `editTrack` and after a merge.
 
@@ -892,7 +894,7 @@ The Library places finished files and handles the library folder as a whole.
 - **Removal.** Files go to the Recycle Bin through `FileOps`.
 - **Relocation.** `relocateLibrary(newPath)` updates `libraryPath`; all `file` entries are relative, so they stay valid.
 - **Rebuild.** `rebuildState()` scans the library folder for `.opus` and `.flac` files. From each one it reads
-  `WESTIELIB_SOURCE` / `WESTIELIB_VIDEOID` and the regular tags, and recreates the track and its sources.
+  `WESTIELIB_SOURCE` / `WESTIELIB_YTMID` and the regular tags, and recreates the track and its sources.
   - The file tags become the source values, so `edits` are not restored.
   - Playlist membership is restored on the next sync.
 
@@ -904,7 +906,7 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
    - On success, the playlist's `sources` and `name` in the state are replaced with it, and `fetchError` is
      cleared. The engine emits `PlaylistFetched`.
    - A new source becomes a new `pending` track with `addedAt`. The exception is a new YouTube Music source
-     whose video already belongs to a track: it joins that track (see Merging).
+     whose id already belongs to a track: it joins that track (see Merging).
    - On failure, the playlist gets `fetchError` / `fetchErrorAt` and keeps its previous source list, plus the pages
      a Spotify fetch read before it failed, so none of its tracks become orphans. The engine emits
      `PlaylistFetchFailed`, and the run continues with the other playlists.
@@ -913,11 +915,11 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
 3. **Queue.** All `pending` and `failed` tracks are queued in playlist order. Workers start tracks
    `delayBetweenTracksSeconds` apart.
 4. **Per track (worker).**
-   1. Resolve the video (see Video resolution). This step takes a lock on the video id, so two tracks that
-      resolve to the same video in one run merge instead of downloading it twice.
-   2. If the video already belongs to another track, merge, emit `TracksMerged`, and stop here.
+   1. Resolve the YouTube Music id (see YouTube Music id resolution). This step takes a lock on the id, so two
+      tracks that resolve to the same id in one run merge instead of downloading it twice.
+   2. If the id already belongs to another track, merge, emit `TracksMerged`, and stop here.
    3. Downloader, then Tagger, then Library placement.
-   4. Update the track (`downloaded`, `file`, `videoId`) and the source's `match`, or mark the track `failed`
+   4. Update the track (`downloaded`, `file`, `ytmId`) and the source's `match`, or mark the track `failed`
       with a `failure`:
       - `noMatch`, with the searched queries as `error`;
       - `download`, with the last lines of tool output as `error`.
@@ -944,7 +946,7 @@ downloads yet.
 - Per playlist the run emits `PlaylistFetching` and fetches. `apply_fetch` (`ApplyFetch.cpp`) puts the result in
   the state: the playlist's `name` and `sources`, `lastSync`, no `fetchError`, the source values from the playlist,
   a `pending` track for each new source (keyed like the source), then `prune_tracks`. A new YouTube Music source
-  whose video a track already has (a Spotify track matched to it) joins that track instead. A playlist removed during
+  whose id a track already has (a Spotify track matched to it) joins that track instead. A playlist removed during
   the fetch is left alone. Then the run emits `PlaylistFetched`.
 - A Spotify fetch also hands over the tracks read so far after every page but the last. `apply_fetch_page` puts them
   in the state: the playlist's `name`, and as its `sources` the ones read so far followed by its earlier sources that
@@ -961,10 +963,10 @@ downloads yet.
   once. The run emits `TracksQueued` with the ones it hasn't queued yet, and matches them one at a time, saving after
   each:
   - `apply_match` (`ApplyMatch.cpp`) stores the match, clears a failure (a failed track waits again), and merges the
-    track into the one that already has that video (`track_with_video`, `merge_tracks`), unless the match needs
+    track into the one that already has that id (`track_with_ytm_id`, `merge_tracks`), unless the match needs
     review. The run emits `TracksMerged`, or `TrackStatusChanged`.
 - `confirm_match` (`src/core/matching/ConfirmMatch`) serves `confirmMatch` on the UI thread: it sets `confirmed` and
-  merges the track as `apply_match` would have. `set_video_override` serves `setVideoOverride` there too. A match
+  merges the track as `apply_match` would have. `set_ytm_override` serves `setYtmOverride` there too. A match
   that a run makes meanwhile for a track that got an override is dropped (`apply_match` leaves such a track alone).
   - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
   - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped. A track is tried
@@ -988,9 +990,9 @@ downloads yet.
 | `cancel()`                               | Cancels the running sync                                       |
 | `retry(trackKeys)`                       | Queues the given tracks again without fetching playlists       |
 | `resolveRemovals({trackKey: keep/remove})` | Applies removal decisions                                    |
-| `setVideoOverride(sourceKey, videoId)`   | Sets `videoOverride` on the source's track, or on a track of its own (see Merging), and re-downloads it, or merges it into the track that already has that video |
-| `confirmMatch(trackKey)`                 | Sets `confirmed` on the match the track's video comes from, then merges the track into one that already has that video |
-| `searchVideos(sourceKey, query?)`        | Lists candidate videos for a Spotify source, searching YouTube Music's songs; answers with `VideoSearchResults` |
+| `setYtmOverride(sourceKey, ytmId)`       | Sets `ytmOverride` on the source's track, or on a track of its own (see Merging), and re-downloads it, or merges it into the track that already has that id |
+| `confirmMatch(trackKey)`                 | Sets `confirmed` on the match the track's id comes from, then merges the track into one that already has that id |
+| `searchCandidates(sourceKey, query?)`    | Lists candidates for a Spotify source, searching YouTube Music's songs; answers with `CandidateSearchResults` |
 | `editTrack(trackKey, edits, coverImage?)` | Stores `edits` and an optional custom cover. Re-tags the file, renames it when artists or title changed, emits `TrackUpdated` |
 | `setSettings(settings)`                  | Saves `settings.json`; applies to the next run                 |
 | `relocateLibrary(path)`                  | Points the state at a moved library folder                     |
@@ -1013,7 +1015,7 @@ downloads yet.
 | `TrackProgress`                | track key, percent                              |
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |
-| `VideoSearchResults`           | request number, candidates, error               |
+| `CandidateSearchResults`           | request number, candidates, error               |
 | `RemovalsPending`              | list of orphaned track keys                     |
 | `ToolsRunChanged`              | whether a ToolManager run is going              |
 | `ToolStatus`                   | tool, state, installed release, percent, error  |

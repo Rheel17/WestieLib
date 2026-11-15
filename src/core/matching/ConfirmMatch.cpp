@@ -6,7 +6,7 @@
 #include "core/log/LogSubject.h"
 #include "core/sources/SourceType.h"
 #include "core/state/MergeTracks.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 
 namespace westie::core {
 
@@ -15,15 +15,15 @@ std::optional<std::string> confirm_match(State& state, const std::string& track_
     if (track == state.tracks.end()) {
         return std::nullopt;
     }
-    std::optional<ResolvedVideo> video = resolved_video(state, track->second);
-    if (!video || video->overridden || source_type_of_key(video->source) != SourceType::Spotify) {
+    std::optional<ResolvedYtmId> resolved = resolved_ytm_id(state, track->second);
+    if (!resolved || resolved->overridden || source_type_of_key(resolved->source) != SourceType::Spotify) {
         return std::nullopt;
     }
-    std::optional<Match>& match = state.sources.at(video->source).match;
+    std::optional<Match>& match = state.sources.at(resolved->source).match;
     match->confirmed = true;
 
-    // As the Matcher would have, had it been sure: the track that had the video first survives
-    std::optional<std::string> survivor = track_with_video(state, video->video_id, track_key);
+    // As the Matcher would have, had it been sure: the track that had the YouTube Music id first survives
+    std::optional<std::string> survivor = track_with_ytm_id(state, resolved->ytm_id, track_key);
     if (survivor) {
         merge_tracks(state, *survivor, track_key);
     }
@@ -38,7 +38,7 @@ std::optional<std::string> confirm_match(StateStore& store, Log& log, const std:
     if (survivor) {
         subject.track = *survivor;
     }
-    log.write(LogLevel::Info, survivor ? "Confirmed the match, and merged into the track that has that video" : "Confirmed the match", std::move(subject));
+    log.write(LogLevel::Info, survivor ? "Confirmed the match, and merged into the track with that YouTube Music id" : "Confirmed the match", std::move(subject));
     return survivor;
 }
 

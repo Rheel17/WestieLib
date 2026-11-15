@@ -14,7 +14,7 @@ public:
     explicit LengthValue(HWND parent);
 
     void set_font(HFONT font);
-    void set_lengths(std::chrono::milliseconds video, std::chrono::milliseconds source);
+    void set_lengths(std::chrono::milliseconds result, std::chrono::milliseconds source);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -24,7 +24,7 @@ private:
 
     void paint() const;
 
-    std::wstring video_;
+    std::wstring result_;
     std::wstring source_;
     HFONT font_ = nullptr;
 };

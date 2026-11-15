@@ -73,9 +73,9 @@ In the Status column, Needs review wins over Synced and Waiting and shows ⚠, b
 can act on. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a
 duplicate counts under its track's status everywhere else.
 
-**Needs review.** A Spotify track needs review when its video comes from a match the Matcher wasn't sure of (`arch.md`,
+**Needs review.** A Spotify track needs review when its YouTube Music id comes from a match the Matcher wasn't sure of (`arch.md`,
 Matcher › Verdict: a Review, with the doubts that made it one) and that the user hasn't confirmed. Until then the match
-stays apart: it doesn't merge into a track that already has the video.
+stays apart: it doesn't merge into a track that already has that id.
 
 **Waiting for tools.** Work that needs a tool waits while that tool isn't installed, and only then; work that doesn't
 need it goes ahead. Waiting isn't failing: the hourglass is gray and still, unlike ✕ for a failed download and ⚠ for
@@ -97,13 +97,13 @@ ffmpeg`) as its tooltip and in the inspector. A playlist whose fetch waits shows
 Add playlist dialog shows it on its detection line (see Dialogs).
 
 **Tracks, sources and entries.** A *track* is one file in the library. A track has one or more *sources*, which
-are YouTube Music videos or Spotify tracks. Sources with the same video are merged into one track (see `arch.md`,
+are YouTube Music or Spotify catalog entries. Sources with the same YouTube Music id are merged into one track (see `arch.md`,
 Merging): the same song in a YouTube Music and a Spotify playlist, or one recording a Spotify playlist lists under
 several ids (single, album, compilation). All tracks shows a row per track. A playlist shows a row per *entry*: one
 source it lists. So a merge never takes a row out of a playlist: when a playlist lists several sources of one track,
 the first is the original and the later ones are *duplicates*, which download nothing of their own and share its
 file. Entries in different playlists are never duplicates of each other. A track with a YouTube Music source never
-needs review, because the playlist owner chose its video.
+needs review, because the playlist owner chose its id.
 
 ## Menu bar and toolbar
 
@@ -250,7 +250,7 @@ tracks show as Waiting, a track whose match fails as Failed, and nothing downloa
   playlist had; the next fetch that succeeds settles the list;
 - a fetch that succeeds sets the last sync, so a playlist whose tracks all wait reads `○ Synced today 14:03 ↻`;
 - each match updates the table, the cards and the rows' counts as it ends. A matched track that merges into one
-  with the same video leaves the table; when it was selected, the selection is gone with it.
+  with the same YouTube Music id leaves the table; when it was selected, the selection is gone with it.
 
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
 so their left edge is where the All tracks name starts.
@@ -452,8 +452,8 @@ tab, search or source starts it at the top.
   - the track key;
   - the ISRC.
 - **Audio**:
-  - for matched tracks: `Matched` (the video title), `Artists` (the video's, as YouTube Music's search lists them),
-    and `Length`, the video's length next to the source length;
+  - for matched tracks: `Matched` (the result's title), `Artists` (the result's, as YouTube Music's search lists them),
+    and `Length`, the result's length next to the source length;
   - `ID`, the YouTube Music id as a link; `No match found` in red when the Matcher found nothing;
   - `Chosen by`: `Playlist`, `Matcher` or `Override`;
   - `Confidence`, as a bar + %; the bar is yellow when review is needed;
@@ -465,8 +465,8 @@ tab, search or source starts it at the top.
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
 So far no track has a file, so the track card shows no cover, no year, and `File` not downloaded yet. It shows the
-status with its explanation, a failure's reason and output, and the Audio rows of a video that a YouTube Music
-source, the Matcher or an override chose. The only action so far is `Choose match…`, for Needs review and for Failed,
+status with its explanation, a failure's reason and output, and the Audio rows of the YouTube Music id that a
+YouTube Music source, the Matcher or an override chose. The only action so far is `Choose match…`, for Needs review and for Failed,
 no match. The ISRC and the other action buttons come with their
 features, and so do the selection card's bulk actions.
 
@@ -550,15 +550,15 @@ The track card, from the top, in DIPs:
     that playlist, as a click on its row does. A link that doesn't fit ends in an ellipsis, and the ones after it
     don't show. A track in no playlist reads `None` in gray;
   - `Key`: the row's source key.
-- **Audio** holds rows like Source's, by how the row's source got its video, so a duplicate shows what the Matcher
+- **Audio** holds rows like Source's, by how the row's source got its YouTube Music id, so a duplicate shows what the Matcher
   did with it:
   - a Spotify entry with a match: `Matched`, `Artists`, `Length`, `ID`, `Chosen by` `Matcher`, `Confidence`;
   - a YouTube Music entry: `ID`, `Chosen by` `Playlist`, and `Spotify match` `Same ID (96%)` when the
-    track's first Spotify source was matched to that video;
-  - otherwise by where the track's video comes from (`arch.md`, Video resolution), and with none, `ID` reads
+    track's first Spotify source was matched to that id;
+  - otherwise by where the track's YouTube Music id comes from (`arch.md`, YouTube Music id resolution), and with none, `ID` reads
     `Not chosen yet` in gray, or `No match found` in red after a failed match.
 
-  `Length` is the video's length (`m:ss`), then ` (Spotify 3:32)` in gray. `ID` is the YouTube Music id (the video id)
+  `Length` is the result's length (`m:ss`), then ` (Spotify 3:32)` in gray. `ID` is the YouTube Music id
   as a link to `https://music.youtube.com/watch?v=<id>`. `Confidence` is a 110 px bar, 6 px tall and centered on the
   line, filled as far as the confidence, then 6 px and the percentage; a narrower card shortens the bar. The fill is
   green, or `#D9A400` (a paused progress bar's yellow) when the track needs review.
@@ -772,24 +772,24 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 - **Choose a match**. Opened by `Choose match…` in the inspector, the Track menu or Edit track. One dialog
   covers both the case with several candidates and the case where nothing was found:
   - At the top: the source track (glyph, title, then `by <artists> (<album>, <length>)` in gray), with a play button
-    at the right end of the line (see Play buttons), which opens the track on Spotify. Under it the track's video,
-    by where it comes from: "Current match: <title>, 58% confidence", "Current match: <title>, from a YouTube Music
+    at the right end of the line (see Play buttons), which opens the track on Spotify. Under it the track's current
+    match, by where it comes from: "Current match: <title>, 58% confidence", "Current match: <title>, from a YouTube Music
     playlist", "Current match: <title or id>, chosen by you", or without one "No match found." (after a failed match)
     or "Not matched yet."
   - `Search YouTube Music:` an edit pre-filled with the Matcher's first query, and `Search`. The search is the
-    Matcher's own (`arch.md`, Matcher › Search): songs only, and no tool needed. A video that isn't a song is
+    Matcher's own (`arch.md`, Matcher › Search): songs only, and no tool needed. Anything that isn't a song is
     chosen by its link (below).
   - A results list with Title | Artists | Album | Length | Match and an untitled last column with each row's play
-    button, which opens that video on YouTube Music without selecting or choosing the row. Title takes the width the
+    button, which opens that result on YouTube Music without selecting or choosing the row. Title takes the width the
     other columns leave. The rows come in the Matcher's ranking (`arch.md`, Matcher › Verdict; ties in the order
-    below), each video once:
+    below), each YouTube Music id once:
     - the current match, marked `(current)`;
     - the YouTube Music sources the playlists list that the Matcher doesn't reject for the track, marked
       `(in library)`;
     - the search results. When the dialog opens, those of the Matcher's queries; after `Search` (or Enter in the
       edit), those of the edit's text. The current match and the library rows stay.
-    - A result whose video already belongs to another track is marked `(in library)` too. Choosing a video in the
-      library merges the track into the one that has it.
+    - A result whose YouTube Music id already belongs to another track is marked `(in library)` too. Choosing a
+      result in the library merges the track into the one that has it.
     - `Match` is the Matcher's verdict on it (`judge_match`): `Same recording` when it would accept it; `Check`
       and its doubts when it would ask for a review (`Check length`, `Check artist, version`), in the order of the
       track card's sentences; `Other recording`, `Other artist` or `Other song` when it would reject it. Lengths more
@@ -798,22 +798,22 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
       "No results. Try fewer words, or paste a link below.", or "Couldn't search YouTube Music: <reason>" when the
       search failed.
   - `Or paste a YouTube or YouTube Music link:` an edit with a play button on its right, enabled once the link names
-    a video, and a live detection line under it. The line reads nothing for an empty edit, `Not a YouTube link` in
-    gray, or the YouTube Music logo and `YouTube video <id>`, followed by the title when the library has that video.
-    The links it takes are in `arch.md` (Video links).
-  - A link that names a video wins over the list's selection; selecting a row leaves the link as it is.
-  - The footer has `Use this match` (default) and `Cancel`. `Use this match` is enabled once the link names a video
-    or a row is selected. A double-click on a row is `Use this match`.
-  - `Use this match` on the current match confirms it. Any other video becomes the video override, which downloads
+    a YouTube Music id, and a live detection line under it. The line reads nothing for an empty edit, `Not a YouTube link` in
+    gray, or the YouTube Music logo and `YouTube Music id <id>`, followed by the title when the library has that id.
+    The links it takes are in `arch.md` (YouTube Music links).
+  - A link that names a YouTube Music id wins over the list's selection; selecting a row leaves the link as it is.
+  - The footer has `Use this match` (default) and `Cancel`. `Use this match` is enabled once the link names a YouTube
+    Music id or a row is selected. A double-click on a row is `Use this match`.
+  - `Use this match` on the current match confirms it. Any other result becomes the override, which downloads
     the track again.
   - **Play buttons** open a track's page in the browser, so it can be heard before it's chosen. Each is a small
     button with the 12 px play glyph and a tooltip: `Play on Spotify` for the track, `Play on YouTube Music` for a
-    video.
+    result or a link.
     - The track's and the link's are push buttons, as tall as the search field. The link's grays out with its glyph
-      while the link names no video.
+      while the link names no YouTube Music id.
     - A row's is painted in its cell: just the glyph, and on hover a box with the hover colors of the playlist rows'
       sync control (`#E5F3FF`, `#CCE8FF` frame, `#99D1FF` on a selected row), `#CCE4F7` while pressed. It reacts like
-      a button: it opens the video when the mouse is released over it, and a double click on it is two clicks, never
+      a button: it opens the result when the mouse is released over it, and a double click on it is two clicks, never
       `Use this match`.
   - **Size.** It opens at 900 × 600 px and is resizable, with a size grip in the bottom right corner, down to the
     size of its template, about 660 × 490 px. The list takes the extra height and its Title column the extra width; the fields and lines take the
@@ -833,7 +833,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     │ └──────────────────────────────────────────────────────────────────────┘│
     │ Or paste a YouTube or YouTube Music link:                                │
     │ [                                                               ] [▶]    │
-    │ ● YouTube video 5aM1xdk8lRw                                              │
+    │ ● YouTube Music id 5aM1xdk8lRw                                           │
     │                                                                          │
     │                                            [Use this match]  [Cancel]  ◢ │
     └──────────────────────────────────────────────────────────────────────────┘
@@ -891,9 +891,9 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | `resolveRemovals` | infobar → Removed tab, Track menu, inspector (single and bulk) |
 | `retry` | inspector Retry, Track menu |
 | `confirmMatch` | inspector actions, Track menu |
-| `setVideoOverride` | Choose a match dialog, Edit track dialog (Audio link) |
+| `setYtmOverride` | Choose a match dialog, Edit track dialog (Audio link) |
 | `editTrack` | Edit track dialog (tags, cover art) |
-| `searchVideos` / `VideoSearchResults` | Choose a match dialog's list |
+| `searchCandidates` / `CandidateSearchResults` | Choose a match dialog's list |
 | `setSettings` | Settings dialog OK |
 | `relocateLibrary` / `rebuildState` / `checkForUpdates` | Tools menu, Settings, infobar |
 | `TrackStatusChanged` / `TrackProgress` | Status cell, status counts, playlist row, inspector, status bar |

@@ -12,14 +12,14 @@
 #include "core/matching/SongFacts.h"
 #include "core/sources/SourceType.h"
 #include "core/state/ListedSources.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 
 namespace westie::core {
 
 namespace {
 
 struct ListedSong {
-    std::string video_id{};
+    std::string ytm_id{};
     std::string track{};
     const Source* source = nullptr;
     SongFacts song{};
@@ -33,14 +33,14 @@ std::set<std::string> name_keys(const TitleParts& title) {
 std::vector<ListedSong> listed_songs(const State& state, const platform::TextNormalizer& normalizer, const std::set<std::string>& listed) {
     std::vector<ListedSong> songs;
     for (const std::string& key : listed) {
-        std::optional<std::string> video = own_video(key);
+        std::optional<std::string> ytm_id = own_ytm_id(key);
         auto source = state.sources.find(key);
-        if (!video || source == state.sources.end() || !state.tracks.contains(source->second.track)) {
+        if (!ytm_id || source == state.sources.end() || !state.tracks.contains(source->second.track)) {
             continue;
         }
         const Source& listed_source = source->second;
         songs.push_back({
-            .video_id = std::move(*video),
+            .ytm_id = std::move(*ytm_id),
             .track = listed_source.track,
             .source = &listed_source,
             .song = song_facts(
@@ -52,7 +52,7 @@ std::vector<ListedSong> listed_songs(const State& state, const platform::TextNor
 }
 
 bool has_listed_youtube_music_source(const Track& track, const std::set<std::string>& listed) {
-    return std::ranges::any_of(track.sources, [&](const std::string& key) { return own_video(key) && listed.contains(key); });
+    return std::ranges::any_of(track.sources, [&](const std::string& key) { return own_ytm_id(key) && listed.contains(key); });
 }
 
 }
@@ -70,7 +70,7 @@ std::vector<LibraryMatch> library_matches(const State& state, const platform::Te
 
     std::vector<LibraryMatch> matches;
     for (const auto& [key, track] : state.tracks) {
-        bool chosen = !track.video_override.empty() || has_listed_youtube_music_source(track, listed);
+        bool chosen = !track.ytm_override.empty() || has_listed_youtube_music_source(track, listed);
         if (track.status == TrackStatus::Orphaned || track.status == TrackStatus::Kept || chosen) {
             continue;
         }
@@ -112,7 +112,7 @@ std::vector<LibraryMatch> library_matches(const State& state, const platform::Te
         matches.push_back({
             .track = key,
             .match = {
-                .video_id = best->video_id,
+                .ytm_id = best->ytm_id,
                 .confidence = best_judgement.confidence,
                 .title = best->source->title,
                 .artists = best->source->artists,

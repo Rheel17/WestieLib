@@ -38,7 +38,7 @@ struct PlaylistJson {
 
 // Songs from an auto-generated channel carry it after the artist's name
 constexpr std::string_view TopicSuffix = " - Topic";
-// What the playlist lists in place of a video that can't be played anymore
+// yt-dlp's titles for an entry that can't be played anymore
 constexpr std::array<std::string_view, 2> GoneTitles = {"[Private video]", "[Deleted video]"};
 constexpr double MillisecondsPerSecond = 1000.0;
 

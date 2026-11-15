@@ -18,7 +18,7 @@
 #include "core/sources/SpotifyPlaylist.h"
 #include "core/sources/YouTubeMusicPlaylist.h"
 #include "core/state/MatchReview.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 #include "core/sync/ApplyFetch.h"
 #include "core/sync/ApplyMatch.h"
 #include "core/sync/PlaylistFetchFailed.h"
@@ -285,7 +285,7 @@ void SyncEngine::match(const std::string& track, const std::stop_token& stop) {
 
     // An exception that leaves a thread ends the process, so it becomes the track's failure instead
     try {
-        std::expected<Match, std::string> matched = matcher_.match(source, track_videos(*state), stop);
+        std::expected<Match, std::string> matched = matcher_.match(source, track_ytm_ids(*state), stop);
         if (!matched) {
             fail_match(track, TrackFailure::NoMatch, std::move(matched.error()));
             return;
@@ -330,7 +330,7 @@ void SyncEngine::log_match(LogSubject subject, const Match& match, std::string_v
         return;
     }
     log_.write(
-            LogLevel::Info, std::format("Matched {}{}{}", match_text(match), from, merged ? ", and merged into the track that has that video" : ""),
+            LogLevel::Info, std::format("Matched {}{}{}", match_text(match), from, merged ? ", and merged into the track with that YouTube Music id" : ""),
             std::move(subject)
     );
 }

@@ -43,7 +43,7 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         doubts_(hwnd(), L"", {.color = framework::TextColor::Warning, .wrap = true}),
         reason_(hwnd(), L"", {.color = framework::TextColor::Error}),
         output_(hwnd()),
-        choose_(hwnd(), {.text = L"Choose match…", .command = std::to_underlying(CommandId::ChooseVideo)}),
+        choose_(hwnd(), {.text = L"Choose match…", .command = std::to_underlying(CommandId::ChooseMatch)}),
         source_section_(hwnd(), L"Source"),
         first_source_key_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         first_source_(hwnd(), [this] { open_source(0); }),

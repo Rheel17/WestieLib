@@ -1,4 +1,4 @@
-#include "ui/dialogs/VideoListView.h"
+#include "ui/dialogs/CandidateListView.h"
 
 #include <algorithm>
 #include <array>
@@ -22,7 +22,7 @@ constexpr int AlbumWidthDips = 115;
 constexpr int LengthWidthDips = 52;
 constexpr int MatchWidthDips = 110;
 constexpr int PlayWidthDips = 26;
-// Off by more, a video is often a live version or a cover
+// Off by more, a result is often a live version or a cover
 constexpr std::chrono::milliseconds LengthTolerance{5000};
 
 enum class Column { Title, Artists, Album, Length, Match, Play };
@@ -43,7 +43,7 @@ constexpr std::array<ColumnSpec, 6> Columns = {{
     {.title = L"", .width_dips = PlayWidthDips},
 }};
 
-std::wstring title_text(const core::VideoCandidate& candidate) {
+std::wstring title_text(const core::MatchCandidate& candidate) {
     std::wstring title = platform::win32::to_utf16(candidate.title);
     if (candidate.current) {
         return title + L" (current)";
@@ -62,7 +62,7 @@ const wchar_t* doubt_word(core::MatchDoubt doubt) {
     return L"";
 }
 
-std::wstring verdict_text(const core::VideoCandidate& candidate) {
+std::wstring verdict_text(const core::MatchCandidate& candidate) {
     if (candidate.verdict == core::MatchVerdict::Accept) {
         return L"Same recording";
     }
@@ -80,27 +80,27 @@ std::wstring verdict_text(const core::VideoCandidate& candidate) {
     }
 }
 
-bool length_off(std::chrono::milliseconds video, std::chrono::milliseconds source) {
-    if (video.count() <= 0 || source.count() <= 0) {
+bool length_off(std::chrono::milliseconds result, std::chrono::milliseconds source) {
+    if (result.count() <= 0 || source.count() <= 0) {
         return false;
     }
-    return (video > source ? video - source : source - video) > LengthTolerance;
+    return (result > source ? result - source : source - result) > LengthTolerance;
 }
 
 }
 
-VideoListView::VideoListView(HWND list, std::function<void(std::size_t)> on_play) :
+CandidateListView::CandidateListView(HWND list, std::function<void(std::size_t)> on_play) :
         Control(list), play_(list, std::to_underlying(Column::Play), std::move(on_play)) {
     platform::win32::check_hresult(SetWindowTheme(hwnd(), L"Explorer", nullptr), "SetWindowTheme");
     ListView_SetExtendedListViewStyle(hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     add_columns();
 }
 
-void VideoListView::show(const std::vector<core::VideoCandidate>& candidates, std::chrono::milliseconds source_duration) {
+void CandidateListView::show(const std::vector<core::MatchCandidate>& candidates, std::chrono::milliseconds source_duration) {
     platform::win32::check(ListView_DeleteAllItems(hwnd()), "LVM_DELETEALLITEMS");
     length_off_.clear();
     for (int item = 0; std::cmp_less(item, candidates.size()); ++item) {
-        const core::VideoCandidate& candidate = candidates[item];
+        const core::MatchCandidate& candidate = candidates[item];
         std::wstring title = title_text(candidate);
         LVITEMW row{};
         row.mask = LVIF_TEXT;
@@ -117,19 +117,19 @@ void VideoListView::show(const std::vector<core::VideoCandidate>& candidates, st
     }
 }
 
-void VideoListView::set_empty_text(std::wstring text) {
+void CandidateListView::set_empty_text(std::wstring text) {
     empty_text_ = std::move(text);
     // A list view shows no window text, so this is for screen readers and the UI checks
     platform::win32::check(SetWindowTextW(hwnd(), empty_text_.c_str()), "SetWindowTextW");
     platform::win32::check(InvalidateRect(hwnd(), nullptr, TRUE), "InvalidateRect");
 }
 
-std::optional<std::size_t> VideoListView::selected() const {
+std::optional<std::size_t> CandidateListView::selected() const {
     int item = ListView_GetNextItem(hwnd(), -1, LVNI_SELECTED);
     return item < 0 ? std::nullopt : std::optional(static_cast<std::size_t>(item));
 }
 
-LRESULT VideoListView::on_custom_draw(NMLVCUSTOMDRAW& draw) const {
+LRESULT CandidateListView::on_custom_draw(NMLVCUSTOMDRAW& draw) const {
     switch (draw.nmcd.dwDrawStage) {
     case CDDS_PREPAINT:      return CDRF_NOTIFYITEMDRAW;
     case CDDS_ITEMPREPAINT:  return CDRF_NOTIFYSUBITEMDRAW | CDRF_NOTIFYPOSTPAINT;
@@ -145,14 +145,14 @@ LRESULT VideoListView::on_custom_draw(NMLVCUSTOMDRAW& draw) const {
     }
 }
 
-void VideoListView::on_empty_markup(NMLVEMPTYMARKUP& markup) const {
+void CandidateListView::on_empty_markup(NMLVEMPTYMARKUP& markup) const {
     markup.dwFlags = EMF_CENTERED;
     std::size_t size = std::min(empty_text_.size(), std::size(markup.szMarkup) - 1);
     empty_text_.copy(markup.szMarkup, size);
     markup.szMarkup[size] = L'\0';
 }
 
-LRESULT VideoListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
+LRESULT CandidateListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     if (std::optional<LRESULT> result = play_.on_mouse(message, lparam)) {
         return *result;
     }
@@ -170,7 +170,7 @@ LRESULT VideoListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam
     }
 }
 
-void VideoListView::add_columns() {
+void CandidateListView::add_columns() {
     for (int index = 0; std::cmp_less(index, Columns.size()); ++index) {
         LVCOLUMNW column{};
         column.mask = LVCF_TEXT | LVCF_FMT;
@@ -183,7 +183,7 @@ void VideoListView::add_columns() {
     fit_columns();
 }
 
-void VideoListView::fit_columns() {
+void CandidateListView::fit_columns() {
     framework::Dpi dpi = framework::Dpi::of(hwnd());
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
@@ -197,7 +197,7 @@ void VideoListView::fit_columns() {
     platform::win32::check(ListView_SetColumnWidth(hwnd(), std::to_underlying(Column::Title), std::max(rest, 0)), "LVM_SETCOLUMNWIDTH");
 }
 
-void VideoListView::set_text(int item, int column, const std::wstring& text) {
+void CandidateListView::set_text(int item, int column, const std::wstring& text) {
     LVITEMW cell{};
     cell.iSubItem = column;
     cell.pszText = const_cast<wchar_t*>(text.c_str());

@@ -114,7 +114,7 @@ std::optional<WindowState> load_window_state() {
         },
         .column_dips = read_columns(*key),
         .log_view = read_log_view(*key),
-        .choose_video_dips = read_size(*key, ChooseMatchWidthValue, ChooseMatchHeightValue),
+        .choose_match_dips = read_size(*key, ChooseMatchWidthValue, ChooseMatchHeightValue),
     };
 }
 
@@ -132,9 +132,9 @@ void save_window_state(const WindowState& state) {
     write_int(key, LogVisibleValue, state.panels.log_visible);
     write_int(key, LogLevelValue, std::to_underlying(state.log_view.least));
     write_int(key, LogScopeValue, std::to_underlying(state.log_view.scope));
-    if (state.choose_video_dips) {
-        write_int(key, ChooseMatchWidthValue, state.choose_video_dips->width);
-        write_int(key, ChooseMatchHeightValue, state.choose_video_dips->height);
+    if (state.choose_match_dips) {
+        write_int(key, ChooseMatchWidthValue, state.choose_match_dips->width);
+        write_int(key, ChooseMatchHeightValue, state.choose_match_dips->height);
     }
     for (const ColumnValue& value : ColumnValues) {
         if (auto width = state.column_dips.find(value.column); width != state.column_dips.end()) {

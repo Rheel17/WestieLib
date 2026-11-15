@@ -9,8 +9,8 @@
 
 #include "core/log/Log.h"
 #include "core/log/LogLine.h"
-#include "core/matching/VideoSearch.h"
-#include "core/matching/VideoSearchResults.h"
+#include "core/matching/CandidateSearch.h"
+#include "core/matching/CandidateSearchResults.h"
 #include "core/playlists/PlaylistLink.h"
 #include "core/playlists/PlaylistLookedUp.h"
 #include "core/playlists/PlaylistLookup.h"
@@ -37,7 +37,7 @@
 #include "ui/commands/CommandId.h"
 #include "ui/commands/CommandState.h"
 #include "ui/dialogs/AddPlaylistDialog.h"
-#include "ui/dialogs/ChooseVideoDialog.h"
+#include "ui/dialogs/ChooseMatchDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/events/CoreEventQueue.h"
 #include "ui/framework/Dpi.h"
@@ -74,7 +74,7 @@ public:
             core::ToolManager& tools,
             core::PlaylistLookup& lookup,
             core::SyncEngine& sync,
-            core::VideoSearch& video_search,
+            core::CandidateSearch& candidate_search,
             const platform::TextNormalizer& normalizer,
             core::Log& logger
     );
@@ -111,7 +111,7 @@ private:
     void show_playlist_menu(POINT screen);
     void remove_playlist();
     void confirm_match();
-    void choose_video();
+    void choose_match();
     void open_library_folder() const;
     void open_log_folder() const;
     void open_playlist_page() const;
@@ -135,7 +135,7 @@ private:
     void apply_event(const core::TrackStatusChanged& event);
     void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);
-    void apply_event(const core::VideoSearchResults& results);
+    void apply_event(const core::CandidateSearchResults& results);
     void apply_event(const core::LogLine& line);
     void on_command(WPARAM wparam, LPARAM lparam);
     void on_activate(WORD state);
@@ -157,7 +157,7 @@ private:
     core::ToolManager& tools_;
     core::PlaylistLookup& lookup_;
     core::SyncEngine& sync_;
-    core::VideoSearch& video_search_;
+    core::CandidateSearch& candidate_search_;
     const platform::TextNormalizer& normalizer_;
     core::Log& logger_;
     ToolBoard tool_board_;
@@ -186,8 +186,8 @@ private:
     // Only while they're open, so tool, look-up and search events can reach them
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;
-    std::optional<ChooseVideoDialog> choose_video_dialog_;
-    framework::Size choose_video_dips_ = ChooseVideoDialog::DefaultWindowDips;
+    std::optional<ChooseMatchDialog> choose_match_dialog_;
+    framework::Size choose_match_dips_ = ChooseMatchDialog::DefaultWindowDips;
 };
 
 }

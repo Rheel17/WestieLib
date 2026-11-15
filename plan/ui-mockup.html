@@ -372,7 +372,7 @@ const SONGS = [
 	["Say So", "Doja Cat", "Hot Pink", 2019, "3:57", "H"],
 	["Crazy", "Gnarls Barkley", "St. Elsewhere", 2006, "2:58", "H", { review: .75, doubts: ['length'], mt: "Crazy", mc: "Gnarls Barkley", md: "3:31" }],
 	["Adorn", "Miguel", "Kaleidoscope Dream", 2012, "3:13", "HS"],
-	// The same recording again in Her playlist, from another Spotify release: the Matcher found the same video, so it
+	// The same recording again in Her playlist, from another Spotify release: the Matcher found the same YouTube Music id, so it
 	// is a duplicate of #3 there
 	["Best Part", "Daniel Caesar;H.E.R.", "Freudian", 2017, "3:29", "H", { dup: true, dupAt: 3 }],
 	["Juice", "Lizzo", "Cuz I Love You", 2019, "3:15", "H"],
@@ -493,10 +493,10 @@ function buildBase() {
 		const artists = artistList.split(';');
 		const merged = /[WC]/.test(mem) && /[HSK]/.test(mem);
 		const src = merged || !/[WC]/.test(mem) ? 'spotify' : 'ytm';    // a merged track takes Spotify metadata
-		const t = { title, artists, album, year, dur: secs(length), src, videoId: rid(r, 11), review: false,
+		const t = { title, artists, album, year, dur: secs(length), src, ytmId: rid(r, 11), review: false,
 			status: x.st || (mem === 'K' ? 'kept' : 'downloaded'), dup: x.dup, dupAt: x.dupAt };
 		if (src === 'ytm') {
-			t.key = 'ytm:' + t.videoId;
+			t.key = 'ytm:' + t.ytmId;
 			t.chosen = 'playlist';
 		} else {
 			t.key = 'spotify:' + rid(r, 22, B62);
@@ -510,16 +510,16 @@ function buildBase() {
 			t.mt = x.mt || title;
 			t.mc = x.mc || artists.join(', ');
 			t.md = x.md ? secs(x.md) : t.dur + Math.round(r() * 4 - 2);
-			if (t.status === 'pending') { t.videoId = null; t.mt = null; t.conf = null; }
+			if (t.status === 'pending') { t.ytmId = null; t.mt = null; t.conf = null; }
 		}
-		// Merged: the Spotify match picked the very video the YouTube Music playlist lists, so it is one track.
-		if (merged) Object.assign(t, { srcs: ['spotify', 'ytm'], ytKey: 'ytm:' + t.videoId, chosen: 'playlist', merged: true });
+		// Merged: the Spotify match picked the very id the YouTube Music playlist lists, so it is one track.
+		if (merged) Object.assign(t, { srcs: ['spotify', 'ytm'], ytKey: 'ytm:' + t.ytmId, chosen: 'playlist', merged: true });
 		if (t.status === 'downloaded' || t.status === 'kept') t.file = fileName(artists, title);
 		if (t.status === 'failed' && x.noMatch) {
-			Object.assign(t, { noMatch: true, videoId: null, mt: null, conf: null, errTitle: 'No match on YouTube Music',
+			Object.assign(t, { noMatch: true, ytmId: null, mt: null, conf: null, errTitle: 'No match on YouTube Music',
 				error: `Searched "The Late Hours Sway With Me (WCS Edit)": no usable results\nSearched "The Late Hours Sway With Me": no usable results` });
 		} else if (t.status === 'failed') {
-			Object.assign(t, { errTitle: 'yt-dlp exited with code 1', error: errorLines(t.videoId) });
+			Object.assign(t, { errTitle: 'yt-dlp exited with code 1', error: errorLines(t.ytmId) });
 		}
 		tracks.set(t.key, t);
 		for (const ch of mem) if (MEM[ch]) pl[MEM[ch]].keys.push(t.key);
@@ -541,7 +541,7 @@ function variantSync(s) {
 		if (p < 9 || (p >= 15 && slow.has(k))) return;      // older tracks, and shared tracks already on disk
 		t.queued = true;
 		if (p >= 15) { t.status = 'pending'; t.file = null; t.review = false; }
-		if (p >= 17) { t.videoId = null; t.mt = null; t.conf = null; }
+		if (p >= 17) { t.ytmId = null; t.mt = null; t.conf = null; }
 		if (p === 15) { t.status = 'downloading'; t.progress = 62; }
 		if (p === 16) { t.status = 'downloading'; t.progress = 18; }
 	});
@@ -806,10 +806,10 @@ function trackInspector(s, t, cfg) {
 	const audio = [];
 	if (t.noMatch) {
 		audio.push(['ID', '<span class="red">No match found</span>']);
-	} else if (!t.videoId) {
+	} else if (!t.ytmId) {
 		audio.push(['ID', '<span class="gray">Not chosen yet</span>']);
 	} else if (t.merged) {
-		audio.push(['ID', `<span class="link">${t.videoId}</span>`],
+		audio.push(['ID', `<span class="link">${t.ytmId}</span>`],
 			['Chosen by', 'Playlist'],
 			['Spotify match', `Same ID (${pct(t.conf)})`]);
 	} else {
@@ -818,7 +818,7 @@ function trackInspector(s, t, cfg) {
 				['Artists', esc(t.mc)],
 				['Length', `${mmss(t.md)} <span class="gray">(Spotify ${mmss(t.dur)})</span>`]);
 		}
-		audio.push(['ID', `<span class="link">${t.videoId}</span>`]);
+		audio.push(['ID', `<span class="link">${t.ytmId}</span>`]);
 		audio.push(['Chosen by', { playlist: 'Playlist', matcher: 'Matcher', override: 'Override' }[t.chosen]]);
 		if (t.chosen === 'matcher') audio.push(['Confidence', `<span class="pbar${t.review ? ' paused' : ''}"><i style="width:${t.conf * 100}%"></i></span>${pct(t.conf)}`]);
 	}
@@ -982,7 +982,7 @@ const dlgTitle = title => `<div class="dt"><span class="t">${title}</span><span 
 
 // One dialog for both cases: several candidates to pick from, or nothing found. Both take a pasted link. The list
 // holds the current match, the library's YouTube Music entries that come close, and the search results, by score.
-function chooseVideoDialog(t, found) {
+function chooseMatchDialog(t, found) {
 	const results = found ? [
 		['Feeling Good', 'Michael Bublé', '', '3:59', 'Same recording', 'library', 'sel'],
 		['Feeling Good (Live)', 'Michael Bublé', 'Caught in the Act', '3:58', 'Check version', 'current'],
@@ -1002,7 +1002,7 @@ function chooseVideoDialog(t, found) {
 	const link = found
 		? `<div class="fld" style="margin:0"><div class="edit" style="flex:1"><span class="cue">https://music.youtube.com/watch?v=…</span></div>${play('Play on YouTube Music', 'dis')}</div>`
 		: `<div class="fld" style="margin:0"><div class="edit focus" style="flex:1"><span>https://www.youtube.com/watch?v=Qm4XtP0r8zA</span><span class="caret" style="margin-left:-3px"></span></div>${play('Play on YouTube Music')}</div>
-			<div class="detect">${ic('ytm', 's14')}<span>YouTube video Qm4XtP0r8zA</span></div>`;
+			<div class="detect">${ic('ytm', 's14')}<span>YouTube Music id Qm4XtP0r8zA</span></div>`;
 	// Opens at 900 × 600 and can be resized down to about 660 × 490; the list takes the extra height
 	return `<div class="dlg" style="width:900px;height:600px;display:flex;flex-direction:column">${dlgTitle('Choose a match')}
 		<div class="db" style="flex:1;display:flex;flex-direction:column;min-height:0">
@@ -1041,7 +1041,7 @@ function editTrackDialog(t) {
 				</fieldset>
 			</div>
 			<fieldset class="gbox"><legend>Audio</legend>
-				<div class="fld"><span>YouTube link:</span><div class="edit" style="flex:1">https://music.youtube.com/watch?v=${t.videoId}</div>${btn('Choose match…')}</div>
+				<div class="fld"><span>YouTube link:</span><div class="edit" style="flex:1">https://music.youtube.com/watch?v=${t.ytmId}</div>${btn('Choose match…')}</div>
 				<div class="gray">A different link downloads the audio again.</div>
 			</fieldset>
 		</div>
@@ -1055,8 +1055,8 @@ function dialogHtml(s, cfg) {
 		case 'add-again': return addDialog('already');
 		case 'add-wait': return addDialog('wait');
 		case 'settings': return settingsDialog();
-		case 'choose': return chooseVideoDialog(t, true);
-		case 'nomatch': return chooseVideoDialog(t, false);
+		case 'choose': return chooseMatchDialog(t, true);
+		case 'nomatch': return chooseMatchDialog(t, false);
 		case 'edit': return editTrackDialog(t);
 		default: return '';
 	}
@@ -1096,7 +1096,7 @@ const SCREENS = [
 			'Waiting YouTube Music tracks have no album yet. It is read from the info JSON when they download.',
 			`<i>Slow & bluesy</i> keeps its ${ic('warn')} after its infobar was dismissed. Its tracks from the last sync stay in the library.`,
 			'The Kept tab appears because 2 tracks are kept. Removed stays hidden because nothing is removed.',
-			`<i>Best Part</i> is in WCS (YouTube Music) and in two Spotify playlists. The Matcher picked the video WCS lists, so it is one merged track with one file. Its Playlists cell lists all three playlists, and the inspector shows both ${ic('sp')} ${ic('ytm')} sources.`,
+			`<i>Best Part</i> is in WCS (YouTube Music) and in two Spotify playlists. The Matcher picked the id WCS lists, so it is one merged track with one file. Its Playlists cell lists all three playlists, and the inspector shows both ${ic('sp')} ${ic('ytm')} sources.`,
 		],
 	},
 	{
@@ -1116,7 +1116,7 @@ const SCREENS = [
 		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'] },
 		cap: 'The Needs review tab lists the matches the Matcher wasn’t sure of. One is selected, and the inspector offers Confirm match, Choose match… and Edit track….',
 		notes: [
-			'Needs review is a subset of Synced and Waiting. The Matcher wasn’t sure it picked the right video, so the match doesn’t merge into another track until it is confirmed.',
+			'Needs review is a subset of Synced and Waiting. The Matcher wasn’t sure it picked the right result, so the match doesn’t merge into another track until it is confirmed.',
 			'The amber list says what the Matcher doubts, a line for each doubt: here the match’s title adds "Live". Halo has two lines.',
 			'The Audio section shows what was matched.',
 			'Confirm match clears the flag (<code>confirmMatch</code>). Choose match… opens the dialog on the next screen.',
@@ -1132,7 +1132,7 @@ const SCREENS = [
 			'The list starts from the Matcher’s queries, with the current match and the library’s YouTube Music entries the Matcher doesn’t reject, in the Matcher’s ranking. Match says what it makes of each: Same recording, Check and its doubts, or Other recording, artist or song. You can edit the query and search again; like the Matcher, it searches songs. Here a WCS playlist’s entry is selected: choosing it merges the two tracks.',
 			'Lengths more than 5 seconds off the Spotify length are amber.',
 			'Open in browser plays the selected result on YouTube Music, so you can listen before you choose.',
-			'Use this match sets the video override (<code>setVideoOverride</code>) and downloads the track again. On the current match, it confirms the match instead.',
+			'Use this match sets the override (<code>setYtmOverride</code>) and downloads the track again. On the current match, it confirms the match instead.',
 		],
 	},
 	{
@@ -1142,7 +1142,7 @@ const SCREENS = [
 		notes: [
 			'A track with no usable result fails with the reason <i>No match on YouTube Music</i>. Its inspector offers Choose match… first.',
 			'The empty list says what to try next. A ListView can show this text through its empty markup.',
-			'A pasted link is checked as you type. Use this match is enabled once the link points to a YouTube or YouTube Music video.',
+			'A pasted link is checked as you type. Use this match is enabled once the link names a YouTube Music id.',
 		],
 	},
 	{
@@ -1243,7 +1243,7 @@ document.getElementById('legend').innerHTML = [
 	['synced', 'Synced', 'downloaded'], ['waiting', 'Waiting', 'pending'], ['failed', 'Failed', 'failed'],
 	['warn', 'Needs review / fetch failed', 'match.review'], ['removed', 'Removed', 'orphaned'], ['kept', 'Kept', 'kept'],
 	['toolwait', 'Waiting for tools', 'needs a tool that isn\'t installed'],
-	['syncing', 'Syncing', 'in the running sync'], ['ytm', 'YouTube Music', 'ytm:'], ['sp', 'Spotify', 'spotify:'], ['yt', 'YouTube', 'pasted video links'],
+	['syncing', 'Syncing', 'in the running sync'], ['ytm', 'YouTube Music', 'ytm:'], ['sp', 'Spotify', 'spotify:'], ['yt', 'YouTube', 'pasted YouTube links'],
 ].map(([i, w, core]) => `<span>${ic(i)}${w} <em>${core}</em></span>`).join('');
 document.getElementById('screens').innerHTML = SCREENS.map((sc, i) => `
 	<section class="screen" id="${sc.id}">

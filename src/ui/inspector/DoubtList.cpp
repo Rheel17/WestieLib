@@ -20,11 +20,11 @@ constexpr std::wstring_view NoDoubts = L"Low confidence";
 constexpr std::wstring_view Bullet = L"• ";
 
 std::wstring version_line(const TrackMatch& match) {
-    if (!match.video_words.empty() && !match.source_words.empty()) {
-        return std::format(L"\"{}\" instead of \"{}\"", match.video_words, match.source_words);
+    if (!match.result_words.empty() && !match.source_words.empty()) {
+        return std::format(L"\"{}\" instead of \"{}\"", match.result_words, match.source_words);
     }
-    if (!match.video_words.empty()) {
-        return std::format(L"Adds \"{}\"", match.video_words);
+    if (!match.result_words.empty()) {
+        return std::format(L"Adds \"{}\"", match.result_words);
     }
     if (!match.source_words.empty()) {
         return std::format(L"Lacks \"{}\"", match.source_words);

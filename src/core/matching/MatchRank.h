@@ -16,8 +16,8 @@ struct MatchRank {
     // the same recording
     int artists = 0;
     int length = 0;
-    // The video belongs to a track already, so choosing it keeps the same song from both sources one track
-    bool known_video = false;
+    // The YouTube Music id belongs to a track already, so choosing it keeps the same song from both sources one track
+    bool known_ytm_id = false;
     bool same_album = false;
     int explicit_content = 0;
     int name = 0;
@@ -27,6 +27,6 @@ struct MatchRank {
     auto operator<=>(const MatchRank&) const = default;
 };
 
-MatchRank match_rank(const MatchJudgement& judgement, bool known_video);
+MatchRank match_rank(const MatchJudgement& judgement, bool known_ytm_id);
 
 }

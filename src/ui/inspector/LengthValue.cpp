@@ -23,10 +23,10 @@ void LengthValue::set_font(HFONT font) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
-void LengthValue::set_lengths(std::chrono::milliseconds video, std::chrono::milliseconds source) {
-    video_ = duration_text(video);
+void LengthValue::set_lengths(std::chrono::milliseconds result, std::chrono::milliseconds source) {
+    result_ = duration_text(result);
     source_ = std::format(L" (Spotify {})", duration_text(source));
-    platform::win32::check(SetWindowTextW(hwnd(), (video_ + source_).c_str()), "SetWindowTextW");
+    platform::win32::check(SetWindowTextW(hwnd(), (result_ + source_).c_str()), "SetWindowTextW");
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
@@ -51,13 +51,13 @@ void LengthValue::paint() const {
 
     SelectObject(paint.dc(), font_);
     SetBkMode(paint.dc(), TRANSPARENT);
-    SIZE video{};
-    platform::win32::check(GetTextExtentPoint32W(paint.dc(), video_.c_str(), static_cast<int>(video_.size()), &video), "GetTextExtentPoint32W");
+    SIZE result{};
+    platform::win32::check(GetTextExtentPoint32W(paint.dc(), result_.c_str(), static_cast<int>(result_.size()), &result), "GetTextExtentPoint32W");
     SetTextColor(paint.dc(), framework::text_color(framework::TextColor::Normal));
     RECT first = client;
-    DrawTextW(paint.dc(), video_.c_str(), static_cast<int>(video_.size()), &first, LineFormat);
+    DrawTextW(paint.dc(), result_.c_str(), static_cast<int>(result_.size()), &first, LineFormat);
 
-    RECT rest{client.left + video.cx, client.top, client.right, client.bottom};
+    RECT rest{client.left + result.cx, client.top, client.right, client.bottom};
     SetTextColor(paint.dc(), framework::text_color(framework::TextColor::Gray));
     DrawTextW(paint.dc(), source_.c_str(), static_cast<int>(source_.size()), &rest, LineFormat);
 }

@@ -10,7 +10,7 @@
 namespace westie::core {
 
 struct Match {
-    std::string video_id{};
+    std::string ytm_id{};
     // From 0 to 1
     double confidence = 0.0;
     bool confirmed = false;

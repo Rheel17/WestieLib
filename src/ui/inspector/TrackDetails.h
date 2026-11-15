@@ -23,27 +23,27 @@ struct TrackPlaylist {
     std::wstring name{};
 };
 
-enum class VideoChooser { Playlist, Matcher, Override };
+enum class AudioChooser { Playlist, Matcher, Override };
 
-struct TrackVideo {
+struct TrackAudio {
     std::wstring id{};
     std::wstring url{};
-    VideoChooser chosen_by = VideoChooser::Playlist;
+    AudioChooser chosen_by = AudioChooser::Playlist;
 };
 
 struct TrackMatch {
-    std::wstring video_id{};
+    std::wstring ytm_id{};
     std::wstring title{};
     std::wstring artists{};
     std::chrono::milliseconds duration{};
-    // The Spotify source's, which the video's is held against
+    // The Spotify source's, which the result's is held against
     std::chrono::milliseconds source_duration{};
     double confidence = 0.0;
     std::vector<core::MatchDoubt> doubts{};
     std::optional<bool> explicit_content{};
     // The version words only one of the two titles has, as it writes them
     std::wstring source_words{};
-    std::wstring video_words{};
+    std::wstring result_words{};
 };
 
 struct TrackDetails {
@@ -53,7 +53,7 @@ struct TrackDetails {
     // In the left panel's order
     std::vector<TrackPlaylist> playlists{};
     // How the entry got it
-    std::optional<TrackVideo> video{};
+    std::optional<TrackAudio> audio{};
     // The entry's own match, or for a YouTube Music entry its track's first Spotify source's
     std::optional<TrackMatch> match{};
     core::TrackFailure failure = core::TrackFailure::None;

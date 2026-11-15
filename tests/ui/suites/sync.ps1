@@ -1,7 +1,7 @@
 # Syncing playlists: Sync all, Sync selected and Sync now fetch YouTube Music (from the fake yt-dlp) and Spotify (from
 # FakeWeb) playlists into state.json and the track table, a failed fetch keeps its error, Cancel stops a fetch, removing
 # a playlist takes its tracks along, a fetch waits for yt-dlp to be installed, and a Spotify fetch shows each page as it
-# comes and fails as Spotify does. The track card shows the video of each track a state.json holds, and why a match
+# comes and fails as Spotify does. The track card shows the YouTube Music id of each track a state.json holds, and why a match
 # failed. Dot-sourced by ui-checks.ps1.
 
 # A state.json with these YouTube Music and Spotify playlists, never synced, added a day apart in this order
@@ -46,17 +46,17 @@ function Get-SavedTracks {
 	}) -join ' / '
 }
 
-# Each Spotify source with a match as "id videoId confidence"
+# Each Spotify source with a match as "id ytmId confidence"
 function Get-SavedMatches {
 	@((Get-SavedState).sources.PSObject.Properties | Where-Object { $_.Value.match } | ForEach-Object {
-		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.videoId) $($_.Value.match.confidence)"
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.ytmId) $($_.Value.match.confidence)"
 	}) -join ' / '
 }
 
-# The same with the match's doubts, as "id videoId confidence [doubts]", for the sources whose id matches $pattern
+# The same with the match's doubts, as "id ytmId confidence [doubts]", for the sources whose id matches $pattern
 function Get-SavedJudgements([string]$pattern) {
 	@((Get-SavedState).sources.PSObject.Properties | Where-Object { $_.Value.match -and ($_.Name -replace $KeyPrefix, '') -match $pattern } | ForEach-Object {
-		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.videoId) $($_.Value.match.confidence) [$(@($_.Value.match.doubts) -join ',')]"
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.ytmId) $($_.Value.match.confidence) [$(@($_.Value.match.doubts) -join ',')]"
 	}) -join ' / '
 }
 
@@ -232,7 +232,7 @@ Check '  the Spotify playlist: one query, with the page''s token' ($Web.SpotifyQ
 Check '  playlists' (Get-SavedPlaylistSync) ("$SyncSpotifyKey [$SpotifyName] spTrackLateNight000001,spTrackSenorita0000002,spTrackLateNight000001 synced True / " +
 	"ytm:PLbroken1 [Named PLbroken1]  synced False error: $BrokenError at True / " +
 	"ytm:PLshared1 [$SharedName] SHARE5,DDDDD6 synced True / ytm:PLtracks1 [$TracksName] AAAAA1,BBBBB2,CCCCC4,SHARE5,AAAAA1 synced True")
-Check '  sources: Topic dropped, a private video, an episode and a local file left out, albums from Spotify only' (Get-SavedSources) (
+Check '  sources: Topic dropped, a private entry, an episode and a local file left out, albums from Spotify only' (Get-SavedSources) (
 	'spTrackLateNight000001 Late Night Swing [Ana, Ben] (Nights) 241000 > spTrackLateNight000001 / ' +
 	"spTrackSenorita0000002 $Senorita [Earth, Wind & Fire] (Summer) 185000 > spTrackSenorita0000002 / " +
 	"AAAAA1 Way Down We Go [KALEO] 214000 > AAAAA1 / BBBBB2 $Cafe [Nova] 191000 > BBBBB2 / " +
@@ -608,22 +608,22 @@ Stop-App $app
 
 "--- Run 5: matches and failures in state.json"
 # A YouTube Music playlist and a Spotify one: a track only on YouTube Music, two the Matcher matched (one a live version
-# 33 s longer), one on both whose match is the YouTube Music video, one without a match, one whose search failed
+# 33 s longer), one on both whose match is the YouTube Music source, one without a match, one whose search failed
 $MatchSpotifyKey = 'spotify:4matchmatchmatchmatchm'
 $NoMatchError = 'Searched \"The Late Hours No Results (WCS Edit)\": no results\nSearched \"The Late Hours No Results\": no usable results'
 $SearchError = 'Couldn''t reach music.youtube.com: The server name or address could not be resolved'
 # Each element in parentheses: a comma binds tighter than +
 $sources = @(
 	('"spotify:spBestPart000000000001": {"title": "Best Part", "artists": ["Daniel Caesar", "H.E.R."], "album": "Freudian", "durationMs": 209433, ' +
-		'"match": {"videoId": "zNhtz0Lygik", "confidence": 0.94, "title": "Best Part (feat. H.E.R.)", "artists": ["Daniel Caesar"], "durationMs": 210000}, ' +
+		'"match": {"ytmId": "zNhtz0Lygik", "confidence": 0.94, "title": "Best Part (feat. H.E.R.)", "artists": ["Daniel Caesar"], "durationMs": 210000}, ' +
 		'"track": "spotify:spBestPart000000000001"}'),
 	('"spotify:spCrazy0000000000000002": {"title": "Crazy", "artists": ["Gnarls Barkley"], "album": "St. Elsewhere", "durationMs": 178000, ' +
-		'"match": {"videoId": "liveCrazy01", "confidence": 0.61, "title": "Crazy (Live at Coachella 2006)", "artists": ["Gnarls Barkley"], "durationMs": 211000}, ' +
+		'"match": {"ytmId": "liveCrazy01", "confidence": 0.61, "title": "Crazy (Live at Coachella 2006)", "artists": ["Gnarls Barkley"], "durationMs": 211000}, ' +
 		'"track": "spotify:spCrazy0000000000000002"}'),
 	('"spotify:spMerged000000000000003": {"title": "Merged Song", "artists": ["Both"], "album": "Shared", "durationMs": 200000, ' +
-		'"match": {"videoId": "vidMerged01", "confidence": 0.96, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
+		'"match": {"ytmId": "vidMerged01", "confidence": 0.96, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
 	('"spotify:spMergedAgain000000006": {"title": "Merged Song", "artists": ["Both"], "album": "Shared (Deluxe)", "durationMs": 200000, ' +
-		'"match": {"videoId": "vidMerged01", "confidence": 0.9, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
+		'"match": {"ytmId": "vidMerged01", "confidence": 0.9, "title": "Merged Song", "artists": ["Both"], "durationMs": 201000}, "track": "ytm:vidMerged01"}'),
 	'"spotify:spNoResults00000000004": {"title": "No Results", "artists": ["The Late Hours"], "album": "Sway", "durationMs": 228000, "track": "spotify:spNoResults00000000004"}',
 	'"spotify:spOffline0000000000005": {"title": "Offline", "artists": ["Nobody"], "album": "Unplugged", "durationMs": 150000, "track": "spotify:spOffline0000000000005"}',
 	'"ytm:vidAlone001": {"title": "Alone Here", "artists": ["Lone"], "durationMs": 180000, "track": "ytm:vidAlone001"}',
@@ -653,7 +653,7 @@ $h = $app.Hwnd
 Check 'All tracks: a row per track, two failed' (Get-TrackSummary $h) 'All 6 | Synced 0 | Waiting 4 | Needs review 1 | Failed 2 | Showing 6 of 6'
 
 Select-TrackRow $h 0
-Check 'Only on YouTube Music: the playlist chose its video' (Wait-TrackCard $h 'ytm:vidAlone001') ("Track card:  / Alone Here / Lone / No album yet / " +
+Check 'Only on YouTube Music: the playlist chose its id' (Wait-TrackCard $h 'ytm:vidAlone001') ("Track card:  / Alone Here / Lone / No album yet / " +
 	"Status / Waiting / Downloads on the next sync. / Source / Source / YouTube Music / Playlists / WCS / Key / ytm:vidAlone001 / " +
 	"Audio / ID / vidAlone001 / Chosen by / Playlist / File / Not downloaded yet.")
 Select-TrackRow $h 1
@@ -694,8 +694,8 @@ $reasonLabel = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match on YouTub
 $reason = [W]::RectIn($reasonLabel, $card)
 Check '  reason 8 under the explanation, no box' "$($reason.Top - $explanation.Bottom) $([W]::IsWindowVisible(([W]::Children($card, 'WestieLib.OutputBox'))[0]))" (
 	"$(S 8) False")
-$noVideo = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match found' })[0]
-Check '  reason and video in red' "$([W]::RedInk($h, $reasonLabel)) $([W]::RedInk($h, $noVideo))" 'True True'
+$noId = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match found' })[0]
+Check '  reason and ID in red' "$([W]::RedInk($h, $reasonLabel)) $([W]::RedInk($h, $noId))" 'True True'
 Select-TrackRow $h 5
 Check 'The search failed: its error' (Wait-TrackCard $h 'spotify:spOffline0000000000005') ("Track card:  / Offline / Nobody / Unplugged / " +
 	"Status / Failed / Retried on the next sync. / Couldn't search YouTube Music / $SearchError / " +
@@ -736,7 +736,7 @@ Stop-App $app
 
 "--- Run 6: matching"
 # A Spotify playlist whose tracks YouTube Music's search finds: the right song second, a live version before the
-# studio one, nothing at all, a search that fails, the video of a YouTube Music track, a video that a YouTube Music
+# studio one, nothing at all, a search that fails, the id of a YouTube Music track, an id that a YouTube Music
 # playlist added later lists, and only another song of the same artist and length. Then two the search doesn't need:
 # a song another id of which a YouTube Music playlist added later lists, and one a synced playlist lists already. And
 # two the search finds under other names: an artist with a word stuck to it, and a cover by the track's own artists.
@@ -841,13 +841,13 @@ $runs = Get-FetchRuns
 $searches = @($Web.YtmQueries()).Count
 Send-Command $h 'Sync &all'
 Wait-Fetches $h $runs 1
-# Way Down We Go and Cafe Lights are songs PLtracks1 lists, so they take its videos without a search
+# Way Down We Go and Cafe Lights are songs PLtracks1 lists, so they take its ids without a search
 Check 'Sync all: the Spotify tracks searched, in playlist order' (Get-YtmQueriesSince $searches) ('Daniel Caesar H.E.R. Best Part / Gnarls Barkley Crazy / ' +
 	'The Late Hours Sway With Me (WCS Edit) / The Late Hours Sway With Me / Nobody Offline / Solo Only Here / Kenny Down Home Blues / Turtle Slow One / ' +
 	'Tora Inundated / Feki Glass House Retrograde (Feki & Glasshouse Cover) / Bryce Fox StayLoose Horns (StayLoose Remix) / ' +
 	"Taylor Swift Everything Has Changed (Taylor's Version) / Lauv Love U Like That - Korean Version / Tones And I Dance Monkey / Lipps Inc. Funkytown / " +
 	'Ke$ha Tik Tok / Trixie Smith Trixie Blues / Ama Glow / Ama Shine / Ama Pulse / Ama Zed Echo (with Zed) / Ama Drift / Ama Tide / Ama Reef / Ama Burn')
-Check '  Tora as ToraMusic | the cover as Retrograde with Glass House' "$((Get-SavedState).sources.'spotify:spLetterArtist00000010'.match.videoId) | $(
+Check '  Tora as ToraMusic | the cover as Retrograde with Glass House' "$((Get-SavedState).sources.'spotify:spLetterArtist00000010'.match.ytmId) | $(
 	@((Get-SavedMatches) -split ' / ' | Where-Object { $_ -like 'spWithTail*' }))" 'toraInundat | spWithTail000000000011 retroGlass1 1'
 Check '  the remix by StayLoose, the re-recording, the Korean version, Funky Town, Kesha' (Get-SavedJudgements '^spRule(Dollar|Language|OwnVersion|Remixer|Spaced)') (
 	'spRuleDollar0000000017 tikTokKesha 1 [] / spRuleLanguage00000014 loveUKorean 1 [] / spRuleOwnVersion000013 changedTays 1 [] / ' +
@@ -885,7 +885,7 @@ Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 12) '
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 28 | Synced 0 | Waiting 22 | Needs review 2 | Failed 6 | Showing 28 of 28'
 
 # A playlist with another id of Slow One: the Spotify track takes it and merges, the order of the playlists aside. The
-# playlist with the video Only Here was matched to: its source joins that track. Only the failed tracks are searched
+# playlist with the id Only Here was matched to: its source joins that track. Only the failed tracks are searched
 # again.
 [void](Add-Playlist $h 'https://music.youtube.com/playlist?list=PLslow1')
 [void](Add-Playlist $h 'https://music.youtube.com/playlist?list=PLshared1')
@@ -935,10 +935,10 @@ $Web.SpotifyItems[$ReviewId] = [Collections.Generic.List[string]]@(
 $Web.YtmResults['Rae Tell Me'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('reviewVid01', 'Tell Me', @('Rae'), 'Tell', '3:45'))
 $Web.YtmResults['Rae Apart Song'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('apartVid001', 'Apart Song Extended', @('Rae'), 'Apart', '3:45'))
 
-# Each Spotify source with a match as "id videoId confirmed"
+# Each Spotify source with a match as "id ytmId confirmed"
 function Get-SavedReviews {
 	@((Get-SavedState).sources.PSObject.Properties | Where-Object { $_.Value.match } | ForEach-Object {
-		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.videoId) $([bool]$_.Value.match.confirmed)"
+		"$($_.Name -replace $KeyPrefix, '') $($_.Value.match.ytmId) $([bool]$_.Value.match.confirmed)"
 	}) -join ' / '
 }
 
@@ -966,7 +966,7 @@ Wait-Fetches $h $queries 1 -Spotify
 Check 'Synced: both matched, neither confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 False / spReviewApart000000002 apartVid001 False'
 Check '  confidences and doubts: the cut, the cut with a longer title' (Get-SavedJudgements '^spReview') (
 	'spReviewAlone000000001 reviewVid01 0.75 [length] / spReviewApart000000002 apartVid001 0.65 [title,length]')
-Check '  the one with the entry''s video stays apart' (Get-SavedTracks) ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
+Check '  the one with the entry''s id stays apart' (Get-SavedTracks) ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
 	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 pending [ytm:apartVid001] True')
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 2 | Synced 0 | Waiting 2 | Needs review 2 | Failed 0 | Duplicates 0 | Showing 2 of 3 in Reviews'
 Check '  Status tooltips' "$(Get-StatusTip $h 0 1) | $(Get-StatusTip $h 1 1)" 'Needs review | Needs review'

@@ -13,9 +13,9 @@
 
 namespace westie::core {
 
-class VideoSearch {
+class CandidateSearch {
 public:
-    VideoSearch(
+    CandidateSearch(
             platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, const StateStore& state, EventSink& events, Log& log
     );
 

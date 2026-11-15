@@ -13,7 +13,7 @@ namespace {
 
 constexpr std::string_view YouTubeMusicHost = "music.youtube.com";
 constexpr std::string_view BrowsePlaylistPrefix = "VL";
-// Liked Music, Watch later and Liked videos belong to one account and are never public
+// Liked Music, Watch later and Liked videos (YouTube's names) belong to one account and are never public
 constexpr std::array<std::string_view, 3> PrivateListIds = {"LM", "WL", "LL"};
 constexpr std::string_view SpotifyHost = "open.spotify.com";
 constexpr std::string_view SpotifyUriPrefix = "spotify:playlist:";

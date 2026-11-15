@@ -36,7 +36,7 @@ constexpr std::array SyncItems = {
 
 constexpr std::array TrackItems = {
     command_item(CommandId::ConfirmMatch, L"&Confirm match"),
-    command_item(CommandId::ChooseVideo, L"C&hoose match…"),
+    command_item(CommandId::ChooseMatch, L"C&hoose match…"),
     command_item(CommandId::EditTrack, L"&Edit track…\tEnter"),
     framework::MenuSeparator,
     command_item(CommandId::Retry, L"&Retry"),

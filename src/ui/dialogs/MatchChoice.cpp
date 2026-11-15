@@ -1,4 +1,4 @@
-#include "ui/dialogs/VideoChoice.h"
+#include "ui/dialogs/MatchChoice.h"
 
 #include <cmath>
 #include <format>
@@ -7,7 +7,7 @@
 #include "ResourceIds.h"
 #include "core/matching/MatchQueries.h"
 #include "core/sources/SourceType.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 #include "platform/win32/Utf16.h"
 #include "ui/ArtistsText.h"
 #include "ui/DurationText.h"
@@ -34,20 +34,20 @@ std::wstring heading_details(const core::Source& source) {
 }
 
 std::wstring current_text(const core::State& state, const core::Track& track) {
-    std::optional<core::ResolvedVideo> video = core::resolved_video(state, track);
-    if (!video) {
+    std::optional<core::ResolvedYtmId> resolved = core::resolved_ytm_id(state, track);
+    if (!resolved) {
         bool failed = track.status == core::TrackStatus::Failed && track.failure == core::TrackFailure::NoMatch;
         return failed ? L"No match found." : L"Not matched yet.";
     }
-    if (video->overridden) {
-        std::string title = library_video_title(state, video->video_id).value_or(video->video_id);
+    if (resolved->overridden) {
+        std::string title = library_result_title(state, resolved->ytm_id).value_or(resolved->ytm_id);
         return std::format(L"Current match: {}, chosen by you", platform::win32::to_utf16(title));
     }
-    auto source = state.sources.find(video->source);
+    auto source = state.sources.find(resolved->source);
     if (source == state.sources.end()) {
         return L"";
     }
-    if (const std::optional<core::Match>& match = source->second.match; match && !core::own_video(video->source)) {
+    if (const std::optional<core::Match>& match = source->second.match; match && !core::own_ytm_id(resolved->source)) {
         return std::format(L"Current match: {}, {}% confidence", platform::win32::to_utf16(match->title), std::lround(match->confidence * PercentPerWhole));
     }
     return std::format(L"Current match: {}, from a YouTube Music playlist", platform::win32::to_utf16(source->second.title));
@@ -55,7 +55,7 @@ std::wstring current_text(const core::State& state, const core::Track& track) {
 
 }
 
-std::optional<VideoChoice> video_choice(const core::State& state, const std::string& source_key) {
+std::optional<MatchChoice> match_choice(const core::State& state, const std::string& source_key) {
     auto source = state.sources.find(source_key);
     if (source == state.sources.end() || core::source_type_of_key(source_key) != core::SourceType::Spotify) {
         return std::nullopt;
@@ -65,7 +65,7 @@ std::optional<VideoChoice> video_choice(const core::State& state, const std::str
         return std::nullopt;
     }
     LinkLine heading{.icon = IDI_SPOTIFY, .text = platform::win32::to_utf16(source->second.title), .source = heading_details(source->second)};
-    return VideoChoice{
+    return MatchChoice{
         .source = source_key,
         .heading = std::move(heading),
         .current = current_text(state, track->second),
@@ -74,8 +74,8 @@ std::optional<VideoChoice> video_choice(const core::State& state, const std::str
     };
 }
 
-std::optional<std::string> library_video_title(const core::State& state, const std::string& video_id) {
-    auto source = state.sources.find(std::format("{}:{}", core::source_prefix(core::SourceType::YouTubeMusic), video_id));
+std::optional<std::string> library_result_title(const core::State& state, const std::string& ytm_id) {
+    auto source = state.sources.find(std::format("{}:{}", core::source_prefix(core::SourceType::YouTubeMusic), ytm_id));
     if (source == state.sources.end()) {
         return std::nullopt;
     }

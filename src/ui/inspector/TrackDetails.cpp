@@ -8,7 +8,7 @@
 
 #include "core/matching/MatchEvidence.h"
 #include "core/sources/SourcePage.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 #include "platform/win32/Utf16.h"
 #include "ui/ArtistsText.h"
 #include "ui/playlists/PlaylistRow.h"
@@ -58,7 +58,7 @@ std::optional<TrackMatch> match_of(const core::State& state, const platform::Tex
     const core::Match& match = *source->second.match;
     core::VersionDifference difference = core::version_difference(normalizer, source->second.title, source->second.artists, match.title, match.artists);
     return TrackMatch{
-        .video_id = platform::win32::to_utf16(match.video_id),
+        .ytm_id = platform::win32::to_utf16(match.ytm_id),
         .title = platform::win32::to_utf16(match.title),
         .artists = artists_text(match.artists),
         .duration = match.duration,
@@ -67,11 +67,11 @@ std::optional<TrackMatch> match_of(const core::State& state, const platform::Tex
         .doubts = match.doubts,
         .explicit_content = match.explicit_content,
         .source_words = words_text(difference.wanted),
-        .video_words = words_text(difference.found),
+        .result_words = words_text(difference.found),
     };
 }
 
-TrackVideo video(const std::string& id, VideoChooser chosen_by) {
+TrackAudio audio(const std::string& id, AudioChooser chosen_by) {
     return {
         .id = platform::win32::to_utf16(id),
         .url = platform::win32::to_utf16(std::format("https://music.youtube.com/watch?v={}", id)),
@@ -79,30 +79,30 @@ TrackVideo video(const std::string& id, VideoChooser chosen_by) {
     };
 }
 
-void show_entry_video(
+void show_entry_audio(
         const core::State& state, const platform::TextNormalizer& normalizer, const core::Track& track, const std::string& entry, TrackDetails& details
 ) {
-    // How the entry itself got its video, so a duplicate shows what the Matcher did with it
+    // How the entry itself got its YouTube Music id, so a duplicate shows what the Matcher did with it
     const std::string* first_spotify = core::first_source_of(track, core::SourceType::Spotify);
     // The user's choice is every entry's
-    if (!track.video_override.empty()) {
-        details.video = video(track.video_override, VideoChooser::Override);
+    if (!track.ytm_override.empty()) {
+        details.audio = audio(track.ytm_override, AudioChooser::Override);
         details.match = match_of(state, normalizer, core::source_type_of_key(entry) == core::SourceType::Spotify ? &entry : first_spotify);
         return;
     }
-    if (std::optional<std::string> own = core::own_video(entry)) {
-        details.video = video(*own, VideoChooser::Playlist);
+    if (std::optional<std::string> own = core::own_ytm_id(entry)) {
+        details.audio = audio(*own, AudioChooser::Playlist);
         details.match = match_of(state, normalizer, first_spotify);
         return;
     }
     if (auto source = state.sources.find(entry); source != state.sources.end() && source->second.match) {
-        details.video = video(source->second.match->video_id, VideoChooser::Matcher);
+        details.audio = audio(source->second.match->ytm_id, AudioChooser::Matcher);
         details.match = match_of(state, normalizer, &entry);
         return;
     }
-    if (std::optional<core::ResolvedVideo> resolved = core::resolved_video(state, track)) {
+    if (std::optional<core::ResolvedYtmId> resolved = core::resolved_ytm_id(state, track)) {
         bool chosen_by_playlist = core::source_type_of_key(resolved->source) == core::SourceType::YouTubeMusic;
-        details.video = video(resolved->video_id, chosen_by_playlist ? VideoChooser::Playlist : VideoChooser::Matcher);
+        details.audio = audio(resolved->ytm_id, chosen_by_playlist ? AudioChooser::Playlist : AudioChooser::Matcher);
     }
     details.match = match_of(state, normalizer, first_spotify);
 }
@@ -137,7 +137,7 @@ std::optional<TrackDetails> track_details(const core::State& state, const platfo
             details.playlists.push_back({.key = std::move(playlist.key), .name = std::move(playlist.name)});
         }
     }
-    show_entry_video(state, normalizer, track->second, row.key, details);
+    show_entry_audio(state, normalizer, track->second, row.key, details);
     if (track->second.status == core::TrackStatus::Failed) {
         details.failure = track->second.failure;
         details.error = last_lines(track->second.error);

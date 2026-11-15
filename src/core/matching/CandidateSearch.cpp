@@ -1,4 +1,4 @@
-#include "core/matching/VideoSearch.h"
+#include "core/matching/CandidateSearch.h"
 
 #include <exception>
 #include <format>
@@ -10,19 +10,19 @@
 #include "core/log/LogLevel.h"
 #include "core/log/LogSubject.h"
 #include "core/matching/MatchQueries.h"
-#include "core/matching/VideoCandidates.h"
-#include "core/matching/VideoSearchResults.h"
+#include "core/matching/MatchCandidates.h"
+#include "core/matching/CandidateSearchResults.h"
 #include "core/matching/YouTubeMusicSearch.h"
 #include "platform/Cancelled.h"
 
 namespace westie::core {
 
-VideoSearch::VideoSearch(
+CandidateSearch::CandidateSearch(
         platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, const StateStore& state, EventSink& events, Log& log
 ) :
         http_(http), normalizer_(normalizer), api_url_(std::move(api_url)), state_(state), events_(events), log_(log) {}
 
-int VideoSearch::search(std::string source_key, std::optional<std::string> query) {
+int CandidateSearch::search(std::string source_key, std::optional<std::string> query) {
     int request = ++requests_;
     // Assigning stops the search before this one and waits for it to end
     worker_ = std::jthread([this, request, source_key = std::move(source_key), query = std::move(query)](std::stop_token stop) {
@@ -31,12 +31,12 @@ int VideoSearch::search(std::string source_key, std::optional<std::string> query
     return request;
 }
 
-void VideoSearch::stop() noexcept {
+void CandidateSearch::stop() noexcept {
     worker_.request_stop();
 }
 
-void VideoSearch::work(const std::stop_token& stop, int request, const std::string& source_key, const std::optional<std::string>& query) const {
-    VideoSearchResults answer{.request = request};
+void CandidateSearch::work(const std::stop_token& stop, int request, const std::string& source_key, const std::optional<std::string>& query) const {
+    CandidateSearchResults answer{.request = request};
     std::vector<SongResult> results;
     LogSubject subject;
     // An exception that leaves a thread ends the process, so it becomes the answer instead
@@ -62,7 +62,7 @@ void VideoSearch::work(const std::stop_token& stop, int request, const std::stri
     }
     try {
         // The state may have changed while the search ran
-        answer.candidates = video_candidates(*state_.snapshot(), normalizer_, source_key, results);
+        answer.candidates = match_candidates(*state_.snapshot(), normalizer_, source_key, results);
     } catch (const std::exception& error) {
         answer.error = error.what();
     }

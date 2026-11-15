@@ -1,4 +1,4 @@
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 
 #include <algorithm>
 #include <optional>
@@ -16,20 +16,20 @@ const std::string* first_source_of(const Track& track, SourceType type) {
     return found == track.sources.end() ? nullptr : &*found;
 }
 
-std::optional<std::string> own_video(std::string_view source_key) {
+std::optional<std::string> own_ytm_id(std::string_view source_key) {
     if (source_type_of_key(source_key) != SourceType::YouTubeMusic) {
         return std::nullopt;
     }
     return std::string(source_key.substr(source_prefix(SourceType::YouTubeMusic).size() + 1));
 }
 
-std::optional<ResolvedVideo> resolved_video(const State& state, const Track& track) {
-    if (!track.video_override.empty()) {
-        return ResolvedVideo{.video_id = track.video_override, .source = track.sources.empty() ? "" : track.sources.front(), .overridden = true};
+std::optional<ResolvedYtmId> resolved_ytm_id(const State& state, const Track& track) {
+    if (!track.ytm_override.empty()) {
+        return ResolvedYtmId{.ytm_id = track.ytm_override, .source = track.sources.empty() ? "" : track.sources.front(), .overridden = true};
     }
-    // The playlist owner chose a YouTube Music source's video
+    // The playlist owner chose a YouTube Music source
     if (const std::string* key = first_source_of(track, SourceType::YouTubeMusic)) {
-        return ResolvedVideo{.video_id = own_video(*key).value_or(""), .source = *key};
+        return ResolvedYtmId{.ytm_id = own_ytm_id(*key).value_or(""), .source = *key};
     }
     const std::string* key = first_source_of(track, SourceType::Spotify);
     if (key == nullptr) {
@@ -39,33 +39,33 @@ std::optional<ResolvedVideo> resolved_video(const State& state, const Track& tra
     if (source == state.sources.end() || !source->second.match) {
         return std::nullopt;
     }
-    return ResolvedVideo{.video_id = source->second.match->video_id, .source = *key};
+    return ResolvedYtmId{.ytm_id = source->second.match->ytm_id, .source = *key};
 }
 
-std::optional<std::string> track_with_video(const State& state, std::string_view video_id, std::string_view except) {
+std::optional<std::string> track_with_ytm_id(const State& state, std::string_view ytm_id, std::string_view except) {
     for (const auto& [key, track] : state.tracks) {
         // A match that may be wrong takes no other track's sources in
         if (key == except || needs_review(state, track)) {
             continue;
         }
-        if (std::optional<ResolvedVideo> video = resolved_video(state, track); video && video->video_id == video_id) {
+        if (std::optional<ResolvedYtmId> resolved = resolved_ytm_id(state, track); resolved && resolved->ytm_id == ytm_id) {
             return key;
         }
     }
     return std::nullopt;
 }
 
-std::set<std::string> track_videos(const State& state) {
-    std::set<std::string> videos;
+std::set<std::string> track_ytm_ids(const State& state) {
+    std::set<std::string> ytm_ids;
     for (const Track& track : state.tracks | std::views::values) {
         if (needs_review(state, track)) {
             continue;
         }
-        if (std::optional<ResolvedVideo> video = resolved_video(state, track)) {
-            videos.insert(std::move(video->video_id));
+        if (std::optional<ResolvedYtmId> resolved = resolved_ytm_id(state, track)) {
+            ytm_ids.insert(std::move(resolved->ytm_id));
         }
     }
-    return videos;
+    return ytm_ids;
 }
 
 }

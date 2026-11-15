@@ -63,7 +63,7 @@ constexpr std::array DoubtNames = {
 };
 
 struct MatchJson {
-    std::string video_id{};
+    std::string ytm_id{};
     double confidence = 0.0;
     std::optional<bool> confirmed{};
     std::optional<std::vector<std::string>> doubts{};
@@ -72,6 +72,8 @@ struct MatchJson {
     std::optional<std::string> album{};
     std::int64_t duration_ms = 0;
     std::optional<bool> explicit_content{};
+    // Read from files of earlier versions, never written
+    std::optional<std::string> old_ytm_id{};
 };
 
 struct SourceJson {
@@ -86,11 +88,13 @@ struct SourceJson {
 
 struct TrackJson {
     std::vector<std::string> sources{};
-    std::optional<std::string> video_override{};
+    std::optional<std::string> ytm_override{};
     std::string status{};
     std::optional<std::string> failure{};
     std::optional<std::string> error{};
     std::string added_at{};
+    // Read from files of earlier versions, never written
+    std::optional<std::string> old_ytm_override{};
 };
 
 // state.json as it is on disk: camelCase keys and ISO 8601 times
@@ -188,7 +192,7 @@ std::optional<std::vector<std::string>> doubt_names(const std::vector<MatchDoubt
 
 Match match_of(MatchJson&& json) {
     return {
-        .video_id = std::move(json.video_id),
+        .ytm_id = json.ytm_id.empty() ? std::move(json.old_ytm_id).value_or("") : std::move(json.ytm_id),
         .confidence = json.confidence,
         .confirmed = json.confirmed.value_or(false),
         .doubts = doubts_named(json.doubts),
@@ -202,7 +206,7 @@ Match match_of(MatchJson&& json) {
 
 MatchJson json_of(const Match& match) {
     return {
-        .video_id = match.video_id,
+        .ytm_id = match.ytm_id,
         .confidence = match.confidence,
         .confirmed = match.confirmed ? std::optional(true) : std::nullopt,
         .doubts = doubt_names(match.doubts),
@@ -231,8 +235,8 @@ template<>
 struct glz::meta<westie::core::MatchJson> {
     using T = westie::core::MatchJson;
     constexpr static auto value = glz::object(
-            "videoId", &T::video_id, "confidence", &T::confidence, "confirmed", &T::confirmed, "doubts", &T::doubts, "title", &T::title, "artists",
-            &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "explicit", &T::explicit_content
+            "ytmId", &T::ytm_id, "confidence", &T::confidence, "confirmed", &T::confirmed, "doubts", &T::doubts, "title", &T::title, "artists",
+            &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "explicit", &T::explicit_content, "videoId", &T::old_ytm_id
     );
 };
 
@@ -249,8 +253,8 @@ template<>
 struct glz::meta<westie::core::TrackJson> {
     using T = westie::core::TrackJson;
     constexpr static auto value = glz::object(
-            "sources", &T::sources, "videoOverride", &T::video_override, "status", &T::status, "failure", &T::failure, "error", &T::error, "addedAt",
-            &T::added_at
+            "sources", &T::sources, "ytmOverride", &T::ytm_override, "status", &T::status, "failure", &T::failure, "error", &T::error, "addedAt",
+            &T::added_at, "videoOverride", &T::old_ytm_override
     );
 };
 
@@ -304,7 +308,7 @@ State StateStore::load() const {
     for (auto& [key, track] : json.tracks) {
         state.tracks[key] = {
             .sources = std::move(track.sources),
-            .video_override = std::move(track.video_override).value_or(""),
+            .ytm_override = std::move(track.ytm_override).or_else([&] { return std::move(track.old_ytm_override); }).value_or(""),
             .status = status_named(track.status),
             .failure = failure_named(track.failure),
             .error = std::move(track.error).value_or(""),
@@ -333,7 +337,7 @@ void StateStore::save(const State& state) {
     for (const auto& [key, track] : state.tracks) {
         json.tracks[key] = {
             .sources = track.sources,
-            .video_override = optional_text(track.video_override),
+            .ytm_override = optional_text(track.ytm_override),
             .status = std::string(status_name(track.status)),
             .failure = failure_name(track.failure),
             .error = optional_text(track.error),

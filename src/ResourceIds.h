@@ -45,16 +45,16 @@
 #define IDC_PLAYLIST_KIND         1101
 #define IDC_SYNC_NOW              1102
 
-#define IDD_CHOOSE_VIDEO          102
-#define IDC_VIDEO_SOURCE          1200
-#define IDC_VIDEO_CURRENT         1201
-#define IDC_VIDEO_QUERY           1202
-#define IDC_VIDEO_SEARCH          1203
-#define IDC_VIDEO_LIST            1204
-#define IDC_VIDEO_LINK            1205
-#define IDC_VIDEO_LINK_KIND       1206
+#define IDD_CHOOSE_MATCH          102
+#define IDC_CHOOSE_SOURCE          1200
+#define IDC_CHOOSE_CURRENT         1201
+#define IDC_CHOOSE_QUERY           1202
+#define IDC_CHOOSE_SEARCH          1203
+#define IDC_CHOOSE_LIST            1204
+#define IDC_CHOOSE_LINK            1205
+#define IDC_CHOOSE_LINK_KIND       1206
 #define IDC_PLAY_SOURCE           1207
 #define IDC_PLAY_LINK             1208
-#define IDC_VIDEO_GRIP            1209
-#define IDC_VIDEO_LINK_LABEL      1210
-#define IDC_VIDEO_QUERY_LABEL     1211
+#define IDC_CHOOSE_GRIP            1209
+#define IDC_CHOOSE_LINK_LABEL      1210
+#define IDC_CHOOSE_QUERY_LABEL     1211

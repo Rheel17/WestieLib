@@ -13,7 +13,7 @@ enum class CommandId : WORD {
     SyncSelectedPlaylist,
     CancelSync,
     ConfirmMatch,
-    ChooseVideo,
+    ChooseMatch,
     EditTrack,
     Retry,
     Keep,

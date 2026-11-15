@@ -12,7 +12,7 @@
 namespace westie::core {
 
 struct SongResult {
-    std::string video_id{};
+    std::string ytm_id{};
     std::string title{};
     std::vector<std::string> artists{};
     std::string album{};

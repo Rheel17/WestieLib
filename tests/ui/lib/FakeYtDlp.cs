@@ -1,5 +1,5 @@
 // A yt-dlp that answers playlists by the list id, as the real one does. A look-up (--playlist-items 0) gets a name; a
-// fetch gets the entries too: songs for ids starting with PLtracks and PLshared (which share one video), none for any
+// fetch gets the entries too: songs for ids starting with PLtracks and PLshared (which share one id), none for any
 // other id. Ids starting with PLmissing and PLprivate get YouTube's errors, PLbroken a network error, and PLslow its
 // answer 1.5 s late (a fetch 3 s late). Each run adds its arguments, joined with |, to yt-dlp-runs.txt beside it.
 
@@ -51,10 +51,10 @@ public static class FakeYtDlp {
 	}
 
 	// Like the real one's flat entries, with the fields the app doesn't read too
-	static string Entry(string video, string title, string channel, string duration) {
-		return "{\"_type\": \"url\", \"ie_key\": \"Youtube\", \"id\": \"" + video + "\", \"url\": \"https://music.youtube.com/watch?v=" + video +
+	static string Entry(string id, string title, string channel, string duration) {
+		return "{\"_type\": \"url\", \"ie_key\": \"Youtube\", \"id\": \"" + id + "\", \"url\": \"https://music.youtube.com/watch?v=" + id +
 			"\", \"title\": " + title + ", \"duration\": " + duration + ", \"channel\": " + channel +
-			", \"thumbnails\": [{\"url\": \"https://i.ytimg.com/vi/" + video + "/hqdefault.jpg\", \"height\": 94, \"width\": 168}]}";
+			", \"thumbnails\": [{\"url\": \"https://i.ytimg.com/vi/" + id + "/hqdefault.jpg\", \"height\": 94, \"width\": 168}]}";
 	}
 
 	static void Write(Stream stream, string text) {

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "core/state/PruneTracks.h"
-#include "core/state/TrackVideos.h"
+#include "core/state/TrackYtmIds.h"
 
 namespace westie::core {
 
@@ -25,9 +25,9 @@ void add_source(State& state, SourceTrack&& listed, std::chrono::system_clock::t
     if (state.tracks.contains(source.track)) {
         return;
     }
-    // A YouTube Music video that a Spotify track was matched to is that track's
-    if (std::optional<std::string> video = own_video(listed.key)) {
-        if (std::optional<std::string> owner = track_with_video(state, *video)) {
+    // A YouTube Music source that a Spotify track was matched to is that track's
+    if (std::optional<std::string> ytm_id = own_ytm_id(listed.key)) {
+        if (std::optional<std::string> owner = track_with_ytm_id(state, *ytm_id)) {
             source.track = *owner;
             state.tracks.at(*owner).sources.push_back(listed.key);
             return;

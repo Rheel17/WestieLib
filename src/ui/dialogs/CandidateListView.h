@@ -10,19 +10,19 @@
 #include <windows.h>
 #include <commctrl.h>
 
-#include "core/matching/VideoCandidates.h"
+#include "core/matching/MatchCandidates.h"
 #include "ui/dialogs/RowPlayButtons.h"
 #include "ui/framework/Control.h"
 
 namespace westie::ui {
 
-class VideoListView final : public framework::Control {
+class CandidateListView final : public framework::Control {
 public:
     // Gets the row whose play button was clicked
-    VideoListView(HWND list, std::function<void(std::size_t)> on_play);
+    CandidateListView(HWND list, std::function<void(std::size_t)> on_play);
 
     // A length further off the source's than a few seconds shows in amber
-    void show(const std::vector<core::VideoCandidate>& candidates, std::chrono::milliseconds source_duration);
+    void show(const std::vector<core::MatchCandidate>& candidates, std::chrono::milliseconds source_duration);
     // What it reads while it has no rows
     void set_empty_text(std::wstring text);
     std::optional<std::size_t> selected() const;

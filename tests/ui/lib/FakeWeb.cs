@@ -6,7 +6,7 @@
 // makes pages fail with HTTP 500.
 //
 // The search answers a query with the songs YtmResults lists for it, HTTP 500 for YtmBrokenQueries, and otherwise, when
-// the query is "<artists> <title>" of a track that Track built, with that song as video "yt<track id>"; anything else
+// the query is "<artists> <title>" of a track that Track built, with that song as id "yt<track id>"; anything else
 // has no results. Each search is logged in YtmQueries and waits for YtmGate.
 
 using System;
@@ -79,11 +79,11 @@ public class FakeWeb {
 
 	// A song as YouTube Music's search lists it: the title, then "<artists> • <album> • <length>", then the plays, and the
 	// explicit badge for an explicit song
-	public static string Song(string video, string title, string[] artists, string album, string length) {
-		return Song(video, title, artists, album, length, false);
+	public static string Song(string id, string title, string[] artists, string album, string length) {
+		return Song(id, title, artists, album, length, false);
 	}
 
-	public static string Song(string video, string title, string[] artists, string album, string length, bool isExplicit) {
+	public static string Song(string id, string title, string[] artists, string album, string length, bool isExplicit) {
 		var runs = new List<string>();
 		for (int i = 0; i < artists.Length; i++) {
 			if (i > 0) runs.Add("{\"text\":\"" + (i == artists.Length - 1 ? " & " : ", ") + "\"}");
@@ -94,9 +94,9 @@ public class FakeWeb {
 		runs.Add("{\"text\":\" " + (char)0x2022 + " \"}");
 		runs.Add("{\"text\":\"" + length + "\"}");
 		string badges = isExplicit ? "\"badges\":[{\"musicInlineBadgeRenderer\":{\"icon\":{\"iconType\":\"MUSIC_EXPLICIT_BADGE\"}}}]," : "";
-		return "{\"musicResponsiveListItemRenderer\":{" + badges + "\"playlistItemData\":{\"videoId\":\"" + video + "\"},\"flexColumns\":[" +
+		return "{\"musicResponsiveListItemRenderer\":{" + badges + "\"playlistItemData\":{\"videoId\":\"" + id + "\"},\"flexColumns\":[" +
 			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[{\"text\":" + Json(title) + ",\"navigationEndpoint\":{\"watchEndpoint\":{" +
-			"\"videoId\":\"" + video + "\"}}}]}}}," +
+			"\"videoId\":\"" + id + "\"}}}]}}}," +
 			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[" + string.Join(",", runs) + "]}}}," +
 			"{\"musicResponsiveListItemFlexColumnRenderer\":{\"text\":{\"runs\":[{\"text\":\"1.2M plays\"}]}}}]}}";
 	}

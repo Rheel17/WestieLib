@@ -29,7 +29,7 @@ void split_source(State& state, const std::string& source_key) {
     std::string others_key = others.front();
     Track rest = track->second;
     rest.sources = std::move(others);
-    rest.video_override.clear();
+    rest.ytm_override.clear();
     for (const std::string& key : rest.sources) {
         if (auto moved = state.sources.find(key); moved != state.sources.end()) {
             moved->second.track = others_key;
