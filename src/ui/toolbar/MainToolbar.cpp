@@ -38,14 +38,14 @@ constexpr std::array DisabledGlyphs = {IDI_PLUS_DISABLED, IDI_SYNCING_DISABLED, 
 
 constexpr std::array Buttons = {
     framework::ToolbarButton{.command = std::to_underlying(CommandId::AddPlaylist), .image = 0, .text = L"Add playlist"},
-    framework::ToolbarButton{.command = std::to_underlying(CommandId::SyncAll), .image = 1, .text = L"Sync all", .dropdown = true},
-    framework::ToolbarButton{.command = std::to_underlying(CommandId::CancelSync), .image = 2, .text = L"Cancel"},
+    framework::ToolbarButton{.command = std::to_underlying(CommandId::UpdateAll), .image = 1, .text = L"Update all", .dropdown = true},
+    framework::ToolbarButton{.command = std::to_underlying(CommandId::CancelUpdate), .image = 2, .text = L"Cancel"},
     framework::ToolbarSeparator,
     framework::ToolbarButton{.command = std::to_underlying(CommandId::Settings), .image = 3, .text = L"Settings"},
 };
 
 constexpr std::array SyncMenuItems = {
-    command_item(CommandId::SyncSelectedPlaylist, L"Sync &selected playlist"),
+    command_item(CommandId::UpdateSelectedPlaylist, L"Update &selected playlist"),
 };
 
 }

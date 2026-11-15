@@ -257,7 +257,7 @@ $h = $app.Hwnd
 Check 'Track panel in the main column' ((Get-RowPanels $h)[1] -eq (Get-TrackPanel $h)) 'True'
 Check-TrackLayout 'Layout:' $h
 Check-FilterBar $h
-Check 'Status tabs | selected' "$([W]::TabTexts((Get-StatusTabs $h))) | $(Get-SelectedTab $h)" 'All 0 | Synced 0 | Waiting 0 | Needs review 0 | Failed 0 | 0'
+Check 'Status tabs | selected' "$([W]::TabTexts((Get-StatusTabs $h))) | $(Get-SelectedTab $h)" 'All 0 | Downloaded 0 | Waiting 0 | Needs review 0 | Failed 0 | 0'
 Check '  width beyond each text' (Get-TabPadding $h) ((1..5 | ForEach-Object { 2 * (S 8) }) -join ' ')
 Check 'Result line' ([W]::TextOf((Get-ResultLine $h))) 'Showing 0 of 0'
 Check-Clear $h

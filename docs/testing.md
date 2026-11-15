@@ -35,7 +35,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 
 | Suite | Checks | Run it after changes to |
 |-------|--------|-------------------------|
-| `unit` | The unit checks (below): the Matcher's rules against real cases from the user's library, the log's texts | `core/matching/`, `core/state/MatchDoubt`, `core/log/LogText`, `platform/win32/Win32TextNormalizer` |
+| `unit` | The unit checks (below): the Matcher's rules against real cases from the user's library, the log's texts, an update's phases as the playlist rows show them (`SyncBoard`'s counts per playlist, `last_sync_line`'s texts) | `core/matching/`, `core/state/MatchDoubt`, `core/log/LogText`, `platform/win32/Win32TextNormalizer`, `ui/sync/SyncBoard`, `ui/playlists/LastSyncLine` |
 | `window` | DPI awareness, icons, menus and their states, About, the toolbar and status bar, the side panels' first-run content, sizes, splitter limits, the log pane (its toolbar, columns, close button, level and scope, saved and restored), saving and restoring the window state | `ui/main/`, `ui/commands/`, `ui/toolbar/`, `ui/statusbar/`, `ui/log/`, `ui/welcome/WelcomePanel`, menus, accelerators |
 | `settings` | The Settings dialog, the library folder field, Browse and Change..., settings.json | `core/settings/`, `ui/dialogs/SettingsDialog`, `ui/dialogs/FolderPicker`, `ui/welcome/LibraryFolder*` |
 | `tools` | The Tools part, the Settings dialog's Tools group, Check for updates, installing yt-dlp | `core/tools/`, `core/github/`, `ui/tools/`, `ui/dialogs/ToolListView` |

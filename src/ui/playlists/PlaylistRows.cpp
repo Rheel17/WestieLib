@@ -1,6 +1,7 @@
 #include "ui/playlists/PlaylistRows.h"
 
 #include <algorithm>
+#include <optional>
 #include <ranges>
 #include <set>
 #include <string>
@@ -90,11 +91,17 @@ void mark_runs(std::vector<PlaylistRow>& rows, const SyncBoard& board) {
     for (PlaylistRow& row : rows) {
         row.run = PlaylistRun::None;
         row.waiting_for.clear();
+        row.matching_now = false;
         if (board.current() == row.key) {
-            row.run = PlaylistRun::Fetching;
+            row.run = PlaylistRun::Syncing;
             row.waiting_for.assign(board.waiting_for().begin(), board.waiting_for().end());
         } else if (board.queued(row.key)) {
             row.run = PlaylistRun::Queued;
+        } else if (std::optional<MatchProgress> progress = board.match_progress(row.key)) {
+            row.run = PlaylistRun::Matching;
+            row.matched = progress->ended;
+            row.to_match = progress->queued;
+            row.matching_now = board.matching_now(row.key);
         }
     }
 }

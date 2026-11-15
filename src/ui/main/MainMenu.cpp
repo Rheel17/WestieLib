@@ -27,11 +27,11 @@ constexpr std::array FileItems = {
     command_item(CommandId::Exit, L"E&xit\tCtrl+Q"),
 };
 
-constexpr std::array SyncItems = {
-    command_item(CommandId::SyncAll, L"Sync &all\tF5"),
-    command_item(CommandId::SyncSelectedPlaylist, L"Sync &selected playlist"),
+constexpr std::array UpdateItems = {
+    command_item(CommandId::UpdateAll, L"Update &all\tF5"),
+    command_item(CommandId::UpdateSelectedPlaylist, L"Update &selected playlist"),
     framework::MenuSeparator,
-    command_item(CommandId::CancelSync, L"&Cancel"),
+    command_item(CommandId::CancelUpdate, L"&Cancel"),
 };
 
 constexpr std::array TrackItems = {
@@ -69,8 +69,8 @@ constexpr std::array HelpItems = {
 };
 
 constexpr std::array Popups = {
-    Popup{L"&File", FileItems}, Popup{L"&Sync", SyncItems},   Popup{L"&Track", TrackItems},
-    Popup{L"&View", ViewItems}, Popup{L"T&ools", ToolsItems}, Popup{L"&Help", HelpItems},
+    Popup{L"&File", FileItems}, Popup{L"&Update", UpdateItems}, Popup{L"&Track", TrackItems},
+    Popup{L"&View", ViewItems}, Popup{L"T&ools", ToolsItems},   Popup{L"&Help", HelpItems},
 };
 
 }

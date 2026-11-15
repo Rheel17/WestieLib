@@ -39,10 +39,10 @@ $h = $app.Hwnd
 Check 'DPI awareness (2 = per monitor)' ([W]::GetAwarenessFromDpiAwarenessContext([W]::GetWindowDpiAwarenessContext($h))) 2
 Check 'Big and small icons set' "$([W]::SendMessageW($h, 0x7F, [IntPtr]1, [IntPtr]::Zero) -ne 0) $([W]::SendMessageW($h, 0x7F, [IntPtr]0, [IntPtr]::Zero) -ne 0)" 'True True'
 $menu = [W]::GetMenu($h)
-Check 'Menu bar' ([W]::MenuText($menu)) '&File &Sync &Track &View T&ools &Help'
+Check 'Menu bar' ([W]::MenuText($menu)) '&File &Update &Track &View T&ools &Help'
 $popups = @(
 	'&Add playlist... [Ctrl+N], &Remove playlist..., -, &Open library folder, -, E&xit [Ctrl+Q]',
-	'Sync &all [F5], Sync &selected playlist, -, &Cancel',
+	'Update &all [F5], Update &selected playlist, -, &Cancel',
 	'&Confirm match, C&hoose match..., &Edit track... [Enter], -, &Retry, &Keep, &Move to Recycle Bin..., -, &Show in folder, Open on &YouTube, Open source &page',
 	'&Log [Ctrl+L], -, &Columns...',
 	'&Settings... [Ctrl+Alt+S], Check for &updates, -, &Rebuild library from files..., Locate library &folder..., -, Open &log folder',
@@ -52,7 +52,7 @@ for ($i = 0; $i -lt $popups.Count; $i++) {
 	Check "  $(([W]::MenuText($menu) -split ' ')[$i]) items" ([W]::PopupText([W]::GetSubMenu($menu, $i))) $popups[$i]
 }
 Update-MenuStates $h
-Check 'Grayed while idle, no playlists, nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Sync &all, Sync &selected playlist, &Cancel, ' +
+Check 'Grayed while idle, no playlists, nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Update &all, Update &selected playlist, &Cancel, ' +
 	'&Confirm match, C&hoose match..., &Edit track..., &Retry, &Keep, &Move to Recycle Bin..., &Show in folder, Open on &YouTube, Open source &page')
 Check 'Checked items' ([W]::ItemsWithState($menu, 0x8)) ''
 Send-Command $h '&About WestieLib'
@@ -65,7 +65,7 @@ Check-MenuBarEdge 'Menu bar runs into the toolbar' $h -Menus
 Check 'Initial window size' ((Get-Bounds $h) -replace '^.* ', '') "$(S 1280)x$(S 800)"
 Check-Bars 'Toolbar strip | status bar' $h
 $toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
-Check 'Toolbar buttons, no playlists' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v (disabled), Cancel (disabled), -, Settings'
+Check 'Toolbar buttons, no playlists' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Update all v (disabled), Cancel (disabled), -, Settings'
 Check-Toolbar ' ' $h
 Check-StatusParts 'Status bar part edges' $h
 Check-StatusTexts ' ' $h

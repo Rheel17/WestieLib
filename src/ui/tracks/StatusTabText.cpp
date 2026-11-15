@@ -6,7 +6,7 @@ namespace westie::ui {
 
 const wchar_t* status_word(StatusTab tab) {
     switch (tab) {
-    case StatusTab::Synced:      return L"Synced";
+    case StatusTab::Synced:      return L"Downloaded";
     case StatusTab::Waiting:     return L"Waiting";
     case StatusTab::NeedsReview: return L"Needs review";
     case StatusTab::Failed:      return L"Failed";

@@ -32,7 +32,7 @@ constexpr UINT SpinIntervalMs = 100;
 constexpr std::chrono::milliseconds SpinTurn{1200};
 
 bool spins(const PlaylistRow& row) {
-    return row.run == PlaylistRun::Fetching && row.waiting_for.empty();
+    return (row.run == PlaylistRun::Syncing && row.waiting_for.empty()) || (row.run == PlaylistRun::Matching && row.matching_now);
 }
 
 }
@@ -199,7 +199,7 @@ void PlaylistList::place_tips() {
     for (std::size_t index = 0; index < rows_.size(); ++index) {
         // Only a control that can be clicked explains itself
         if (sync_enabled_) {
-            tips_.set_tool(index, painter_->sync_button(row_bounds(index), rows_[index], now), L"Sync " + rows_[index].name);
+            tips_.set_tool(index, painter_->sync_button(row_bounds(index), rows_[index], now), L"Update " + rows_[index].name);
         } else {
             tips_.remove_tool(index);
         }

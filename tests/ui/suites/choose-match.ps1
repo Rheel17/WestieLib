@@ -267,7 +267,7 @@ $Web.SpotifyItems[$PicksId] = [Collections.Generic.List[string]]@(
 )
 $searches = @($Web.YtmQueries()).Count
 $spotify = @($Web.SpotifyQueries()).Count
-Send-Command $h 'Sync &selected playlist'
+Send-Command $h 'Update &selected playlist'
 for ($i = 0; $i -lt 50 -and @($Web.SpotifyQueries()).Count -le $spotify; $i++) { Start-Sleep -Milliseconds 100 }
 for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
 Start-Sleep -Milliseconds 300

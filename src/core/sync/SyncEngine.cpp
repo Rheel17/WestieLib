@@ -29,6 +29,7 @@
 #include "core/sync/PlaylistPageFetched.h"
 #include "core/sync/SyncFinished.h"
 #include "core/sync/SyncQueued.h"
+#include "core/sync/TrackMatching.h"
 #include "core/sync/TrackStatusChanged.h"
 #include "core/sync/TracksMerged.h"
 #include "core/sync/TracksQueued.h"
@@ -109,7 +110,7 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
     }
     std::string what = counted(queued.playlists.size(), "playlist");
     LogSubject subject = queued.playlists.size() == 1 ? playlist_subject(*state_.snapshot(), queued.playlists.front()) : LogSubject{};
-    log_.write(LogLevel::Info, running_ ? std::format("Added {} to the sync", what) : std::format("Sync started: {}", what), std::move(subject));
+    log_.write(LogLevel::Info, running_ ? std::format("Added {} to the update", what) : std::format("Update started: {}", what), std::move(subject));
     // Under the lock, so the run can't report on these playlists before the UI knows they're queued
     events_.emit(std::move(queued));
     if (running_) {
@@ -173,7 +174,7 @@ bool SyncEngine::finish(const std::stop_token& stop) {
     }
     queue_.clear();
     running_ = false;
-    log_.write(LogLevel::Info, stop.stop_requested() ? "Sync cancelled" : "Sync finished");
+    log_.write(LogLevel::Info, stop.stop_requested() ? "Update cancelled" : "Update finished");
     // Under the lock, so a sync that starts the next run comes after this in the events
     events_.emit(SyncFinished{.cancelled = stop.stop_requested()});
     return true;
@@ -273,9 +274,9 @@ void SyncEngine::merge_library_matches() {
 
 void SyncEngine::queue_tracks(MatchQueue& queue) {
     TracksQueued queued;
-    for (std::string& track : tracks_to_match(*state_.snapshot())) {
-        if (queue.queued.insert(track).second) {
-            queue.waiting.push_back({.track = track});
+    for (QueuedTrack& track : tracks_to_match(*state_.snapshot())) {
+        if (queue.queued.insert(track.track).second) {
+            queue.waiting.push_back({.track = track.track});
             queued.tracks.push_back(std::move(track));
         }
     }
@@ -303,10 +304,12 @@ std::optional<SyncEngine::QueuedMatch> SyncEngine::take_track(MatchQueue& queue,
 void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_token& stop) {
     std::shared_ptr<const State> state = state_.snapshot();
     auto found = state->tracks.find(queued.track);
-    // Merged or removed with its playlist since it was queued
+    // Merged or removed with its playlist since it was queued; the event still ends it for the UI's counts
     if (found == state->tracks.end() || !needs_match(*state, found->second)) {
+        events_.emit(TrackStatusChanged{.track = queued.track});
         return;
     }
+    events_.emit(TrackMatching{.track = queued.track});
     const Source& source = state->sources.at(*first_source_of(found->second, SourceType::Spotify));
     LogSubject subject = track_subject(*state, queued.track);
     int tries = queued.tries + 1;

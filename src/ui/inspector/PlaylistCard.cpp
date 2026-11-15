@@ -30,7 +30,7 @@ PlaylistCard::PlaylistCard(HWND parent, std::function<void(CommandId)> on_comman
         link_(hwnd(), [this](std::size_t) { on_command_(CommandId::OpenPlaylistPage); }),
         tracks_key_(hwnd(), L"Tracks", {.color = framework::TextColor::Gray}),
         tracks_(hwnd(), L""),
-        synced_key_(hwnd(), L"Synced", {.color = framework::TextColor::Gray}),
+        synced_key_(hwnd(), L"Downloaded", {.color = framework::TextColor::Gray}),
         synced_(hwnd()),
         waiting_key_(hwnd(), L"Waiting", {.color = framework::TextColor::Gray}),
         waiting_(hwnd(), L""),
@@ -40,9 +40,9 @@ PlaylistCard::PlaylistCard(HWND parent, std::function<void(CommandId)> on_comman
         review_(hwnd(), L"", {.color = framework::TextColor::Warning}),
         shared_key_(hwnd(), L"Shared", {.color = framework::TextColor::Gray}),
         shared_(hwnd(), L""),
-        last_sync_key_(hwnd(), L"Last sync", {.color = framework::TextColor::Gray}),
+        last_sync_key_(hwnd(), L"Last update", {.color = framework::TextColor::Gray}),
         last_sync_(hwnd(), L""),
-        sync_(hwnd(), {.text = L"Sync playlist", .command = std::to_underlying(CommandId::SyncSelectedPlaylist), .icon = IDI_SYNCING}),
+        sync_(hwnd(), {.text = L"Update playlist", .command = std::to_underlying(CommandId::UpdateSelectedPlaylist), .icon = IDI_SYNCING}),
         remove_(hwnd(), {.text = L"Remove playlist…", .command = std::to_underlying(CommandId::RemovePlaylist)}) {}
 
 int PlaylistCard::height_for(int width) const {
@@ -83,7 +83,7 @@ void PlaylistCard::set_contents(const PlaylistRow& playlist) {
 }
 
 void PlaylistCard::update(const CommandState& state) {
-    sync_.set_enabled(state.enabled(CommandId::SyncSelectedPlaylist));
+    sync_.set_enabled(state.enabled(CommandId::UpdateSelectedPlaylist));
     remove_.set_enabled(state.enabled(CommandId::RemovePlaylist));
 }
 

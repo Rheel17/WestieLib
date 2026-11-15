@@ -19,7 +19,7 @@ constexpr ACCEL shortcut(BYTE modifiers, WORD key, CommandId command) {
 constexpr std::array Shortcuts = {
     shortcut(FCONTROL, 'N', CommandId::AddPlaylist),
     shortcut(FCONTROL, 'Q', CommandId::Exit),
-    shortcut(0, VK_F5, CommandId::SyncAll),
+    shortcut(0, VK_F5, CommandId::UpdateAll),
     shortcut(FCONTROL, 'L', CommandId::ToggleLog),
     shortcut(FCONTROL, 'F', CommandId::FocusSearch),
     shortcut(FCONTROL | FALT, 'S', CommandId::Settings),

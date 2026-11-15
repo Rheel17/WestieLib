@@ -21,11 +21,11 @@ const wchar_t* status_explanation(StatusTab status, core::TrackFailure failure) 
     }
     switch (status) {
     case StatusTab::Synced:  return L"The file is in the library and tagged.";
-    case StatusTab::Failed:  return L"Retried on the next sync.";
+    case StatusTab::Failed:  return L"Retried on the next update.";
     case StatusTab::Removed: return L"No longer in any playlist. The file is still in the library.";
     case StatusTab::Kept:    return L"No longer in any playlist, but kept.";
     // Needs review shows its doubts instead (doubt_list)
-    default: return L"Downloads on the next sync.";
+    default: return L"Downloads on the next update.";
     }
 }
 

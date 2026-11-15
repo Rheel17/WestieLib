@@ -4,7 +4,7 @@
 $HintNotFullPath = "Enter a full folder path, such as $DefaultLibrary."
 $HintNoSuchDrive = "That drive isn't on this PC."
 $HintNotAFolder = "That's a file, not a folder."
-$HintWillBeCreated = "This folder doesn't exist yet. The first sync creates it."
+$HintWillBeCreated = "This folder doesn't exist yet. The first update creates it."
 # Folders no test leaves behind: they're only typed, never created
 $Unique = [guid]::NewGuid().ToString('N').Substring(0, 8)
 $MissingFolder = "C:\WestieLib-check-$Unique"

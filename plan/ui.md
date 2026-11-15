@@ -11,29 +11,29 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 
 ```
 ┌ WestieLib ──────────────────────────────────────────────────────────────── ─ □ ✕ ┐
-│ File  Sync  Track  View  Tools  Help                                             │ menu bar
-│ [+ Add playlist] [⟳ Sync all ▾] [■ Cancel]  [⚙ Settings]                         │ toolbar
+│ File  Update  Track  View  Tools  Help                                           │ menu bar
+│ [+ Add playlist] [⟳ Update all ▾] [■ Cancel]  [⚙ Settings]                       │ toolbar
 │ ⚠ 5 tracks are no longer in any playlist.                  [Review…] [✕]         │ infobar (when needed)
 ├────────────────────────┬────────────────────────────────────────┬────────────────┤
 │ ▤ All tracks           │ [🔍 Search title, artist, album ] Source [All ▾] Clear│ filter bar
-│   412, 398 synced      │ All 412│Synced 398│Waiting 6│Needs review 3│Failed 1… │ status filter
+│   412, 398 downloaded  │ All 412│Downloaded 398│Waiting 6│Needs review 3│Fail… │ status filter
 ├────────────────────────┤ Showing 214 of 412 in WCS                       │                │
 │ ▶ WCS                  ├────────────────────────────────────────┤ [ cover art ]  │
 │   214 tracks           │ # Status  Title    Artists  Album    … │ Title          │
 │   ███████████░ 198/214 │ 1 ✓       …        …        Freudian   │ Artists        │
 │   14 waiting, 2 failed │ 2 ⚠       …                            │ Album (2021)   │
-│   ✓ Synced 14:03 ↻     │ 3 ◔                                    │ ── Status ──   │
+│   ✓ Updated 14:03 ↻    │ 3 ◔                                    │ ── Status ──   │
 │ ● Her playlist         │                                        │ ── Source ──   │
 │   98 tracks            │                                        │ ── Audio ──    │
 │   ██████░░░░░░  51/98  │                                        │ ── File ──     │
-│   Syncing 6 of 47 ⟳    │                                        │ [actions]      │
+│   Matching 6 of 47 ⟳   │                                        │ [actions]      │
 │ ● Slow & bluesy        │                                        │                │
-│   ⚠ Couldn't fetch ↻   │                                        │                │
+│   ⚠ Couldn't sync ↻    │                                        │                │
 │ [+ Add playlist]       │                                        │                │
 ├────────────────────────┴────────────────────────────────────────┴────────────────┤
 │ log pane (hidden by default, View › Log, Ctrl+L)                                 │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│ Syncing 12 of 40 ▓▓▓▓░░░ │ 412 tracks │ D:\Music\WestieLib │    │ Tools ✓ │ v1.2.0 │ status bar
+│ Matching 12 of 40 ▓▓▓░░░ │ 412 tracks │ D:\Music\WestieLib │    │ Tools ✓ │ v1.2.0 │ status bar
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,11 +55,13 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 
 ## Vocabulary
 
-The UI uses its own words for the core statuses.
+The UI uses its own words for the core statuses. The whole run is an *update*: for each playlist it **syncs** (reads
+the playlist's data), then **matches** (Spotify only: searches YouTube Music for each track), then **downloads**. A
+downloaded track is **Downloaded**.
 
 | Core status / flag | UI word                              | Icon                               |
 |--------------------|--------------------------------------|------------------------------------|
-| `downloaded`       | Synced                               | green circle with check            |
+| `downloaded`       | Downloaded                           | green circle with check            |
 | `pending`          | Waiting                              | hollow gray circle                 |
 | (downloading)      | Waiting, shown as `Downloading 62%`  | blue progress ring that fills      |
 | (needs a tool)     | Waiting, shown as `Waiting for ffmpeg` | gray hourglass, still            |
@@ -69,7 +71,7 @@ The UI uses its own words for the core statuses.
 | `kept`             | Kept                                 | gray pin                           |
 | (a playlist's later entry of a track) | Duplicate         | two overlapping gray squares, nearly square-cornered |
 
-In the Status column, Needs review wins over Synced and Waiting and shows ⚠, because review is the state the user
+In the Status column, Needs review wins over Downloaded and Waiting and shows ⚠, because review is the state the user
 can act on. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a
 duplicate counts under its track's status everywhere else.
 
@@ -112,21 +114,21 @@ Each menu lists its items top to bottom; ─ is a separator. Shortcuts are right
 | Menu  | Items |
 |-------|-------|
 | File  | Add playlist… (Ctrl+N), Remove playlist…, ─, Open library folder, ─, Exit (Ctrl+Q) |
-| Sync  | Sync all (F5), Sync selected playlist, ─, Cancel |
+| Update | Update all (F5), Update selected playlist, ─, Cancel |
 | Track | Confirm match, Choose match…, Edit track… (Enter, double-click), ─, Retry, Keep, Move to Recycle Bin…, ─, Show in folder, Open on YouTube, Open source page |
 | View  | Log (Ctrl+L), ─, Columns… |
 | Tools | Settings… (Ctrl+Alt+S), Check for updates, ─, Rebuild library from files…, Locate library folder…, ─, Open log folder |
 | Help  | About WestieLib |
 
-Access keys: the menu bar has **F**ile, **S**ync, **T**rack, **V**iew, T**o**ols and **H**elp (Track and Tools can't
-share T). The items, in order: File **A**dd, **R**emove, **O**pen, E**x**it; Sync **A**ll, **S**elected, **C**ancel;
+Access keys: the menu bar has **F**ile, **U**pdate, **T**rack, **V**iew, T**o**ols and **H**elp (Track and Tools can't
+share T). The items, in order: File **A**dd, **R**emove, **O**pen, E**x**it; Update **A**ll, **S**elected, **C**ancel;
 Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **M**ove, **S**how, **Y**ouTube, source **P**age;
 View **L**og, **C**olumns; Tools **S**ettings, **U**pdates, **R**ebuild, **F**older, **L**og folder; Help **A**bout.
 
 The menu bar is white and runs straight into the toolbar, without the gray line Windows draws under a menu bar. Its
 items look as usual: the same font, hover and open highlights, and gray text while the window is inactive.
 
-The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Settings`.
+The toolbar has `+ Add playlist`, `⟳ Update all ▾`, `■ Cancel` and `⚙ Settings`.
 
 - It is a white strip, 34 px tall including a 1 px `#D9D9D9` rule along its bottom, and as wide as the window.
 - The buttons are flat, 26 px tall and centered in the strip, starting 4 px from its left edge. Each has 8 px on
@@ -136,16 +138,16 @@ The toolbar has `+ Add playlist`, `⟳ Sync all ▾`, `■ Cancel` and `⚙ Sett
   text.
 - The strip grows when the system font needs taller buttons.
 
-- `Sync all ▾` is a split button. Its dropdown lists "Sync selected playlist" and then every playlist by name.
+- `Update all ▾` is a split button. Its dropdown lists "Update selected playlist" and then every playlist by name.
 - The menu bar, the toolbar and the shortcuts share one set of rules, so a command is enabled everywhere or nowhere:
-  - `Cancel` is enabled only while a sync runs. `Sync all` is enabled when there is at least one playlist and no sync
-    runs. The tools don't matter: work that needs a missing tool waits (see Vocabulary › Waiting for tools).
-  - `Remove playlist…` and `Sync selected playlist` need a selected playlist, and `Sync selected playlist` also needs
-    no sync running.
+  - `Cancel` is enabled only while an update runs. `Update all` is enabled when there is at least one playlist and no
+    update runs. The tools don't matter: work that needs a missing tool waits (see Vocabulary › Waiting for tools).
+  - `Remove playlist…` and `Update selected playlist` need a selected playlist, and `Update selected playlist` also
+    needs no update running.
   - Track items need a selected track. `Confirm match` needs exactly one selected row, and that it needs review.
     `Choose match…` needs exactly one selected row whose entry is a Spotify track.
   - So far the other Track items stay disabled; each is enabled with its feature.
-  - `Check for updates` is disabled while tools are checked, installed or updated, and while a sync runs.
+  - `Check for updates` is disabled while tools are checked, installed or updated, and while an update runs.
   - Everything else is always enabled.
 - View › Log shows a check mark while the log pane is shown.
 
@@ -196,7 +198,7 @@ the right edge. A click on the box dismisses the message.
 The left panel has the All tracks row at the top, a separator under it, and then the list of playlists. All tracks
 stays where it is; only the playlist list scrolls.
 
-**All tracks** (glyph ▤): `All tracks`, then `100 tracks, 92 synced`. It is selected while the main panel shows the
+**All tracks** (glyph ▤): `All tracks`, then `100 tracks, 92 downloaded`. It is selected while the main panel shows the
 whole library, which is always the case until there are playlists.
 
 With no playlists, the list reads `No playlists yet.` in gray.
@@ -205,50 +207,67 @@ With no playlists, the list reads `No playlists yet.` in gray.
 
 | Line | Content |
 |------|---------|
-| 1 | Source logo (the YouTube Music or Spotify icon, 14 px) and the name in semibold. The name comes from the look-up in Add playlist and is refreshed by every fetch. A playlist stored without a name (by an earlier version) reads `YouTube Music playlist` or `Spotify playlist` until its first fetch |
+| 1 | Source logo (the YouTube Music or Spotify icon, 14 px) and the name in semibold. The name comes from the look-up in Add playlist and is refreshed by every sync. A playlist stored without a name (by an earlier version) reads `YouTube Music playlist` or `Spotify playlist` until its first sync |
 | 2 | `55 tracks` |
-| 3 | synced/total bar, then `51/55` |
+| 3 | downloaded/total bar, then `51/55` |
 | 4 | non-zero counts only: `3 waiting, 1 failed, 2 to review` in gray / red / amber. Left out when all are zero |
-| 5 | status icon, last-sync text, sync control (see below) |
+| 5 | status icon, last-update text, update control (see below); during an update, its phase instead |
 
-**Line 5** reads like `✓ Synced today 14:03 ↻`:
+**Line 5** reads like `✓ Updated today 14:03 ↻`:
 
 - **Status icon.** It starts the line, flush with the progress bar above, and the text follows it. It is the
   first rule that applies, top to bottom:
 
   | Icon | Status            | Shown when                                          |
   |------|-------------------|-----------------------------------------------------|
-  | ⚠    | fetch failed      | the last fetch failed                               |
+  | ⚠    | sync failed       | the last sync failed                                |
   | ✕    | failures          | some tracks failed                                  |
-  | ⧗    | waiting for tools | its fetch, or some of its tracks, wait for a tool   |
-  | ○    | unsynced          | some tracks are waiting, or it was never synced     |
-  | ✓    | synced            | none of the above                                   |
+  | ⧗    | waiting for tools | its sync, or some of its tracks, wait for a tool    |
+  | ○    | not done          | some tracks are waiting, or it was never updated    |
+  | ✓    | done              | none of the above                                   |
 
-  While it waits for tools, the last-sync text reads `Waiting for yt-dlp`.
+  While it waits for tools, the last-update text reads `Waiting for yt-dlp`.
 
-- **Last-sync text.** One of `Synced today 14:03`, `Synced yesterday`, `Synced 12 Oct`, `Never synced`, or
-  `Couldn't fetch, synced 9 Oct` (with `Couldn't fetch` in amber). It ends in an ellipsis rather than pushing
+- **Last-update text.** One of `Updated today 14:03`, `Updated yesterday`, `Updated 12 Oct`, `Never updated`, or
+  `Couldn't sync, updated 9 Oct` (with `Couldn't sync` in amber). The time is when the playlist last synced. It ends in an ellipsis rather than pushing
   the control out of the row.
-- **Sync control.** It sits directly after the text: a 20 px flat button with a gray ↻ glyph and no frame.
-  - On hover it gets the light-blue hot frame and the tooltip "Sync <playlist name>". Clicking it syncs that
+- **Update control.** It sits directly after the text: a 20 px flat button with a gray ↻ glyph and no frame.
+  - On hover it gets the light-blue hot frame and the tooltip "Update <playlist name>". Clicking it updates that
     playlist only.
-  - While the playlist syncs, the line reads `Syncing 6 of 22 ⟳`. The button turns into the blue ⟳, which
-    spins clockwise at about one turn per 1.2 s, and the status icon steps aside because the sync supersedes it.
-  - A playlist that is in the run but hasn't started yet reads `Queued ⟳`, with the icon still and faded.
+- **Phase.** While the playlist is in an update, the line shows its phase instead, and the status icon steps aside
+  because the update supersedes it. The first that applies:
+
+  | Phase       | Shown when                                                  | Text                  | Control               |
+  |-------------|-------------------------------------------------------------|-----------------------|-----------------------|
+  | queued      | it is in the run, and its sync hasn't started               | `Queued`              | ⟳, still and faded    |
+  | syncing     | its data is read                                            | `Syncing…`            | ⟳, spinning           |
+  |             | its sync waits for a tool                                   | ⧗ `Waiting for yt-dlp` | ⟳, still and faded   |
+  | matching    | Spotify only: the run's match queue holds tracks of it       | `Matching 12 of 340`  | ⟳, spinning while one of its tracks is matched; still and faded otherwise |
+  | downloading | (with the Downloader) its tracks download                   | `Downloading 6 of 22` | ⟳, spinning           |
+
+  The spinning ⟳ is blue and turns clockwise at about one turn per 1.2 s. A playlist whose phases are over shows its
+  done line (above) while the update goes on with others.
+  - The matching counts are the playlist's tracks the update queued to match, and how many of them have ended:
+    matched, merged, failed, or skipped because they no longer needed a match. While one of its tracks is matched, that
+    one counts too, as in the status bar: the first track matched reads `Matching 1 of 340`. A track that two playlists list counts
+    in both. A search YouTube Music refused doesn't end its track; the track waits in the queue (`arch.md`,
+    SyncEngine).
+  - An update matches only after every playlist in it has synced, so a synced Spotify playlist reads
+    `Matching 0 of 340` with the still ⟳ until then.
 
 The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
-with `0/0`, and `○ Never synced ↻`.
+with `0/0`, and `○ Never updated ↻`.
 
-**So far** a sync fetches playlists, YouTube Music and Spotify alike, and then matches the Spotify tracks: their
+**So far** an update syncs playlists, YouTube Music and Spotify alike, and then matches the Spotify tracks: their
 tracks show as Waiting, a track whose match fails as Failed, and nothing downloads. Meanwhile:
 
-- the playlist being fetched reads `Syncing…`, without `6 of 22`, which counts downloads;
-- a YouTube Music playlist whose fetch waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of
-  a queued one. A Spotify fetch needs no tool, so it never waits;
-- a Spotify playlist's tracks show 100 at a time while it is fetched: the row's counts, the table and the cards
-  update with every page. A fetch that fails or is cancelled halfway keeps the tracks it read, beside the ones the
-  playlist had; the next fetch that succeeds settles the list;
-- a fetch that succeeds sets the last sync, so a playlist whose tracks all wait reads `○ Synced today 14:03 ↻`;
+- a YouTube Music playlist whose sync waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of
+  a queued one. A Spotify sync needs no tool, so it never waits;
+- a Spotify playlist's tracks show 100 at a time while it syncs: the row's counts, the table and the cards
+  update with every page. A sync that fails or is cancelled halfway keeps the tracks it read, beside the ones the
+  playlist had; the next sync that succeeds settles the list;
+- a sync that succeeds sets the time of the last update, so once its matching is over a playlist whose tracks all
+  wait reads `○ Updated today 14:03 ↻`;
 - each match updates the table, the cards and the rows' counts as it ends. A matched track that merges into one
   with the same YouTube Music id leaves the table; when it was selected, the selection is gone with it.
 
@@ -278,15 +297,15 @@ navigation pane:
 - Adding a playlist selects it. When the selected playlist goes away, All tracks is selected.
 - Every start begins on All tracks; the selection isn't saved.
 
-**Context menu.** A playlist row's context menu has **S**ync, **O**pen in browser, **C**opy link, ─, **R**emove
+**Context menu.** A playlist row's context menu has **U**pdate, **O**pen in browser, **C**opy link, ─, **R**emove
 playlist… (Del). The shortcut is right-aligned, as in the menu bar.
 
 - A right-click selects the row under the mouse first, and gives the list the focus. A right-click between or below
   the rows, or on All tracks, shows no menu.
 - Shift+F10 and the menu key open it for the selected playlist, at the row's bottom-left corner, while the list has
   the focus. With All tracks selected they show nothing.
-- Its items follow the command rules: they need a selected playlist, and Sync also needs no sync running. Sync does
-  what `Sync selected playlist` does.
+- Its items follow the command rules: they need a selected playlist, and Update also needs no update running. Update
+  does what `Update selected playlist` does.
 - **Open in browser** opens the playlist's URL in the default browser, as the playlist card's link does. **Copy link**
   puts the URL on the clipboard; when another program holds the clipboard, it beeps instead.
 
@@ -295,7 +314,7 @@ removal All tracks is selected; removing the last playlist brings back the welco
 placeholder.
 
 **Open library folder** (File menu, Library card) opens the library folder in Explorer, or the nearest folder above it
-that exists while the first sync hasn't created it yet. When even the drive is missing it does nothing. When Windows
+that exists while the first update hasn't created it yet. When even the drive is missing it does nothing. When Windows
 can't open a folder or a link, it says so in its own message.
 
 ## Main panel
@@ -318,7 +337,7 @@ From the top:
 
 The library folder:
 
-- starts as `Music\WestieLib` in the user's profile, the *default folder*. It doesn't have to exist; the first sync
+- starts as `Music\WestieLib` in the user's profile, the *default folder*. It doesn't have to exist; the first update
   creates it.
 - The hint line under the field says what the text in the field names, and changes as the user types:
 
@@ -327,7 +346,7 @@ The library folder:
   | isn't a full path (`C:\…` or `\\server\share\…`), or has a character a folder name can't have | "Enter a full folder path, such as `<default folder>`." in red |
   | is on a drive letter this PC doesn't have | "That drive isn't on this PC." in red |
   | is a file | "That's a file, not a folder." in red |
-  | is a folder that doesn't exist yet | "This folder doesn't exist yet. The first sync creates it." in gray |
+  | is a folder that doesn't exist yet | "This folder doesn't exist yet. The first update creates it." in gray |
   | is a folder that exists, or one on a network drive or share | nothing. Network paths aren't looked up while typing, because an unreachable server would hang the window |
 
   The line keeps room for its longest hint, wrapped to the column, so nothing moves while the hint changes.
@@ -360,7 +379,7 @@ The bar has 8 px of padding at the top and sides and 4 px under it, with 8 px be
 A strip of flat buttons with counts. Exactly one button is selected. The counts take the scope, the search and
 the source into account, so each button shows how many rows it would list:
 
-`All │ Synced │ Waiting │ Needs review │ Failed │ Duplicates │ Removed │ Kept`
+`All │ Downloaded │ Waiting │ Needs review │ Failed │ Duplicates │ Removed │ Kept`
 
 - Each button reads its word and its count, as in `Needs review 3`. The buttons are 22 px tall with 8 px at the
   sides of the text. The strip has 4 px above it, 8 px at the sides and 2 px under it. The selected button has the
@@ -369,8 +388,8 @@ the source into account, so each button shows how many rows it would list:
 - `Removed` and `Kept` appear only when their count is not zero, or while they are selected.
 - `Duplicates` lists the playlist's duplicates. It shows in every playlist scope, also at 0, and never in All tracks,
   which has none.
-- All = Synced + Waiting + Failed + Removed + Kept.
-- Needs review is a subset of Synced and Waiting: a row that needs review also counts under its track's status. So
+- All = Downloaded + Waiting + Failed + Removed + Kept.
+- Needs review is a subset of Downloaded and Waiting: a row that needs review also counts under its track's status. So
   is Duplicates of All: a duplicate also counts under its track's status.
 
 ### Result line
@@ -387,7 +406,7 @@ when you click their header. Right-click the header to show, hide or reorder col
 | Column    | Default | Content |
 |-----------|---------|---------|
 | #         | playlist scope only | the entry's position in the playlist. It keeps its value when rows are filtered out, so a search can show 2, 5, 8. All tracks has no # column, because a position only means something inside a playlist |
-| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead, and a duplicate the duplicate icon. Hovering the cell shows the word as a tooltip (`Synced`, `Needs review`, `Downloading 62%`, …); a duplicate's reads `Duplicate of track #3 (<its track's word>)`, with the original's position |
+| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead, and a duplicate the duplicate icon. Hovering the cell shows the word as a tooltip (`Downloaded`, `Needs review`, `Downloading 62%`, …); a duplicate's reads `Duplicate of track #3 (<its track's word>)`, with the original's position |
 | Title     | on      | |
 | Artists   | on      | joined with `, ` |
 | Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time, unless a Spotify source merged in has one. Title, Artists, Album and Time show the track's effective metadata (`arch.md`), so a duplicate reads like its original |
@@ -410,7 +429,7 @@ default sort, and forgets the earlier clicks. The row context menu is the Track 
 
 Ctrl+A selects every row, as in Explorer; so does it in the log pane's list.
 
-The selection stays with its tracks while the rows are sorted, searched, filtered by source or refreshed by a sync; a
+The selection stays with its tracks while the rows are sorted, searched, filtered by source or refreshed by an update; a
 track that is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
 
 All tracks shows a row per track, for its first entry: in the left panel's playlist order, then by position. A
@@ -419,7 +438,7 @@ shows once). A row whose track the playlist lists earlier through another source
 The status tabs, the result line, the playlist rows' counts and the selection card count rows, a duplicate under its
 track's status; the library's counts count tracks.
 
-A refresh, such as each fetched page or match of a sync, keeps the table where it is scrolled. Another scope, status
+A refresh, such as each synced page or match of an update, keeps the table where it is scrolled. Another scope, status
 tab, search or source starts it at the top.
 
 ## Inspector
@@ -444,7 +463,7 @@ tab, search or source starts it at the top.
     Confirming a match goes through Choose match too: its current match is in the list. The Track menu keeps
     `Confirm match` as a shortcut.
     | Failed, other  | `Retry`, `Edit track…`                  |
-    | Synced, Waiting, Kept | `Edit track…`                    |
+    | Downloaded, Waiting, Kept | `Edit track…`                |
     | Removed        | `Keep`, `Move to Recycle Bin…`          |
 - **Source** (titled **Sources** for a merged track):
   - one line per source: logo, and the name as a link to the source's page;
@@ -475,14 +494,14 @@ features, and so do the selection card's bulk actions.
 │          ┌──────────┐           │   │ 2 tracks selected               │
 │          │          │           │   │                                 │
 │          │    ♫     │           │   │ Status ──────────────────────── │
-│          └──────────┘           │   │ Synced    ✓ 1                   │
+│          └──────────┘           │   │ Downloaded ✓ 1                  │
 │ Best Part                       │   │ Waiting   ◷ 1                   │
 │ Daniel Caesar, H.E.R.           │   │                                 │
 │ Freudian                        │   │                                 │
 │                                 │   │                                 │
 │ Status ──────────────────────── │   │                                 │
 │ ◷ Waiting                       │   │                                 │
-│ Downloads on the next sync.     │   │                                 │
+│ Downloads on the next update.   │   │                                 │
 │                                 │   │                                 │
 │ Sources ─────────────────────── │   │                                 │
 │ Listed on ● YouTube Music       │   │                                 │
@@ -505,15 +524,15 @@ The track card, from the top, in DIPs:
 - **Title** in semibold at 125% of the message font, on 20 px lines, then the **artists** (`, ` between them) 1 px
   below on 16 px lines. Both wrap. Then the album line in gray, which ends in an ellipsis: the album and year
   (`Freudian (2017)`), or `No album yet` when there's no album.
-- **Status**: the section title as in the other cards, 7 px, then the status line: its 16 px icon (synced, waiting,
+- **Status**: the section title as in the other cards, 7 px, then the status line: its 16 px icon (downloaded, waiting,
   warn, failed, removed or kept), 6 px, and the word in semibold, on a 16 px line. The explanation follows 3 px below
   in gray, and wraps:
 
   | Status       | Explanation |
   |--------------|-------------|
-  | Synced       | The file is in the library and tagged. |
-  | Waiting      | Downloads on the next sync. |
-  | Failed       | Retried on the next sync. A failed match says "No match found." instead |
+  | Downloaded   | The file is in the library and tagged. |
+  | Waiting      | Downloads on the next update. |
+  | Failed       | Retried on the next update. A failed match says "No match found." instead |
   | Removed      | No longer in any playlist. The file is still in the library. |
   | Kept         | No longer in any playlist, but kept. |
   | Duplicate    | Duplicate of track #12 in this playlist. (The original's position) |
@@ -565,7 +584,7 @@ The track card, from the top, in DIPs:
 - **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file.
 
 The selection card: `N tracks selected` in the title's font and line, without a glyph; then **Status**, with a row for
-each status that holds any of the tracks, in the order Synced, Waiting, Failed, Removed, Kept (a track that needs
+each status that holds any of the tracks, in the order Downloaded, Waiting, Failed, Removed, Kept (a track that needs
 review counts under its status): the
 word as the key, and its 16 px icon, 4 px, and the count as the value. When all of them are Removed, "No longer in any
 playlist. Their files are still in the library." follows 6 px below in gray.
@@ -576,10 +595,10 @@ playlist. Their files are still in the library." follows 6 px below in gray.
 
 - In a playlist scope it shows a playlist card with:
   - glyph and name, URL link, track count;
-  - a synced/total bar with the counts;
+  - a downloaded/total bar with the counts;
   - how many tracks it shares with other playlists of the same source (shared tracks download once);
-  - last sync;
-  - `Sync playlist` and `Remove playlist…`.
+  - last update;
+  - `Update playlist` and `Remove playlist…`.
 - In All tracks it shows the library folder, totals and `Open library folder`.
 
 ```
@@ -588,12 +607,12 @@ playlist. Their files are still in the library." follows 6 px below in gray.
 │                                 │   │   YouTube Music playlist        │
 │ Library ─────────────────────── │   │                                 │
 │ Folder    C:\Users\…\WestieLib  │   │ Playlist ────────────────────── │
-│ Tracks    0 tracks, 0 synced    │   │ Link      PLGXm7qiSwxfBEFj0x0K… │
+│ Tracks    0 tracks, 0 downloaded│   │ Link      PLGXm7qiSwxfBEFj0x0K… │
 │                                 │   │ Tracks    0                     │
-│ [Open library folder]           │   │ Synced    ░░░░░░░░░░░░░░░░░ 0/0 │
-│                                 │   │ Last sync Never                 │
+│ [Open library folder]           │   │ Downloaded ░░░░░░░░░░░░░░░░ 0/0 │
+│                                 │   │ Last update Never               │
 │                                 │   │                                 │
-│                                 │   │ [⟳ Sync playlist] [Remove pla…] │
+│                                 │   │ [⟳ Update playlist] [Remove p…] │
 └─────────────────────────────────┘   └─────────────────────────────────┘
 ```
 
@@ -607,18 +626,18 @@ The cards, from the top, in DIPs:
   the right edge, then 7 px to the rows.
 - **Rows**: a gray key in a 74 px column, 8 px, then the value; rows are 16 px lines, 4 px apart. Values end in an
   ellipsis, except the folder, which loses its middle (`C:\Users\...\WestieLib`).
-  - Library: `Folder` is the library folder in effect, `Tracks` reads like the All tracks row (`0 tracks, 0 synced`).
+  - Library: `Folder` is the library folder in effect, `Tracks` reads like the All tracks row (`0 tracks, 0 downloaded`).
   - Playlist: `Link` is the playlist's ID as a link to its URL (`#0066CC`, underlined while the mouse is over it, the
-    hand cursor over its text); a click opens it in the browser. `Tracks` is the count, `Synced` a bar like the row's
-    that fills the value's width, 6 px, then `synced/total`. Then, each only when it isn't zero, a count: `Waiting`,
+    hand cursor over its text); a click opens it in the browser. `Tracks` is the count, `Downloaded` a bar like the
+    row's that fills the value's width, 6 px, then `downloaded/total`. Then, each only when it isn't zero, a count: `Waiting`,
     `Failed` (in red), `To review` (in amber) and `Shared` (tracks also in other playlists of the same source).
-    `Last sync` reads like the row without `Synced`: `today 14:03`, `yesterday`, `12 Oct`, or `Never`.
+    `Last update` reads like the row without `Updated`: `today 14:03`, `yesterday`, `12 Oct`, or `Never`.
 - **Buttons**, 14 px below, 6 px apart, wrapping onto a new row 6 px down when they don't fit: `Open library folder`;
-  or `⟳ Sync playlist` and `Remove playlist…`. They follow the command rules (see Menu bar and toolbar).
+  or `⟳ Update playlist` and `Remove playlist…`. They follow the command rules (see Menu bar and toolbar).
 
 The inspector scrolls vertically when its content is taller than the panel, inside the same padding: 12 px on the
 sides and top, 10 px at the bottom. Another card, or the same card for another track or playlist, starts at the top;
-a card that only changes (a sync reports progress) keeps its place.
+a card that only changes (an update reports progress) keeps its place.
 
 ## Log pane
 
@@ -631,7 +650,7 @@ a card that only changes (a sync reports progress) keeps its place.
 │ Log   Level [Info and up ▾]   All │ Selected playlist │ Selected track             [Open log folder]  ✕ │
 ├─────────────────────────┬─────────┬──────────────────┬────────────────────────────────────────────────┤
 │ Time                    │ Level   │ Playlist / Track │ Message                                        │
-│ 2026-11-12 15:12:01.204 │ Info    │ —                │ Sync started: 4 playlists                      │
+│ 2026-11-12 15:12:01.204 │ Info    │ —                │ Update started: 4 playlists                    │
 │ 2026-11-12 15:12:03.871 │ Error   │ Slow & bluesy    │ Couldn't fetch the playlist: HTTP 404 from …   │
 │ 2026-11-12 15:13:30.016 │ Warning │ Feeling Good     │ Needs review: "Feeling Good (Live)" by Nina …  │
 ```
@@ -647,7 +666,7 @@ edge.
   | Level   | Lines                                                                                       |
   |---------|---------------------------------------------------------------------------------------------|
   | Debug   | details for finding a fault: each yt-dlp run and its exit code, each search with its result count and best result |
-  | Info    | what the app did: a sync started and finished, a playlist fetched, a track matched, a tool installed, a playlist added. Lines state what happened, never what to do |
+  | Info    | what the app did: an update started and finished, a playlist synced, a track matched, a tool installed, a playlist added. Lines state what happened, never what to do |
   | Warning | something the user may want to look at: a match that needs review, a fetch that waits for a tool |
   | Error   | something that failed: a fetch, a match, a tool install, saving the state                    |
 
@@ -677,7 +696,7 @@ the rest of the width. Rows are 20 px tall.
 
 | Part    | Content |
 |---------|---------|
-| Run     | `Synced today 14:05` (`Ready` before any sync), or `Syncing 6 of 25` with an embedded 120 px progress bar against the part's right edge, or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools. So far nothing downloads, so it counts playlists while they are fetched (`Syncing 1 of 2` while the first is), then the tracks it matches (`Syncing 6 of 25`) |
+| Run     | `Updated today 14:05` (`Ready` before any update), or the phase of the running update with an embedded 120 px progress bar against the part's right edge: `Syncing 1 of 2` while it syncs playlists (the first one being synced), `Matching 6 of 25` while it matches tracks, later `Downloading 6 of 25`; or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
 | Tools   | `Tools ✓` or `Tools ⚠`, or while the tools are at work, `Tools ◔ installing ffmpeg 35%` with the progress ring: the word, 7 px, a 12 px icon, and then 7 px and what is going on (see below) |
@@ -693,7 +712,7 @@ the rest of the width. Rows are 20 px tall.
 
   | Part     | Share   | Minimum | Why the minimum                                              |
   |----------|---------|---------|--------------------------------------------------------------|
-  | Run      | 22%     | 250 px  | `Syncing 12 of 400` and its 120 px bar                       |
+  | Run      | 22%     | 250 px  | `Downloading 12 of 400` and its 120 px bar                   |
   | Tracks   | 10%     | 100 px  | `12,345 tracks`                                              |
   | Library  | 36%     | 150 px  | a drive and a folder or two; the middle of a path gives way  |
   | (gap)    | the rest | 0      |                                                              |
@@ -763,8 +782,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     - Looking up a YouTube Music playlist needs yt-dlp; a Spotify playlist needs no tool. While yt-dlp isn't installed
       the line waits, and the look-up starts by itself once yt-dlp is (see Vocabulary › Waiting for tools).
     - A long reason ends in an ellipsis.
-  - A `Sync now` check box (on by default). With it, `Add` also syncs the new playlist; during a sync it joins the
-    sync's queue.
+  - An `Update now` check box (on by default). With it, `Add` also updates the new playlist; during an update it
+    joins the update's queue.
   - `Add` (default, enabled only once the look-up found a playlist that isn't in the list yet) and `Cancel`. `Cancel`
     also cancels the look-up.
   - `Add` stores the playlist with the name the look-up found. The welcome screen gives way to the main panel, and the
@@ -812,7 +831,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     - The track's and the link's are push buttons, as tall as the search field. The link's grays out with its glyph
       while the link names no YouTube Music id.
     - A row's is painted in its cell: just the glyph, and on hover a box with the hover colors of the playlist rows'
-      sync control (`#E5F3FF`, `#CCE8FF` frame, `#99D1FF` on a selected row), `#CCE4F7` while pressed. It reacts like
+      update control (`#E5F3FF`, `#CCE8FF` frame, `#99D1FF` on a selected row), `#CCE4F7` while pressed. It reacts like
       a button: it opens the result when the mouse is released over it, and a double click on it is two clicks, never
       `Use this match`.
   - **Size.** It opens at 900 × 600 px and is resizable, with a size grip in the bottom right corner, down to the
@@ -848,7 +867,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - **Audio**: `YouTube link:` edit and `Choose match…`, with the note "A different link downloads the audio
     again."
   - `Save` (default) and `Cancel`. Saving re-tags the file and renames it when the artists or title changed.
-    Edited values survive later syncs.
+    Edited values survive later updates.
 - **Settings**, as group boxes:
   - **Library**: a read-only folder edit and `Browse…`.
   - **Files**: `Format:` radio buttons Opus / FLAC, and an `Embed album art in files` check box (on by default).
@@ -863,7 +882,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     - The list follows the tools while the dialog is open.
     - `Check for updates` starts at once, without waiting for `OK`, and updates installed tools even when the check
       box is off. It is disabled as in the Tools menu.
-    - "Last checked" reads like a playlist's last sync: `Last checked today 14:03`, `Last checked yesterday`,
+    - "Last checked" reads like a playlist's last update: `Last checked today 14:03`, `Last checked yesterday`,
       `Last checked 12 Oct` (`12 Oct 2025` in another year), or `Never checked`.
   - **Maintenance**: `Rebuild library from files…`.
   - The footer shows the version on the left, and `OK` / `Cancel`.
@@ -872,8 +891,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 - **About** is a TaskDialog with the app icon, `WestieLib` as the main instruction, `Version 1.2.0` (the build's
   version) and OK.
 - **Confirmations** use a TaskDialog:
-  - Remove playlist: title `Remove playlist`, main instruction `Remove "<name>"?`, content "Its synced files stay in the
-    library." Buttons `Remove` and `Cancel`, with Cancel the default. Tracks left in no playlist
+  - Remove playlist: title `Remove playlist`, main instruction `Remove "<name>"?`, content "Its downloaded files stay in
+    the library." Buttons `Remove` and `Cancel`, with Cancel the default. Tracks left in no playlist
     become Removed, and the infobar offers to review them afterwards.
   - Move to Recycle Bin says how many files.
   - Rebuild says it replaces track entries.
@@ -887,7 +906,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | `addPlaylist` | toolbar, left panel button, File menu, first-run button → Add playlist dialog |
 | `lookUpPlaylist` / `PlaylistLookedUp` | Add playlist dialog's detection line |
 | `removePlaylist` | playlist context menu, File menu, inspector playlist card → confirmation |
-| `sync` / `cancel` | toolbar split button, Sync menu, playlist row sync button, playlist context menu, inspector card |
+| `sync` / `cancel` | toolbar split button (Update all), Update menu, playlist row update button, playlist context menu, inspector card |
+| `SyncQueued` / `PlaylistFetching` / `TracksQueued` / `TrackMatching` / `SyncFinished` | playlist row phase, status bar Run part |
 | `resolveRemovals` | infobar → Removed tab, Track menu, inspector (single and bulk) |
 | `retry` | inspector Retry, Track menu |
 | `confirmMatch` | inspector actions, Track menu |
@@ -909,17 +929,17 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Element | Implementation |
 |---------|----------------|
 | Frame | HMENU + accelerator table; the menu bar painted through the undocumented `WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM` with the `Menu` theme; three custom splitters |
-| Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Sync all |
+| Toolbar | `TOOLBARCLASSNAME` with `TBSTYLE_FLAT \| TBSTYLE_LIST` and an image list; `BTNS_DROPDOWN` + `TBSTYLE_EX_DRAWDDARROWS` for Update all |
 | Infobar | custom-painted child window holding push buttons and a close button |
 | Close button (infobar, log) | a small custom-painted window with the ✕ icon; hover `#E5F3FF`, pressed `#CCE4F7`, hot-tracked with `TrackMouseEvent`; it takes the mouse capture on `WM_LBUTTONDOWN` and acts on `WM_LBUTTONUP` inside it |
 | Log toolbar | a custom-painted strip (the rule) holding labels, a `CBS_DROPDOWNLIST` combo box, the status filter's `WC_TABCONTROL` with flat buttons, a compact push button and a close button |
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
-| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row sync control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`), with the hover colors `#E5F3FF` and a `#CCE8FF` frame (`#99D1FF` on a selected row) while the mouse is over it. It is hit-tested in `WM_LBUTTONDOWN`, takes the mouse capture until `WM_LBUTTONUP`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle while it can be clicked. The spinning sync icon is 12 icon resources (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a sync is active. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
+| Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row update control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`), with the hover colors `#E5F3FF` and a `#CCE8FF` frame (`#99D1FF` on a selected row) while the mouse is over it. It is hit-tested in `WM_LBUTTONDOWN`, takes the mouse capture until `WM_LBUTTONUP`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle while it can be clicked. The spinning ⟳ is 12 icon resources (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a row spins. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
 | Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks. The log colors its rows through `clrText` at `CDDS_ITEMPREPAINT`, keeps to the bottom with `LVM_ENSUREVISIBLE`, and takes its empty text from `LVN_GETEMPTYMARKUP` |
-| Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the synced bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
+| Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the downloaded bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
 | Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`; the rows' play buttons are painted at `CDDS_ITEMPOSTPAINT`, and the list is subclassed for their mouse handling and tooltip. Choose a match has `WS_THICKFRAME`, an `SBS_SIZEGRIP` scroll bar, `BS_ICON` push buttons, and moves its controls on `WM_SIZE` by their anchors; `WM_GETMINMAXINFO` holds its minimum. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also keeps the undo history (`EditHistory`), taking Ctrl+Z and Ctrl+Y (`WM_CHAR` `0x1A` and `0x19`) and swallowing the edit's own one-step undo: `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO` and Alt+Backspace. It swallows `WM_CONTEXTMENU` too |
 

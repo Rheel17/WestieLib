@@ -482,10 +482,10 @@ const NEW_PLAYLIST_ID = '7mKq2pLxV9nT4cR1sY8wZa';
 function buildBase() {
 	const r = rng(20261020);
 	const pl = {
-		wcs:  { id: 'wcs',  src: 'ytm',     name: 'WCS',           url: 'music.youtube.com/playlist?list=PL' + rid(r, 32, B62), last: 'Synced today 14:03', keys: [] },
-		her:  { id: 'her',  src: 'spotify', name: 'Her playlist',  url: 'open.spotify.com/playlist/' + rid(r, 22, B62),        last: 'Synced today 14:05', keys: [] },
-		slow: { id: 'slow', src: 'spotify', name: 'Slow & bluesy', url: 'open.spotify.com/playlist/' + rid(r, 22, B62),        last: 'Synced 9 Oct', fetchFailed: true, keys: [] },
-		comp: { id: 'comp', src: 'ytm',     name: 'Comp practice', url: 'music.youtube.com/playlist?list=PL' + rid(r, 32, B62), last: 'Synced 12 Oct', keys: [] },
+		wcs:  { id: 'wcs',  src: 'ytm',     name: 'WCS',           url: 'music.youtube.com/playlist?list=PL' + rid(r, 32, B62), last: 'Updated today 14:03', keys: [] },
+		her:  { id: 'her',  src: 'spotify', name: 'Her playlist',  url: 'open.spotify.com/playlist/' + rid(r, 22, B62),        last: 'Updated today 14:05', keys: [] },
+		slow: { id: 'slow', src: 'spotify', name: 'Slow & bluesy', url: 'open.spotify.com/playlist/' + rid(r, 22, B62),        last: 'Updated 9 Oct', fetchFailed: true, keys: [] },
+		comp: { id: 'comp', src: 'ytm',     name: 'Comp practice', url: 'music.youtube.com/playlist?list=PL' + rid(r, 32, B62), last: 'Updated 12 Oct', keys: [] },
 	};
 	const MEM = { H: 'her', S: 'slow', W: 'wcs', C: 'comp' };
 	const tracks = new Map();
@@ -533,7 +533,7 @@ function errorLines(id) {
 
 const find = (s, title) => [...s.tracks.values()].find(t => t.title === title);
 
-// Sync all is running: Her playlist from position 9 on is in the queue, Comp practice waits behind it.
+// Update all is running: Her playlist from position 9 on is in the queue, Comp practice waits behind it.
 function variantSync(s) {
 	const slow = new Set(s.pl.slow.keys);
 	s.pl.her.keys.forEach((k, i) => {
@@ -596,14 +596,14 @@ function titleBar() {
 }
 
 function menuBar() {
-	return `<div class="menu">${['File', 'Sync', 'Track', 'View', 'Tools', 'Help'].map(m => `<span>${m}</span>`).join('')}</div>`;
+	return `<div class="menu">${['File', 'Update', 'Track', 'View', 'Tools', 'Help'].map(m => `<span>${m}</span>`).join('')}</div>`;
 }
 
 function toolbar(s, cfg) {
 	const syncing = !!s.run, noSync = syncing || cfg.firstRun;
 	return `<div class="toolbar">
 		<span class="tb">${ic('plus')}Add playlist</span>
-		<span class="tb${noSync ? ' dis' : ''}">${ic('syncing')}Sync all<span class="dd">${ic('chev', 's10')}</span></span>
+		<span class="tb${noSync ? ' dis' : ''}">${ic('syncing')}Update all<span class="dd">${ic('chev', 's10')}</span></span>
 		<span class="tb${syncing ? '' : ' dis'}">${ic('stop')}Cancel</span>
 		<span class="tsep"></span>
 		<span class="tb">${ic('gear')}Settings</span></div>`;
@@ -617,7 +617,7 @@ function leftPanel(s, cfg) {
 	const all = counts([...s.tracks.values()]);
 	// All tracks stays at the top; only the playlists scroll
 	const head = `<div class="lhead"><div class="lrow${cfg.scope === 'all' ? ' sel' : ''}"><div class="l1">${ic('lib')}<span class="nm">All tracks</span></div>
-		<div class="ln">${all.all} tracks, ${all.synced} synced</div></div><div class="lsep"></div></div>`;
+		<div class="ln">${all.all} tracks, ${all.synced} downloaded</div></div><div class="lsep"></div></div>`;
 	let list = '';
 	const ids = PL_ORDER.filter(id => s.pl[id]);
 	if (!ids.length) list += `<div class="lempty">No playlists yet.</div>`;
@@ -629,7 +629,7 @@ function playlistRow(s, p, selected, hot) {
 	const list = p.keys.map(k => s.tracks.get(k));
 	const c = counts(list);
 	const inRun = s.run && s.run.pls.includes(p.id);
-	// A playlist that was never synced counts as waiting, even though it has no tracks yet
+	// A playlist that was never updated counts as waiting, even though it has no tracks yet
 	const icon = p.fetchFailed ? 'warn' : c.failed ? 'failed' : c.waiting || p.neverSynced ? 'waiting' : 'synced';
 	const parts = [];
 	if (c.waiting) parts.push(`${c.waiting} waiting`);
@@ -639,15 +639,15 @@ function playlistRow(s, p, selected, hot) {
 	if (inRun) {
 		const q = list.filter(t => t.queued);
 		const done = q.filter(t => t.status === 'downloaded' || t.status === 'failed').length;
-		last = s.run.current === p.id ? `Syncing ${done} of ${q.length}` : 'Queued';
+		last = s.run.current === p.id ? `Downloading ${done} of ${q.length}` : 'Queued';
 	} else if (p.fetchFailed) {
-		last = `<span class="amber">Couldn't fetch</span>, synced 9 Oct`;
+		last = `<span class="amber">Couldn't sync</span>, updated 9 Oct`;
 	}
-	// Last line: status icon flush with the progress bar, the last-sync text, then the sync control right after it.
-	// The control is a subtle ↻ button; while the playlist syncs it becomes the spinning ⟳ (still ⟳ when queued),
-	// and the status icon steps aside because the sync supersedes it.
+	// Last line: status icon flush with the progress bar, the last-update text, then the update control right after it.
+	// The control is a subtle ↻ button; while the playlist is in its phase (syncing, matching, downloading) it becomes
+	// the spinning ⟳ (still ⟳ when queued), and the status icon steps aside because the update supersedes it.
 	const ctl = !inRun
-		? `<span class="lsync${hot ? ' hot' : ''}">${ic('syncgray')}${hot ? `<span class="tip">Sync ${esc(p.name)}</span>` : ''}</span>`
+		? `<span class="lsync${hot ? ' hot' : ''}">${ic('syncgray')}${hot ? `<span class="tip">Update ${esc(p.name)}</span>` : ''}</span>`
 		: `<span class="lsync${s.run.current === p.id ? '' : ' queued'}">${ic('syncing', s.run.current === p.id ? 'spin' : '')}</span>`;
 	return `<div class="lrow${selected ? ' sel' : ''}">
 		<div class="l1">${glyph(p.src)}<span class="nm">${esc(p.name)}</span></div>
@@ -657,7 +657,7 @@ function playlistRow(s, p, selected, hot) {
 		<div class="ln last">${inRun ? '' : `<span class="lstat">${ic(icon, 's14')}</span>`}<span class="lt">${last}</span>${ctl}</div></div>`;
 }
 
-const TABS = [['all', 'All'], ['synced', 'Synced'], ['waiting', 'Waiting'], ['review', 'Needs review'], ['failed', 'Failed'], ['dups', 'Duplicates'], ['removed', 'Removed'], ['kept', 'Kept']];
+const TABS = [['all', 'All'], ['synced', 'Downloaded'], ['waiting', 'Waiting'], ['review', 'Needs review'], ['failed', 'Failed'], ['dups', 'Duplicates'], ['removed', 'Removed'], ['kept', 'Kept']];
 
 function mainPanel(s, cfg) {
 	let items = cfg.scope === 'all'
@@ -726,7 +726,7 @@ function firstRunMain() {
 		<p>WestieLib keeps your YouTube Music and Spotify playlists in sync with a folder of tagged audio files. Choose where the files go, then add your first playlist.</p>
 		<div class="lbl">Library folder</div>
 		<div class="fld"><div class="edit" style="flex:1">${LIBRARY}</div>${btn('Browse…')}</div>
-		<div class="hint">This folder doesn't exist yet. The first sync creates it.</div>
+		<div class="hint">This folder doesn't exist yet. The first update creates it.</div>
 		<div style="margin-top:16px">${btn('Add your first playlist', 'def', 'plus')}</div>
 	</div></div>`;
 }
@@ -741,7 +741,7 @@ function inspector(s, cfg) {
 	const c = counts([...s.tracks.values()]);
 	return `<div class="ph">${ic('lib')}<span>All tracks</span></div>
 		<div class="sec"><h3>Library</h3><div class="kv"><span class="k">Folder</span><span class="v">${LIBRARY}</span>
-		<span class="k">Tracks</span><span class="v">${c.all} tracks, ${c.synced} synced</span></div></div>
+		<span class="k">Tracks</span><span class="v">${c.all} tracks, ${c.synced} downloaded</span></div></div>
 		<div class="acts">${btn('Open library folder')}</div>`;
 }
 
@@ -765,10 +765,10 @@ function trackInspector(s, t, cfg) {
 
 	// Status
 	const STATUS = {
-		downloaded: ['synced', 'Synced', 'The file is in the library and tagged.'],
-		pending: ['waiting', 'Waiting', 'Downloads on the next sync.'],
+		downloaded: ['synced', 'Downloaded', 'The file is in the library and tagged.'],
+		pending: ['waiting', 'Waiting', 'Downloads on the next update.'],
 		downloading: ['syncing', `Downloading ${t.progress}%`, 'Started 15:14.'],
-		failed: ['failed', 'Failed', 'Retried on the next sync.'],
+		failed: ['failed', 'Failed', 'Retried on the next update.'],
 		orphaned: ['removed', 'Removed', 'No longer in any playlist. The file is still in the library.'],
 		kept: ['kept', 'Kept', 'No longer in any playlist, but kept.'],
 	};
@@ -833,7 +833,7 @@ function trackInspector(s, t, cfg) {
 
 function multiInspector(ts) {
 	const c = counts(ts);
-	const lines = [['synced', 'Synced'], ['waiting', 'Waiting'], ['failed', 'Failed'], ['removed', 'Removed'], ['kept', 'Kept']]
+	const lines = [['synced', 'Downloaded'], ['waiting', 'Waiting'], ['failed', 'Failed'], ['removed', 'Removed'], ['kept', 'Kept']]
 		.filter(([k]) => c[k]).map(([k, w]) => [w, `${ic(ST_ICON[k])} ${c[k]}`]);
 	let h = `<div class="mh">${ts.length} tracks selected</div>`;
 	h += section('Status', kv(lines) + (c.removed === ts.length ? `<div class="expl" style="margin-top:6px">No longer in any playlist. Their files are still in the library.</div>` : ''));
@@ -851,16 +851,16 @@ function playlistCard(s, p) {
 		// The ID only: the title and subtitle already name the source, and the link opens the full URL
 		['Link', `<span class="link">${esc(p.url.split(/[/=]/).pop())}</span>`],
 		['Tracks', c.all],
-		['Synced', `<span class="pbar"><i style="width:${c.synced / c.all * 100}%"></i></span>${c.synced}/${c.all}`, 'bar'],
+		['Downloaded', `<span class="pbar"><i style="width:${c.synced / c.all * 100}%"></i></span>${c.synced}/${c.all}`, 'bar'],
 	];
 	if (c.waiting) rows.push(['Waiting', c.waiting]);
 	if (c.failed) rows.push(['Failed', `<span class="red">${c.failed}</span>`]);
 	if (c.review) rows.push(['To review', `<span class="amber">${c.review}</span>`]);
 	if (shared) rows.push(['Shared', shared]);
-	rows.push(['Last sync', p.last.replace('Synced ', '')]);
+	rows.push(['Last update', p.last.replace('Updated ', '')]);
 	return `<div class="ph">${glyph(p.src, '')}<span>${esc(p.name)}</span></div><div class="ps">${srcName(p.src)} playlist</div>
 		${section('Playlist', kv(rows))}
-		<div class="acts">${btn('Sync playlist', '', 'syncing')}${btn('Remove playlist…')}</div>`;
+		<div class="acts">${btn('Update playlist', '', 'syncing')}${btn('Remove playlist…')}</div>`;
 }
 
 // ---------- log pane ----------
@@ -868,19 +868,19 @@ function logPane(s) {
 	const t = title => find(s, title);
 	// The level list starts at Info and up, so the Debug lines (yt-dlp runs, searches) don't show
 	const lines = [
-		['15:12:01.204', 'Info', '', 'Sync started: 4 playlists'],
+		['15:12:01.204', 'Info', '', 'Update started: 4 playlists'],
 		['15:12:02.517', 'Info', 'WCS', `Fetched ${s.pl.wcs.keys.length} tracks, nothing to download`],
 		['15:12:03.871', 'Error', 'Slow & bluesy', "Couldn't fetch the playlist: HTTP 404 from api-partner.spotify.com"],
 		['15:12:04.090', 'Info', 'Her playlist', `Fetched ${s.pl.her.keys.length} tracks, ${s.pl.her.keys.filter(k => s.tracks.get(k).queued).length} to download`],
 		['15:12:04.633', 'Info', 'Comp practice', `Fetched ${s.pl.comp.keys.length} tracks, ${s.pl.comp.keys.filter(k => s.tracks.get(k).queued).length} to download`],
 		['15:12:19.342', 'Info', 'Redbone', `Matched "Redbone" by Childish Gambino (${pct(t('Redbone').conf)})`],
-		['15:12:38.005', 'Info', 'Redbone', `Synced: ${t('Redbone').file}`],
-		['15:12:41.718', 'Info', 'Peaches', `Synced from the override: ${t('Peaches').file}`],
+		['15:12:38.005', 'Info', 'Redbone', `Downloaded: ${t('Redbone').file}`],
+		['15:12:41.718', 'Info', 'Peaches', `Downloaded from the override: ${t('Peaches').file}`],
 		['15:12:58.256', 'Error', 'Cuff It', 'yt-dlp exited with code 1: Sign in to confirm your age'],
-		['15:13:12.940', 'Info', 'Get You', `Synced: ${t('Get You').file}`],
+		['15:13:12.940', 'Info', 'Get You', `Downloaded: ${t('Get You').file}`],
 		['15:13:30.016', 'Warning', 'Feeling Good', `Needs review (${pct(t('Feeling Good').conf)}): "Feeling Good (Live)". ${doubtLines(t('Feeling Good')).join(', ')}.`],
-		['15:13:52.481', 'Info', 'Feeling Good', `Synced: ${t('Feeling Good').file}`],
-		['15:14:10.377', 'Info', 'Snooze', `Synced: ${t('Snooze').file}`],
+		['15:13:52.481', 'Info', 'Feeling Good', `Downloaded: ${t('Feeling Good').file}`],
+		['15:14:10.377', 'Info', 'Snooze', `Downloaded: ${t('Snooze').file}`],
 		['15:14:13.802', 'Info', 'Too Sweet', 'Downloading'],
 		['15:14:16.159', 'Info', 'Espresso', 'Downloading'],
 	];
@@ -900,11 +900,11 @@ function logPane(s) {
 
 // ---------- status bar ----------
 function statusBar(s, cfg) {
-	let run = 'Synced today 14:05';
+	let run = 'Updated today 14:05';
 	if (cfg.firstRun || cfg.neverSynced) run = 'Ready';
 	if (s.run) {
 		const { done, total } = runProgress(s);
-		run = `Syncing ${done} of ${total}<span class="pbar ctl" style="width:120px"><i style="width:${done / total * 100}%"></i></span>`;
+		run = `Downloading ${done} of ${total}<span class="pbar ctl" style="width:120px"><i style="width:${done / total * 100}%"></i></span>`;
 	}
 	// While tools install, the Tools part says so with the progress ring. It's always as wide as its widest text.
 	const work = cfg.toolsWork || { tool: 'ffmpeg', percent: 45 };
@@ -940,7 +940,7 @@ function addDialog(state) {
 			<div class="lbl">Playlist link:</div>
 			<div class="edit focus"><span>${link}</span><span class="caret" style="margin-left:-3px"></span></div>
 			<div class="detect">${line}</div>
-			<span class="chk"><i>${CHECK}</i>Sync now</span>
+			<span class="chk"><i>${CHECK}</i>Update now</span>
 		</div>
 		<div class="df">${btn(addText, addState)}${btn('Cancel')}</div></div>`;
 }
@@ -972,7 +972,7 @@ function settingsDialog() {
 			</fieldset>
 			<fieldset class="gbox"><legend>Maintenance</legend>
 				<div class="fld" style="margin:0 0 6px">${btn('Rebuild library from files…')}</div>
-				<div class="gray">Reads the tags of every file in the library folder and recreates the track list. Playlists fill in again on the next sync.</div>
+				<div class="gray">Reads the tags of every file in the library folder and recreates the track list. Playlists fill in again on the next update.</div>
 			</fieldset>
 		</div>
 		<div class="df"><span class="ver">WestieLib 1.2.0</span>${btn('OK', 'def')}${btn('Cancel')}</div></div>`;
@@ -1083,18 +1083,18 @@ const variant = fn => fn(structuredClone(base));
 const empty = { pl: {}, tracks: new Map(), run: null };
 // One playlist, just added: named by its look-up, but nothing fetched, so no tracks yet
 const justAdded = { pl: { new: { id: 'new', src: 'spotify', name: 'Late Night Swing', url: 'open.spotify.com/playlist/' + NEW_PLAYLIST_ID,
-	last: 'Never synced', neverSynced: true, keys: [] } }, tracks: new Map(), run: null };
+	last: 'Never updated', neverSynced: true, keys: [] } }, tracks: new Map(), run: null };
 
 const SCREENS = [
 	{
 		id: 'overview', title: 'Overview', state: base,
 		cfg: { scope: 'all', tab: 'all', sort: 'title', sel: ['Best Part'] },
-		cap: 'All tracks is selected and the app is idle. A synced Spotify track is selected, so the inspector shows every section. The log is hidden.',
+		cap: 'All tracks is selected and the app is idle. A downloaded Spotify track is selected, so the inspector shows every section. The log is hidden.',
 		notes: [
 			'The table lists the whole library sorted by Title. All tracks has no # column, because a position only means something inside a playlist.',
-			`Status is icon-only and shows the state you can act on: <i>Crazy</i> shows ${ic('warn')} (needs review) rather than ${ic('synced')}. ${ic('failed')} marks <i>Cuff It</i> and ${ic('waiting')} marks waiting tracks. Hovering a cell shows the word as a tooltip.`,
+			`Status is icon-only and shows the state you can act on: <i>Crazy</i> shows ${ic('warn')} (needs review) rather than ${ic('synced')} (downloaded). ${ic('failed')} marks <i>Cuff It</i> and ${ic('waiting')} marks waiting tracks. Hovering a cell shows the word as a tooltip.`,
 			'Waiting YouTube Music tracks have no album yet. It is read from the info JSON when they download.',
-			`<i>Slow & bluesy</i> keeps its ${ic('warn')} after its infobar was dismissed. Its tracks from the last sync stay in the library.`,
+			`<i>Slow & bluesy</i> keeps its ${ic('warn')} after its infobar was dismissed. Its tracks from the last update stay in the library.`,
 			'The Kept tab appears because 2 tracks are kept. Removed stays hidden because nothing is removed.',
 			`<i>Best Part</i> is in WCS (YouTube Music) and in two Spotify playlists. The Matcher picked the id WCS lists, so it is one merged track with one file. Its Playlists cell lists all three playlists, and the inspector shows both ${ic('sp')} ${ic('ytm')} sources.`,
 		],
@@ -1105,7 +1105,7 @@ const SCREENS = [
 		cap: 'WCS is selected in the left panel and a search is active. No track is selected, so the inspector shows the playlist card.',
 		notes: [
 			'Selecting a playlist scopes the table, the tab counts and the result line. The # column appears and shows each entry’s position in the playlist. The positions stay put when filtering, so here they read 2, 5, 8, …',
-			`Each playlist's last line starts with its status icon, flush with the progress bar, and ends with a subtle ${ic('syncgray')} sync button right after the last-sync text. The button is shown here hovered on <i>Her playlist</i>, with its tooltip.`,
+			`Each playlist's last line starts with its status icon, flush with the progress bar, and ends with a subtle ${ic('syncgray')} update button right after the last-update text. The button is shown here hovered on <i>Her playlist</i>, with its tooltip.`,
 			'The search matches artists too. Tab counts include the search, so each tab shows how many rows it would list.',
 			'The result line follows the sketch: rows shown, out of all tracks in the library, then the scope.',
 			'The playlist card counts tracks shared with other playlists of the same source. Shared tracks are downloaded once.',
@@ -1116,7 +1116,7 @@ const SCREENS = [
 		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'] },
 		cap: 'The Needs review tab lists the matches the Matcher wasn’t sure of. One is selected, and the inspector offers Confirm match, Choose match… and Edit track….',
 		notes: [
-			'Needs review is a subset of Synced and Waiting. The Matcher wasn’t sure it picked the right result, so the match doesn’t merge into another track until it is confirmed.',
+			'Needs review is a subset of Downloaded and Waiting. The Matcher wasn’t sure it picked the right result, so the match doesn’t merge into another track until it is confirmed.',
 			'The amber list says what the Matcher doubts, a line for each doubt: here the match’s title adds "Live". Halo has two lines.',
 			'The Audio section shows what was matched.',
 			'Confirm match clears the flag (<code>confirmMatch</code>). Choose match… opens the dialog on the next screen.',
@@ -1151,29 +1151,29 @@ const SCREENS = [
 		cap: 'Edit track… opens from the inspector, from the Track menu, or with a double-click on a row. It changes the YouTube link, the tags and the cover art in one place.',
 		notes: [
 			'Here the artists are being shortened to just Silk Sonic. A changed field gets a Reset link and shows the original value under it.',
-			'Edited tags survive later syncs. They are written to the file, and the file is renamed to match.',
+			'Edited tags survive later updates. They are written to the file, and the file is renamed to match.',
 			'Cover art can come from an image file or from the clipboard. Reset goes back to the source cover.',
 			'A different YouTube link downloads the audio again. Choose match… opens the search dialog from the previous screens.',
 		],
 	},
 	{
-		id: 'syncing', title: 'Sync in progress', state: variant(variantSync),
+		id: 'syncing', title: 'Update in progress', state: variant(variantSync),
 		cfg: { scope: 'her', tab: 'all', sort: '#', sel: ['Cuff It'], log: true, tip: { title: 'Espresso', text: 'Downloading 18%' },
 			infobar: { msg: 'Couldn\'t fetch "Slow & bluesy". It may be private or deleted.', btns: ['Details'] } },
-		cap: 'Sync all is running. Her playlist is downloading, Comp practice waits in the queue, and Slow & bluesy couldn’t be fetched. The log pane is open.',
+		cap: 'Update all is running. Her playlist is downloading, Comp practice waits in the queue, and Slow & bluesy couldn’t be synced. The log pane is open.',
 		notes: [
-			`The sync button of the playlist that is downloading becomes a spinning ${ic('syncing')} after <i>Syncing x of y</i>. Comp practice, queued behind it, shows a still, faded ${ic('syncing')} after <i>Queued</i>. During the sync their status icons step aside.`,
+			`The update button of the playlist that is downloading becomes a spinning ${ic('syncing')} after its phase, <i>Downloading x of y</i>; earlier it read <i>Syncing…</i>, then for a Spotify playlist <i>Matching x of y</i>. Comp practice, queued behind it, shows a still, faded ${ic('syncing')} after <i>Queued</i>. During the update their status icons step aside, and each comes back once that playlist’s phases are over.`,
 			`Two rows download at once (concurrency 2), and each shows a blue ${ring(62)} ring that fills as it downloads. The exact percentage is in the cell's tooltip and in the inspector.`,
-			'<i>Thinkin Bout You</i> stays synced in the middle of the queue because it was already downloaded through Slow & bluesy.',
-			'The fetch failure shows in three places: the infobar, the ⚠ on its playlist row, and an error line in the log.',
-			'The selected failed track shows the last tool output and Retry. Cancel is enabled and Sync all is disabled. The log is scrolled to the newest line.',
+			'<i>Thinkin Bout You</i> stays downloaded in the middle of the queue because it was already downloaded through Slow & bluesy.',
+			'The sync failure shows in three places: the infobar, the ⚠ on its playlist row, and an error line in the log.',
+			'The selected failed track shows the last tool output and Retry. Cancel is enabled and Update all is disabled. The log is scrolled to the newest line.',
 		],
 	},
 	{
 		id: 'removals', title: 'Removed from playlists', state: variant(variantRemovals),
 		cfg: { scope: 'all', tab: 'removed', sort: 'title', sel: ['Crazy in Love', 'Dangerous Woman', 'Drunk in Love', 'Hotline Bling'],
 			infobar: { msg: '5 tracks are no longer in any playlist. Keep their files, or move them to the Recycle Bin.', btns: ['Review…'] } },
-		cap: 'After a sync, five tracks have left every playlist. Review… in the infobar opens this view. Four rows are selected.',
+		cap: 'After an update, five tracks have left every playlist. Review… in the infobar opens this view. Four rows are selected.',
 		notes: [
 			'This comes from the core’s <code>RemovalsPending</code>. The infobar stays until every removed track has been decided.',
 			'The Removed and Kept tabs appear because their counts aren’t zero.',
@@ -1190,7 +1190,7 @@ const SCREENS = [
 			'The detection line updates as you type. A supported link is looked up 300 ms after the last change; the line then shows the playlist’s name and, in gray, its source, and Add enables.',
 			`While it looks up, the line reads <i>Looking up the Spotify playlist…</i> in gray after a spinner, ${spin(0)} ${spin(3)} ${spin(6)} ${spin(9)}, which turns clockwise smoothly, once a second. The logo takes its place once the playlist is found.`,
 			`A playlist that doesn’t exist or is private reads ${ic('warn')} <i>This playlist doesn’t exist or is private.</i>, and Add stays disabled.`,
-			'Sync now is on by default, so a new playlist starts syncing right away.',
+			'Update now is on by default, so a new playlist starts updating right away.',
 		],
 	},
 	{
@@ -1212,7 +1212,7 @@ const SCREENS = [
 		notes: [
 			'The library folder is chosen here, and it defaults to Music\\WestieLib.',
 			'The line under the field follows the typing: red when the text can\'t be the library folder, gray when the folder doesn\'t exist yet.',
-			'The status bar shows tool installation progress. Sync all is disabled because there are no playlists yet, not because of the tools.',
+			'The status bar shows tool installation progress. Update all is disabled because there are no playlists yet, not because of the tools.',
 			'The filter bar, status tabs and table appear once the first playlist is added.',
 		],
 	},
@@ -1228,11 +1228,11 @@ const SCREENS = [
 	{
 		id: 'added', title: 'First playlist added', state: justAdded,
 		cfg: { scope: 'all', tab: 'all', sort: 'title', neverSynced: true, inactive: true, dialog: 'add-again' },
-		cap: 'A Spotify playlist was just added without syncing, and the same link is pasted into Add playlist again.',
+		cap: 'A Spotify playlist was just added without updating, and the same link is pasted into Add playlist again.',
 		notes: [
-			'Its name comes from the look-up in Add playlist; the first fetch refreshes it.',
-			`It has no tracks yet. Its last line reads <i>Never synced</i> after ${ic('waiting')}, because a playlist that was never synced is waiting.`,
-			'The welcome screen gave way to the filter bar, the status tabs and the table. Sync all is enabled.',
+			'Its name comes from the look-up in Add playlist; the first sync refreshes it.',
+			`It has no tracks yet. Its last line reads <i>Never updated</i> after ${ic('waiting')}, because a playlist that was never updated is waiting.`,
+			'The welcome screen gave way to the filter bar, the status tabs and the table. Update all is enabled.',
 			'A link to a playlist that is already in the list shows its name on the detection line, as a found playlist does, and the button reads <i>Already added</i> and stays disabled. The <code>?si=</code> part of a shared link doesn’t make it another playlist.',
 		],
 	},
@@ -1240,10 +1240,10 @@ const SCREENS = [
 
 document.getElementById('toc').innerHTML = SCREENS.map((sc, i) => `<li><a href="#${sc.id}">${i + 1}. ${sc.title}</a></li>`).join('');
 document.getElementById('legend').innerHTML = [
-	['synced', 'Synced', 'downloaded'], ['waiting', 'Waiting', 'pending'], ['failed', 'Failed', 'failed'],
-	['warn', 'Needs review / fetch failed', 'match.review'], ['removed', 'Removed', 'orphaned'], ['kept', 'Kept', 'kept'],
+	['synced', 'Downloaded', 'downloaded'], ['waiting', 'Waiting', 'pending'], ['failed', 'Failed', 'failed'],
+	['warn', 'Needs review / sync failed', 'match.review'], ['removed', 'Removed', 'orphaned'], ['kept', 'Kept', 'kept'],
 	['toolwait', 'Waiting for tools', 'needs a tool that isn\'t installed'],
-	['syncing', 'Syncing', 'in the running sync'], ['ytm', 'YouTube Music', 'ytm:'], ['sp', 'Spotify', 'spotify:'], ['yt', 'YouTube', 'pasted YouTube links'],
+	['syncing', 'In the update', 'syncing, matching or downloading'], ['ytm', 'YouTube Music', 'ytm:'], ['sp', 'Spotify', 'spotify:'], ['yt', 'YouTube', 'pasted YouTube links'],
 ].map(([i, w, core]) => `<span>${ic(i)}${w} <em>${core}</em></span>`).join('');
 document.getElementById('screens').innerHTML = SCREENS.map((sc, i) => `
 	<section class="screen" id="${sc.id}">

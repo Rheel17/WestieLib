@@ -35,7 +35,7 @@ void check_times() {
 
 void check_file_lines() {
     LocalTime time = local_time(2026, 11, 12, 15, 12, 3, 871);
-    check_text(core::log_file_line({.time = time, .level = core::LogLevel::Info, .text = "Sync started: 4 playlists"}), "2026-11-12 15:12:03.871 INFO    Sync started: 4 playlists\n");
+    check_text(core::log_file_line({.time = time, .level = core::LogLevel::Info, .text = "Update started: 4 playlists"}), "2026-11-12 15:12:03.871 INFO    Update started: 4 playlists\n");
     check_text(
             core::log_file_line({
                 .time = time,

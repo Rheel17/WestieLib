@@ -73,7 +73,7 @@ $app = Start-App
 $h = $app.Hwnd
 Check-ToolsPart 'Tools installed: Tools icon | tooltip' $h 'green \| yt-dlp 2026\.10\.21 / ffmpeg n9\.0'
 $toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
-Check '  toolbar buttons: Sync all still waits for a playlist' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v (disabled), Cancel (disabled), -, Settings'
+Check '  toolbar buttons: Sync all still waits for a playlist' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Update all v (disabled), Cancel (disabled), -, Settings'
 Check-SettingsTools $h
 Stop-App $app
 

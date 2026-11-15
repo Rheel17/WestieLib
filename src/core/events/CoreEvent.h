@@ -11,6 +11,7 @@
 #include "core/sync/PlaylistPageFetched.h"
 #include "core/sync/SyncFinished.h"
 #include "core/sync/SyncQueued.h"
+#include "core/sync/TrackMatching.h"
 #include "core/sync/TrackStatusChanged.h"
 #include "core/sync/TracksMerged.h"
 #include "core/sync/TracksQueued.h"
@@ -22,6 +23,6 @@ namespace westie::core {
 
 using CoreEvent = std::variant<
         ToolsRunChanged, ToolStatus, ToolsChecked, PlaylistLookedUp, SyncQueued, PlaylistFetching, PlaylistPageFetched, PlaylistFetched, PlaylistFetchFailed,
-        TracksQueued, TrackStatusChanged, TracksMerged, SyncFinished, CandidateSearchResults, LogLine>;
+        TracksQueued, TrackMatching, TrackStatusChanged, TracksMerged, SyncFinished, CandidateSearchResults, LogLine>;
 
 }

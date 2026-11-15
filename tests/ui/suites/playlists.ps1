@@ -36,7 +36,7 @@ function Check-PlaylistRows([string]$what, $hwnd, [int]$count) {
 function Get-PlaylistCommands($hwnd) {
 	Update-MenuStates $hwnd
 	$menu = [W]::GetMenu($hwnd)
-	$states = '&Remove playlist...', 'Sync &selected playlist' | ForEach-Object { ([W]::GetMenuState($menu, [W]::CommandOf($menu, $_), 0) -band 0x1) -eq 0 }
+	$states = '&Remove playlist...', 'Update &selected playlist' | ForEach-Object { ([W]::GetMenuState($menu, [W]::CommandOf($menu, $_), 0) -band 0x1) -eq 0 }
 	"Remove $($states[0]), Sync selected $($states[1])"
 }
 
@@ -171,7 +171,7 @@ function Check-AddingPlaylists($hwnd) {
 	Check '  screens' (Get-PlaylistScreens $hwnd) $WithPlaylists
 	Check-PlaylistRows '  one row:' $hwnd 1
 	Check '  selected' (Get-Selection $hwnd 1) 'row 1'
-	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Sync all v, Cancel (disabled), -, Settings'
+	Check '  toolbar buttons' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Update all v, Cancel (disabled), -, Settings'
 	$menu = [W]::GetMenu($hwnd)
 	Update-MenuStates $hwnd
 	Check '  grayed menu items' ([W]::ItemsWithState($menu, 0x1)) ('&Cancel, ' +
@@ -237,12 +237,12 @@ function Get-CardLayout($hwnd) {
 function Check-Cards($hwnd) {
 	$folder = if (Test-Path $SettingsFile) { (Get-Content $SettingsFile -Raw | ConvertFrom-Json).libraryPath } else { $DefaultLibrary }
 	Click-AllTracks $hwnd
-	Check 'All tracks: inspector' (Get-CardTexts $hwnd) "Library card: All tracks / Library / Folder / $folder / Tracks / 0 tracks, 0 synced / Open library folder"
+	Check 'All tracks: inspector' (Get-CardTexts $hwnd) "Library card: All tracks / Library / Folder / $folder / Tracks / 0 tracks, 0 downloaded / Open library folder"
 	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 82) | buttons "
 	if ($Screenshot) { Save-Screenshot $hwnd ("$($Screenshot -replace '\.png$', '')-library.png") }
 	Click-PlaylistRow $hwnd 1
 	Check 'Row 1: inspector' (Get-CardTexts $hwnd) ("Playlist card: $SpotifyName / Spotify playlist / Playlist / Link / $SpotifyId / Tracks / 0 / " +
-		"Synced / 0/0 / Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
+		"Downloaded / 0/0 / Last update / Never / Update playlist / Remove playlist$Ellipsis")
 	Check '  layout' (Get-CardLayout $hwnd) "$(S 12),$(S 12) $(S 12) | title 0,0 | values $(S 23),$(S 82) | buttons 0,$(S 6)"
 	# The synced value spans the value column, and its bar runs up to 6 before the counts
 	$synced = ([W]::Children((Get-InspectorCard $hwnd), 'WestieLib.SyncedValue'))[0]
@@ -255,13 +255,13 @@ function Check-Cards($hwnd) {
 	Check '  buttons enabled' ($buttons -join ' ') 'True True'
 	Press-ListKey $hwnd 0x28
 	Check 'Down: row 2' (Get-CardTexts $hwnd) ("Playlist card: $YouTubeName / YouTube Music playlist / Playlist / Link / PLx9k2_-Ab / Tracks / 0 / " +
-		"Synced / 0/0 / Last sync / Never / Sync playlist / Remove playlist$Ellipsis")
+		"Downloaded / 0/0 / Last update / Never / Update playlist / Remove playlist$Ellipsis")
 	Press-ListKey $hwnd 0x24
 	Check 'Home: All tracks' ([W]::TextOf((Get-InspectorCard $hwnd))) 'Library card'
 	Press-ListKey $hwnd 0x28
 }
 
-$PlaylistMenuItems = '&Sync, &Open in browser, &Copy link, -, &Remove playlist... [Del]'
+$PlaylistMenuItems = '&Update, &Open in browser, &Copy link, -, &Remove playlist... [Del]'
 
 # A right-click on a row selects it first and opens the playlist menu where it was clicked, with every item enabled.
 # Shift+F10 sends (-1, -1), and opens it at the selected row's bottom-left corner; with All tracks selected it shows

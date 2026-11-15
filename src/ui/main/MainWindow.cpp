@@ -359,8 +359,8 @@ CommandState MainWindow::command_state() const {
 void MainWindow::update_commands() {
     toolbar_.update(command_state());
     inspector_.update(command_state());
-    // The rows' sync controls follow Sync all: any playlist, while nothing syncs
-    playlists_.set_sync_enabled(command_state().enabled(CommandId::SyncAll));
+    // The rows' update controls follow Update all: any playlist, while no update runs
+    playlists_.set_sync_enabled(command_state().enabled(CommandId::UpdateAll));
 }
 
 void MainWindow::run_command(CommandId command) {
@@ -369,29 +369,29 @@ void MainWindow::run_command(CommandId command) {
     }
 
     switch (command) {
-    case CommandId::AddPlaylist:          add_playlist(); return;
-    case CommandId::RemovePlaylist:       remove_playlist(); return;
-    case CommandId::OpenLibraryFolder:    open_library_folder(); return;
-    case CommandId::OpenLogFolder:        open_log_folder(); return;
-    case CommandId::OpenPlaylistPage:     open_playlist_page(); return;
-    case CommandId::CopyPlaylistLink:     copy_playlist_link(); return;
-    case CommandId::SyncAll:              sync_all(); return;
-    case CommandId::SyncSelectedPlaylist: sync_.sync({*selected_playlist_}); return;
-    case CommandId::CancelSync:           sync_.cancel(); return;
-    case CommandId::Exit:                 SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
-    case CommandId::ToggleLog:            toggle_log(); return;
-    case CommandId::Settings:             show_settings(); return;
-    case CommandId::CheckForUpdates:      tools_.run(true); return;
-    case CommandId::About:                show_about_dialog(hwnd()); return;
-    case CommandId::FocusSearch:          tracks_.focus_search(); return;
-    case CommandId::ConfirmMatch:         confirm_match(); return;
-    case CommandId::ChooseMatch:          choose_match(); return;
-    default:                              return;
+    case CommandId::AddPlaylist:            add_playlist(); return;
+    case CommandId::RemovePlaylist:         remove_playlist(); return;
+    case CommandId::OpenLibraryFolder:      open_library_folder(); return;
+    case CommandId::OpenLogFolder:          open_log_folder(); return;
+    case CommandId::OpenPlaylistPage:       open_playlist_page(); return;
+    case CommandId::CopyPlaylistLink:       copy_playlist_link(); return;
+    case CommandId::UpdateAll:              sync_all(); return;
+    case CommandId::UpdateSelectedPlaylist: sync_.sync({*selected_playlist_}); return;
+    case CommandId::CancelUpdate:           sync_.cancel(); return;
+    case CommandId::Exit:                   SendMessageW(hwnd(), WM_CLOSE, 0, 0); return;
+    case CommandId::ToggleLog:              toggle_log(); return;
+    case CommandId::Settings:               show_settings(); return;
+    case CommandId::CheckForUpdates:        tools_.run(true); return;
+    case CommandId::About:                  show_about_dialog(hwnd()); return;
+    case CommandId::FocusSearch:            tracks_.focus_search(); return;
+    case CommandId::ConfirmMatch:           confirm_match(); return;
+    case CommandId::ChooseMatch:            choose_match(); return;
+    default:                                return;
     }
 }
 
 void MainWindow::sync_playlist(const std::string& key) {
-    if (command_state().enabled(CommandId::SyncAll)) {
+    if (command_state().enabled(CommandId::UpdateAll)) {
         sync_.sync({key});
     }
 }
@@ -589,14 +589,19 @@ void MainWindow::apply_event(const core::TracksQueued& event) {
     show_playlists();
 }
 
-void MainWindow::apply_event(const core::TrackStatusChanged&) {
-    sync_board_.finish_track();
+void MainWindow::apply_event(const core::TrackMatching& event) {
+    sync_board_.apply(event);
+    show_playlists();
+}
+
+void MainWindow::apply_event(const core::TrackStatusChanged& event) {
+    sync_board_.finish_track(event.track);
     show_playlists();
 }
 
 void MainWindow::apply_event(const core::TracksMerged& event) {
     log_.rename_track(event.merged, event.survivor);
-    sync_board_.finish_track();
+    sync_board_.finish_track(event.merged);
     show_playlists();
 }
 

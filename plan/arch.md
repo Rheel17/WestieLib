@@ -973,8 +973,9 @@ downloads yet.
   one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match`
   (`TracksToMatch.cpp`) lists the tracks that are `pending` or `failed`, have no override and no YouTube Music source,
   and whose first Spotify source has no match, in playlist order (playlists by `addedAt`, then their sources), each
-  once. The run emits `TracksQueued` with the ones it hasn't queued yet, and matches them one at a time, saving after
-  each:
+  once, each with the playlists that list it. The run emits `TracksQueued` with the ones it hasn't queued yet, and
+  matches them one at a time, saving after each. It emits `TrackMatching` as it starts each try, so the UI knows whose
+  playlists are matching right now:
   - `apply_match` (`ApplyMatch.cpp`) stores the match, clears a failure (a failed track waits again), and merges the
     track into the one that already has that id (`track_with_ytm_id`, `merge_tracks`), unless the match needs
     review. The run emits `TracksMerged`, or `TrackStatusChanged`.
@@ -982,7 +983,8 @@ downloads yet.
   merges the track as `apply_match` would have. `set_ytm_override` serves `setYtmOverride` there too. A match
   that a run makes meanwhile for a track that got an override is dropped (`apply_match` leaves such a track alone).
   - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
-  - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped.
+  - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped, with a
+    `TrackStatusChanged` so the UI's counts still end it.
   - A search that YouTube Music answers with HTTP 403 or 429 doesn't fail the track at once. It goes back into the queue
     10 tracks further on (`RetryGap`), or last when fewer are left, and waits at least 10 s (`RetryDelay`) from then;
     nothing is stored and no event is sent. The tracks in between go ahead. When only waiting tracks are left, the run
@@ -994,6 +996,10 @@ downloads yet.
   Spotify fetch already read (as for a failure); a track being matched stays as it was; the queue is dropped, and
   nothing more is written.
 - Every run ends with `SyncFinished`, cancelled or not.
+
+The UI calls a run an *update*, and its first step for a playlist, the fetch, *syncing* (`ui.md`, Vocabulary). The
+log uses the UI's words: `Update started: 2 playlists`, `Added 1 playlist to the update`, `Update finished`, `Update
+cancelled`.
 
 ## Core API
 
@@ -1028,7 +1034,8 @@ downloads yet.
 | `PlaylistPageFetched`          | so far: playlist key, after each page of a Spotify fetch but the last |
 | `PlaylistFetched`              | playlist id, name, track count                  |
 | `PlaylistFetchFailed`          | playlist id, error                              |
-| `TracksQueued`                 | so far: track keys the run will match           |
+| `TracksQueued`                 | so far: the tracks the run will match, each with the keys of the playlists that list it |
+| `TrackMatching`                | so far: track key, as the run starts matching it (again after a refused search) |
 | `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for (so far without the tools) |
 | `TrackProgress`                | track key, percent                              |
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |

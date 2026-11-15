@@ -25,6 +25,7 @@
 #include "core/sync/SyncEngine.h"
 #include "core/sync/SyncFinished.h"
 #include "core/sync/SyncQueued.h"
+#include "core/sync/TrackMatching.h"
 #include "core/sync/TrackStatusChanged.h"
 #include "core/sync/TracksMerged.h"
 #include "core/sync/TracksQueued.h"
@@ -132,6 +133,7 @@ private:
     void apply_event(const core::PlaylistFetched& event);
     void apply_event(const core::PlaylistFetchFailed& event);
     void apply_event(const core::TracksQueued& event);
+    void apply_event(const core::TrackMatching& event);
     void apply_event(const core::TrackStatusChanged& event);
     void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);

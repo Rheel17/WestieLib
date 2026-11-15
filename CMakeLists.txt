@@ -270,8 +270,16 @@ add_executable(WestieLibTests
 	tests/unit/LogChecks.cpp
 	tests/unit/MatchWordsChecks.cpp
 	tests/unit/NameChecks.cpp
+	tests/unit/RunPhaseChecks.cpp
 	tests/unit/TitlePartsChecks.cpp
 	${MATCHING_SOURCES}
+	# The update's phases, as the playlist rows show them
+	src/core/tools/ToolPackage.cpp
+	src/platform/win32/LocalTime.cpp
+	src/ui/RelativeDayText.cpp
+	src/ui/playlists/LastSyncLine.cpp
+	src/ui/sync/SyncBoard.cpp
+	src/ui/sync/WaitingText.cpp
 )
 target_include_directories(WestieLibTests PRIVATE src)
 target_compile_definitions(WestieLibTests PRIVATE ${WINDOWS_DEFINITIONS})

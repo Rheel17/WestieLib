@@ -18,6 +18,16 @@ void SyncBoard::apply(const core::PlaylistFetching& fetching) {
 
 void SyncBoard::apply(const core::TracksQueued& queued) {
     tracks_total_ += static_cast<int>(queued.tracks.size());
+    for (const core::QueuedTrack& track : queued.tracks) {
+        for (const std::string& playlist : track.playlists) {
+            ++playlist_matches_[playlist].queued;
+        }
+        track_playlists_[track.track] = track.playlists;
+    }
+}
+
+void SyncBoard::apply(const core::TrackMatching& matching) {
+    matching_track_ = matching.track;
 }
 
 void SyncBoard::finish_playlist(const std::string& playlist) {
@@ -28,19 +38,24 @@ void SyncBoard::finish_playlist(const std::string& playlist) {
     ++finished_;
 }
 
-void SyncBoard::finish_track() {
+void SyncBoard::finish_track(const std::string& track) {
+    auto found = track_playlists_.find(track);
+    // Not one the run queued
+    if (found == track_playlists_.end()) {
+        return;
+    }
+    for (const std::string& playlist : found->second) {
+        ++playlist_matches_[playlist].ended;
+    }
+    track_playlists_.erase(found);
     ++tracks_finished_;
+    if (matching_track_ == track) {
+        matching_track_.reset();
+    }
 }
 
 void SyncBoard::finish() {
-    running_ = false;
-    queue_.clear();
-    current_.reset();
-    waiting_for_.clear();
-    finished_ = 0;
-    total_ = 0;
-    tracks_finished_ = 0;
-    tracks_total_ = 0;
+    *this = SyncBoard();
 }
 
 bool SyncBoard::running() const noexcept {
@@ -69,6 +84,22 @@ int SyncBoard::finished() const noexcept {
 
 int SyncBoard::total() const noexcept {
     return matching() ? tracks_total_ : total_;
+}
+
+std::optional<MatchProgress> SyncBoard::match_progress(const std::string& playlist) const {
+    auto found = playlist_matches_.find(playlist);
+    if (found == playlist_matches_.end() || found->second.ended >= found->second.queued) {
+        return std::nullopt;
+    }
+    return found->second;
+}
+
+bool SyncBoard::matching_now(const std::string& playlist) const {
+    if (!matching_track_) {
+        return false;
+    }
+    auto found = track_playlists_.find(*matching_track_);
+    return found != track_playlists_.end() && std::ranges::contains(found->second, playlist);
 }
 
 }

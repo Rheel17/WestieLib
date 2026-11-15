@@ -100,14 +100,14 @@ void MainStatusBar::set_run(const SyncBoard& board, std::optional<std::chrono::s
     constexpr int Run = std::to_underlying(Part::Run);
     run_bar_shown_ = false;
     if (!board.running()) {
-        std::wstring text = last_sync ? L"Synced " +relative_day_text(*last_sync, std::chrono::system_clock::now()) : L"Ready";
+        std::wstring text = last_sync ? L"Updated " + relative_day_text(*last_sync, std::chrono::system_clock::now()) : L"Ready";
         status_bar_.set_text(Run, std::move(text));
     } else if (!board.waiting_for().empty()) {
         // The playlists are fetched one after another, so everything left waits with the one being fetched
         status_bar_.set_content(Run, {.icon = &tool_wait_icon_, .trailing = waiting_for_text(board.waiting_for())});
     } else {
         int total = std::max(1, board.total());
-        status_bar_.set_text(Run, std::format(L"Syncing {} of {}", std::min(board.finished() + 1, total), total));
+        status_bar_.set_text(Run, std::format(L"{} {} of {}", board.matching() ? L"Matching" : L"Syncing", std::min(board.finished() + 1, total), total));
         run_bar_.set_percent(board.finished() * FullPercent / total);
         run_bar_shown_ = true;
     }
