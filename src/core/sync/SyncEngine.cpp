@@ -1,6 +1,7 @@
 #include "core/sync/SyncEngine.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <expected>
 #include <format>
 #include <memory>
+#include <ranges>
 #include <set>
 #include <utility>
 
@@ -33,10 +35,18 @@
 #include "core/sync/TracksToMatch.h"
 #include "core/tools/ToolMissing.h"
 #include "platform/Cancelled.h"
+#include "platform/HttpError.h"
 
 namespace westie::core {
 
 namespace {
+
+// What YouTube Music answers a search it won't serve right now: Forbidden, Too Many Requests
+constexpr std::array RefusedStatuses = {403, 429};
+constexpr int MatchTries = 4;
+// How many tracks a refused one lets go first, and how long it waits at least
+constexpr std::size_t RetryGap = 10;
+constexpr std::chrono::seconds RetryDelay{10};
 
 std::string counted(std::size_t count, std::string_view thing) {
     return std::format("{} {}{}", count, thing, count == 1 ? "" : "s");
@@ -72,7 +82,7 @@ SyncEngine::SyncEngine(
         http_(http),
         spotify_(std::move(spotify)),
         normalizer_(normalizer),
-        matcher_(http, normalizer, std::move(youtube_music_api)),
+        matcher_(http, normalizer, std::move(youtube_music_api), log),
         state_(state),
         events_(events),
         log_(log) {}
@@ -103,6 +113,7 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
     // Under the lock, so the run can't report on these playlists before the UI knows they're queued
     events_.emit(std::move(queued));
     if (running_) {
+        wake_.notify_all();
         return;
     }
     running_ = true;
@@ -132,9 +143,9 @@ void SyncEngine::work(const std::stop_token& stop) {
             fetched = false;
         }
         if (!tracks.waiting.empty() && !stop.stop_requested()) {
-            std::string track = std::move(tracks.waiting.front());
-            tracks.waiting.pop_front();
-            match(track, stop);
+            if (std::optional<QueuedMatch> next = take_track(tracks, stop)) {
+                match(std::move(*next), tracks, stop);
+            }
             continue;
         }
         if (finish(stop)) {
@@ -264,7 +275,7 @@ void SyncEngine::queue_tracks(MatchQueue& queue) {
     TracksQueued queued;
     for (std::string& track : tracks_to_match(*state_.snapshot())) {
         if (queue.queued.insert(track).second) {
-            queue.waiting.push_back(track);
+            queue.waiting.push_back({.track = track});
             queued.tracks.push_back(std::move(track));
         }
     }
@@ -274,43 +285,70 @@ void SyncEngine::queue_tracks(MatchQueue& queue) {
     }
 }
 
-void SyncEngine::match(const std::string& track, const std::stop_token& stop) {
+std::optional<SyncEngine::QueuedMatch> SyncEngine::take_track(MatchQueue& queue, const std::stop_token& stop) {
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    auto due = std::ranges::find_if(queue.waiting, [&](const QueuedMatch& queued) { return queued.not_before <= now; });
+    if (due != queue.waiting.end()) {
+        QueuedMatch next = std::move(*due);
+        queue.waiting.erase(due);
+        return next;
+    }
+    std::chrono::steady_clock::time_point first = std::ranges::min(queue.waiting | std::views::transform(&QueuedMatch::not_before));
+    std::unique_lock lock(mutex_);
+    // A playlist queued meanwhile ends the wait, so it is fetched first
+    wake_.wait_until(lock, stop, first, [this] { return !queue_.empty(); });
+    return std::nullopt;
+}
+
+void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_token& stop) {
     std::shared_ptr<const State> state = state_.snapshot();
-    auto found = state->tracks.find(track);
+    auto found = state->tracks.find(queued.track);
     // Merged or removed with its playlist since it was queued
     if (found == state->tracks.end() || !needs_match(*state, found->second)) {
         return;
     }
     const Source& source = state->sources.at(*first_source_of(found->second, SourceType::Spotify));
+    LogSubject subject = track_subject(*state, queued.track);
+    int tries = queued.tries + 1;
 
     // An exception that leaves a thread ends the process, so it becomes the track's failure instead
     try {
-        std::expected<Match, std::string> matched = matcher_.match(source, track_ytm_ids(*state), stop);
+        std::expected<Match, std::string> matched = matcher_.match(source, track_ytm_ids(*state), subject, stop);
         if (!matched) {
-            fail_match(track, TrackFailure::NoMatch, std::move(matched.error()));
+            fail_match(queued.track, TrackFailure::NoMatch, std::move(matched.error()), tries);
             return;
         }
         std::optional<std::string> survivor;
-        state_.update([&](State& changed) { survivor = apply_match(changed, track, *matched); });
+        state_.update([&](State& changed) { survivor = apply_match(changed, queued.track, *matched); });
         // About the matched track even when it merged: the UI moves its lines to the survivor with TracksMerged
-        log_match(track_subject(*state, track), *matched, "", survivor.has_value());
+        log_match(std::move(subject), *matched, "", survivor.has_value());
         if (survivor) {
-            events_.emit(TracksMerged{.merged = track, .survivor = std::move(*survivor)});
+            events_.emit(TracksMerged{.merged = queued.track, .survivor = std::move(*survivor)});
         } else {
-            events_.emit(TrackStatusChanged{.track = track});
+            events_.emit(TrackStatusChanged{.track = queued.track});
         }
     } catch (const platform::Cancelled&) {
         return;
+    } catch (const platform::HttpError& error) {
+        if (!std::ranges::contains(RefusedStatuses, error.status()) || tries >= MatchTries) {
+            fail_match(queued.track, TrackFailure::Search, error.what(), tries);
+            return;
+        }
+        // YouTube Music refuses a search now and then while the ones around it go through, so the tracks after it go first
+        queued.tries = tries;
+        queued.not_before = std::chrono::steady_clock::now() + RetryDelay;
+        queue.waiting.insert(queue.waiting.begin() + static_cast<std::ptrdiff_t>(std::min(RetryGap, queue.waiting.size())), std::move(queued));
     } catch (const std::exception& error) {
-        fail_match(track, TrackFailure::Search, error.what());
+        fail_match(queued.track, TrackFailure::Search, error.what(), tries);
     }
 }
 
-void SyncEngine::fail_match(const std::string& track, TrackFailure failure, std::string error) {
+void SyncEngine::fail_match(const std::string& track, TrackFailure failure, std::string error, int tries) {
     LogSubject subject = track_subject(*state_.snapshot(), track);
+    std::string retried = tries > 1 ? std::format(" (tried {} times)", tries) : "";
     log_.write(
             LogLevel::Error,
-            failure == TrackFailure::NoMatch ? std::format("No match found. {}", one_line(error)) : std::format("Couldn't match: {}", one_line(error)),
+            failure == TrackFailure::NoMatch ? std::string("No match found") : std::format("Couldn't search YouTube Music: {}{}", one_line(error), retried),
             subject
     );
     TrackStatusChanged changed{.track = track, .status = TrackStatus::Failed, .failure = failure, .error = std::move(error)};
@@ -326,7 +364,7 @@ void SyncEngine::fail_match(const std::string& track, TrackFailure failure, std:
 void SyncEngine::log_match(LogSubject subject, const Match& match, std::string_view from, bool merged) {
     if (needs_review(match)) {
         std::string doubts = doubts_text(match.doubts);
-        log_.write(LogLevel::Warning, std::format("Needs review: {}{}{}{}", match_text(match), from, doubts.empty() ? "" : ". ", doubts), std::move(subject));
+        log_.write(LogLevel::Warning, std::format("Needs review: {}{}{}{}", match_text(match), from, doubts.empty() ? "" : ", ", doubts), std::move(subject));
         return;
     }
     log_.write(

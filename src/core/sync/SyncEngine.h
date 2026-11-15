@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+#include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <optional>
@@ -38,14 +40,22 @@ public:
     void cancel() noexcept;
 
 private:
+    struct QueuedMatch {
+        std::string track{};
+        int tries = 0;
+        // A track whose search YouTube Music refused waits a while before it is tried again
+        std::chrono::steady_clock::time_point not_before{};
+    };
+
     struct MatchQueue {
-        std::deque<std::string> waiting{};
-        // Every track the run queued, so none is tried twice
+        std::deque<QueuedMatch> waiting{};
+        // Every track the run queued, so none is queued twice
         std::set<std::string> queued{};
     };
 
     void work(const std::stop_token& stop);
     std::optional<std::string> take_next(const std::stop_token& stop);
+    std::optional<QueuedMatch> take_track(MatchQueue& queue, const std::stop_token& stop);
     bool finish(const std::stop_token& stop);
     void fetch(const std::string& playlist, const std::stop_token& stop);
     PlaylistContents fetch_contents(const PlaylistLink& link, const std::stop_token& stop);
@@ -53,8 +63,8 @@ private:
     PlaylistContents fetch_when_installed(const PlaylistLink& link, const std::stop_token& stop);
     void merge_library_matches();
     void queue_tracks(MatchQueue& queue);
-    void match(const std::string& track, const std::stop_token& stop);
-    void fail_match(const std::string& track, TrackFailure failure, std::string error);
+    void match(QueuedMatch queued, MatchQueue& queue, const std::stop_token& stop);
+    void fail_match(const std::string& track, TrackFailure failure, std::string error, int tries);
     void log_match(LogSubject subject, const Match& match, std::string_view from, bool merged);
 
     const YtDlp& yt_dlp_;
@@ -68,6 +78,8 @@ private:
     Log& log_;
     // Guards the queue and whether a run goes, which the UI's sync and the run's end both change
     std::mutex mutex_;
+    // Wakes a run that waits for a track to be due when a playlist is queued
+    std::condition_variable_any wake_;
     std::deque<std::string> queue_;
     std::optional<std::string> current_;
     bool running_ = false;

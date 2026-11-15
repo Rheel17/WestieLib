@@ -418,10 +418,22 @@ every component that logs.
   the exit code, and `stderr:` with its lines indented by 8. Stdout follows the same way when the tool failed; after a
   success only its size is written, as yt-dlp's JSON answers run to megabytes. A Debug line gives the command line and
   the exit code in the pane.
-- So far it logs the sync (started, each fetch and match, failures, the end), the tools (installed, updated, failed),
-  the playlist look-up and the match search (at Debug, failures as warnings), and the commands that change the
+- So far it logs the sync (started, each fetch, the end), the tools (installed, updated, failed), the playlist
+  look-up, the Choose a match dialog's searches (at Debug, failures as warnings), and the commands that change the
   state from the UI (a playlist added or removed, a match confirmed, a match chosen). A merge that sends no
   `TracksMerged` writes its line about the track that is left.
+- A sync's match writes one Debug line per search, and one line for how the track ended, without the searches. A line
+  states what happened; it never tells the user what to do.
+
+  | Line | Level |
+  |------|-------|
+  | `Searched "Taylor Swift Patient Zero": 20 results, best "Patient Zero" by Taylor Swift (100%)`, `Searched "…": no results`, or `Searched "…": HTTP 403 from music.youtube.com` | Debug |
+  | `Matched "Patient Zero" by Taylor Swift (100%)`, with `, and merged into the track with that YouTube Music id` after a merge | Info |
+  | `Needs review: "Weekend Luv" by Quinn Lewis (75%), doubts: explicit` | Warning |
+  | `No match found` | Error |
+  | `Couldn't search YouTube Music: HTTP 403 from music.youtube.com (tried 4 times)`; `(tried …)` only after retries | Error |
+
+  A match from the library writes only its outcome line, with ` from the library` after the match.
 - When the file can't be opened or written, the lines still reach the UI, and the first such failure is an Error line
   of its own.
 
@@ -764,7 +776,8 @@ the Matcher:
       the two tracks merge instead of downloading.
     - Reject, or no results: the track fails with `failure: noMatch` and the searched queries in `error`. A search
       that fails (no network, an HTTP error) fails the track with `failure: search` and the reason in `error`. Either
-      way the next sync tries again.
+      way the next sync tries again. YouTube Music answers some searches with HTTP 403 (or 429) now and then, while
+      the ones around them go through, so a sync tries those again first (SyncEngine › So far).
 
 `Matcher` (`src/core/matching/`) runs the queries. `MatchWords`, `TitleParts`, `Credits`, `NameMatch`, `SongFacts`,
 `MatchEvidence`, `MatchJudgement` and `MatchRank` are pure logic, which the unit checks hold against real cases
@@ -969,8 +982,13 @@ downloads yet.
   merges the track as `apply_match` would have. `set_ytm_override` serves `setYtmOverride` there too. A match
   that a run makes meanwhile for a track that got an override is dropped (`apply_match` leaves such a track alone).
   - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
-  - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped. A track is tried
-    once a run.
+  - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped.
+  - A search that YouTube Music answers with HTTP 403 or 429 doesn't fail the track at once. It goes back into the queue
+    10 tracks further on (`RetryGap`), or last when fewer are left, and waits at least 10 s (`RetryDelay`) from then;
+    nothing is stored and no event is sent. The tracks in between go ahead. When only waiting tracks are left, the run
+    sleeps until the first is due; a playlist queued meanwhile, or a cancel, ends the sleep. A track is tried 4 times
+    (`MatchTries`); the fourth failure fails it with `search`. Any other failed search fails the track at once. Else a
+    track is tried once a run.
   - A playlist queued meanwhile is fetched before the next track, and the tracks it brings join the queue.
 - `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, apart from the pages a
   Spotify fetch already read (as for a failure); a track being matched stays as it was; the queue is dropped, and

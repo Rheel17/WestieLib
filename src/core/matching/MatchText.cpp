@@ -8,6 +8,8 @@ namespace westie::core {
 
 namespace {
 
+constexpr double PercentPerWhole = 100.0;
+
 std::string_view doubt_word(MatchDoubt doubt) noexcept {
     switch (doubt) {
     case MatchDoubt::Title:    return "title";
@@ -32,21 +34,25 @@ std::string joined(const std::vector<std::string>& parts) {
 
 }
 
-std::string match_text(const Match& match) {
-    std::string text = std::format("\"{}\"", match.title);
-    if (!match.artists.empty()) {
-        text += std::format(" by {}", joined(match.artists));
+std::string result_text(const std::string& title, const std::vector<std::string>& artists, double confidence) {
+    std::string text = std::format("\"{}\"", title);
+    if (!artists.empty()) {
+        text += std::format(" by {}", joined(artists));
     }
-    return text + std::format(" ({}%)", std::lround(match.confidence * 100));
+    return text + std::format(" ({}%)", std::lround(confidence * PercentPerWhole));
+}
+
+std::string match_text(const Match& match) {
+    return result_text(match.title, match.artists, match.confidence);
 }
 
 std::string doubts_text(const std::vector<MatchDoubt>& doubts) {
     std::string text;
     for (MatchDoubt doubt : doubts) {
-        text += text.empty() ? "Check " : ", ";
+        text += text.empty() ? "doubts: " : ", ";
         text += doubt_word(doubt);
     }
-    return text.empty() ? text : text + '.';
+    return text;
 }
 
 }

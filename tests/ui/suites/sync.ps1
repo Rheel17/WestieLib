@@ -272,6 +272,9 @@ Check '  a successful one: only the size of its output' ((Get-LogToolRun 'PLtrac
 	'    exit code 0 / ' +
 	'    stdout: N bytes')
 Check '  the three runs at Debug too' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp *: exit code *' }).Count) 3
+Check '  each search at Debug, with its best result' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   Searched *' }) -join ' / ') (
+	'T DEBUG   Searched "Ana Ben Late Night Swing": 1 result, best "Late Night Swing" by Ana, Ben (100%) [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
+	"T DEBUG   Searched `"Earth, Wind & Fire $Senorita`": 1 result, best `"$Senorita`" by Earth, Wind & Fire (100%) [$Senorita; track spotify:spTrackSenorita0000002]")
 
 # The log pane has the same lines, from Info up; the error in red
 $FetchedRows = "T | Info | $TracksName | Fetched 4 tracks / T | Info | $SpotifyName | Fetched 2 tracks / T | Info | $SharedName | Fetched 2 tracks"
@@ -865,6 +868,12 @@ Check '  matches: the best result, not the first; the studio version; the librar
 	'spJoinedLater000000006 trackDDDDD6 1 / spLibraryFirst00000009 trackBBBBB2 1 / spLibraryLater00000008 searchSlow1 1 / ' +
 	'spLiveLoses00000000002 studioCrazy 1 / spMergesYtm00000000005 trackAAAAA1 1')
 Check '  failures: no results, a search that failed, another song, another artist, half the title' (Get-SavedFailures) $MatchFailures
+$outcomes = @(Get-LogLines | Where-Object { $_ -match '^T (WARNING|ERROR) ' })
+Check '  log: each no match in one line, without the searches' (@($outcomes | Where-Object { $_ -match '^T ERROR   No match found \[' }).Count) 5
+Check '  log: the failed search' (@($outcomes | Where-Object { $_ -like '*spBrokenSearch*' }) -join ' / ') (
+	"T ERROR   Couldn't search YouTube Music: HTTP 500 from 127.0.0.1 [Offline; track spotify:spBrokenSearch00000004]")
+Check '  log: a review names its doubts' (@($outcomes | Where-Object { $_ -like '*spRuleOnlyGuest*' }) -join ' / ') (
+	'T WARNING Needs review: "Glow (feat. Zed)" by Ama, Zed (75%), doubts: version [Glow; track spotify:spRuleOnlyGuest0000019]')
 Check '  tracks: Way Down We Go and Cafe Lights on both are one track each' (Get-SavedTracks) ('spBrokenSearch00000004 failed [spBrokenSearch00000004] True / ' +
 	'spClearMatch0000000001 pending [spClearMatch0000000001] True / spJoinedLater000000006 pending [spJoinedLater000000006] True / ' +
 	'spLetterArtist00000010 pending [spLetterArtist00000010] True / spLibraryLater00000008 pending [spLibraryLater00000008] True / ' +
@@ -1014,4 +1023,48 @@ Send-Command $h 'Sync &selected playlist'
 Wait-Fetches $h $queries 1 -Spotify
 Check 'Synced again: matches aren''t searched again' "[$(Get-YtmQueriesSince $searches)] $(Get-SavedReviews)" (
 	'[] spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True')
+Stop-App $app
+
+"--- Run 8: refused searches"
+# A Spotify playlist with a song whose search YouTube Music refuses once, one whose search it keeps refusing, and three
+# more. The refused ones wait while the others go ahead: the first matches on its second try, the second fails after its
+# fourth.
+$RefusedId = '7refusedrefusedrefused'
+$Web.SpotifyNames[$RefusedId] = 'Refused'
+$Web.SpotifyItems[$RefusedId] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Track('spRefusedOnce000000001', 'Once', @('Rae'), 'Once', 200000),
+	[FakeWeb]::Track('spRefusedAlways0000002', 'Always', @('Rae'), 'Always', 200000),
+	[FakeWeb]::Track('spRefusedAfter10000003', 'After One', @('Rae'), 'After', 200000),
+	[FakeWeb]::Track('spRefusedAfter20000004', 'After Two', @('Rae'), 'After', 200000),
+	[FakeWeb]::Track('spRefusedAfter30000005', 'After Three', @('Rae'), 'After', 200000)
+)
+$Web.YtmRefusals['Rae Once'] = 1
+$Web.YtmRefusals['Rae Always'] = 99
+Write-SyncPlaylists "spotify:$RefusedId"
+Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
+$app = Start-App
+$h = $app.Hwnd
+$searches = @($Web.YtmQueries()).Count
+$queries = Get-SpotifyQueries
+$started = Get-Date
+Send-Command $h 'Sync &all'
+for ($i = 0; $i -lt 150 -and (Get-SpotifyQueries) -le $queries; $i++) { Start-Sleep -Milliseconds 100 }
+# Each refused search waits at least 10 s, so the one refused four times takes over 30 s
+for ($i = 0; $i -lt 600 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
+$seconds = ((Get-Date) - $started).TotalSeconds
+Check 'Refused searches: the others go first, then the refused ones again' (Get-YtmQueriesSince $searches) (
+	'Rae Once / Rae Always / Rae After One / Rae After Two / Rae After Three / Rae Once / Rae Always / Rae Always / Rae Always')
+Check-That '  three waits of 10 s' "$([math]::Round($seconds)) s" ($seconds -ge 30 -and $seconds -lt 45) '30-45 s'
+Check '  refused once: matched like the others' (Get-SavedMatches) ('spRefusedAfter10000003 ytspRefusedAfter10000003 1 / ' +
+	'spRefusedAfter20000004 ytspRefusedAfter20000004 1 / spRefusedAfter30000005 ytspRefusedAfter30000005 1 / spRefusedOnce000000001 ytspRefusedOnce000000001 1')
+Check '  refused four times: failed' (Get-SavedFailures) 'spRefusedAlways0000002 search [HTTP 403 from 127.0.0.1]'
+Check '  log: one line for each, the tries at Debug' (@(Get-LogLines | Where-Object { $_ -match '^T (DEBUG|INFO|ERROR) .*track spotify:spRefused(Once|Always)' }) -join ' / ') (
+	'T DEBUG   Searched "Rae Once": HTTP 403 from 127.0.0.1 [Once; track spotify:spRefusedOnce000000001] / ' +
+	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
+	'T DEBUG   Searched "Rae Once": 1 result, best "Once" by Rae (100%) [Once; track spotify:spRefusedOnce000000001] / ' +
+	'T INFO    Matched "Once" by Rae (100%) [Once; track spotify:spRefusedOnce000000001] / ' +
+	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
+	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
+	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
+	"T ERROR   Couldn't search YouTube Music: HTTP 403 from 127.0.0.1 (tried 4 times) [Always; track spotify:spRefusedAlways0000002]")
 Stop-App $app

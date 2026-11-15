@@ -85,7 +85,7 @@ void check_match_texts() {
     match.artists.clear();
     check_text(core::match_text(match), "\"Redbone\" (92%)");
     check_text(core::doubts_text({}), "");
-    check_text(core::doubts_text({core::MatchDoubt::Version, core::MatchDoubt::Length}), "Check version, length.");
+    check_text(core::doubts_text({core::MatchDoubt::Version, core::MatchDoubt::Length}), "doubts: version, length");
 }
 
 }

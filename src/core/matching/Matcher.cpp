@@ -1,16 +1,21 @@
 #include "core/matching/Matcher.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <exception>
 #include <format>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "core/log/LogLevel.h"
 #include "core/matching/MatchJudgement.h"
 #include "core/matching/MatchQueries.h"
 #include "core/matching/MatchRank.h"
+#include "core/matching/MatchText.h"
 #include "core/matching/SongFacts.h"
 #include "core/matching/YouTubeMusicSearch.h"
+#include "platform/Cancelled.h"
 
 namespace westie::core {
 
@@ -33,29 +38,57 @@ std::string joined(const std::vector<std::string>& parts, std::string_view separ
     return text;
 }
 
+// What one search found, for the log: how many, and the best of them, which the pool may have from an earlier search
+std::string search_text(std::string_view query, const std::vector<Candidate>& pool, const std::vector<std::size_t>& found) {
+    if (found.empty()) {
+        return std::format("Searched \"{}\": no results", query);
+    }
+    const Candidate& best = pool[*std::ranges::max_element(found, {}, [&](std::size_t index) { return pool[index].rank; })];
+    return std::format(
+            "Searched \"{}\": {} result{}, best {}", query, found.size(), found.size() == 1 ? "" : "s",
+            result_text(best.song.title, best.song.artists, best.judgement.confidence)
+    );
 }
 
-Matcher::Matcher(platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url) :
-        http_(http), normalizer_(normalizer), api_url_(std::move(api_url)) {}
+}
 
-std::expected<Match, std::string> Matcher::match(const Source& source, const std::set<std::string>& known_ytm_ids, const std::stop_token& stop) const {
+Matcher::Matcher(platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, Log& log) :
+        http_(http), normalizer_(normalizer), api_url_(std::move(api_url)), log_(log) {}
+
+std::expected<Match, std::string> Matcher::match(
+        const Source& source, const std::set<std::string>& known_ytm_ids, const LogSubject& subject, const std::stop_token& stop
+) const {
     SongFacts wanted = song_facts(normalizer_, source.title, source.artists, source.album, source.duration, source.explicit_content);
     // Each YouTube Music id once, in the order the searches found them
     std::vector<Candidate> pool;
     std::vector<std::string> searched;
     for (const std::string& query : match_queries(source)) {
-        std::vector<SongResult> results = search_youtube_music_songs(http_, api_url_, query, stop);
+        std::vector<SongResult> results;
+        try {
+            results = search_youtube_music_songs(http_, api_url_, query, stop);
+        } catch (const platform::Cancelled&) {
+            throw;
+        } catch (const std::exception& error) {
+            log_.write(LogLevel::Debug, std::format("Searched \"{}\": {}", query, error.what()), subject);
+            throw;
+        }
         bool accepted = false;
+        // This search's results, as places in the pool
+        std::vector<std::size_t> found;
         for (SongResult& result : results) {
-            if (std::ranges::contains(pool, result.ytm_id, [](const Candidate& candidate) { return candidate.song.ytm_id; })) {
+            auto known = std::ranges::find(pool, result.ytm_id, [](const Candidate& candidate) { return candidate.song.ytm_id; });
+            if (known != pool.end()) {
+                found.push_back(static_cast<std::size_t>(known - pool.begin()));
                 continue;
             }
-            SongFacts found = song_facts(normalizer_, result.title, result.artists, result.album, result.duration, result.explicit_content);
-            MatchJudgement judgement = judge_match(wanted, found);
+            SongFacts facts = song_facts(normalizer_, result.title, result.artists, result.album, result.duration, result.explicit_content);
+            MatchJudgement judgement = judge_match(wanted, facts);
             accepted = accepted || judgement.verdict == MatchVerdict::Accept;
             MatchRank rank = match_rank(judgement, known_ytm_ids.contains(result.ytm_id));
             pool.push_back({.song = std::move(result), .judgement = std::move(judgement), .rank = rank});
+            found.push_back(pool.size() - 1);
         }
+        log_.write(LogLevel::Debug, search_text(query, pool, found), subject);
         searched.push_back(std::format("Searched \"{}\": {}", query, results.empty() ? "no results" : "no usable results"));
         if (accepted) {
             break;

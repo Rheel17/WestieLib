@@ -5,7 +5,8 @@
 // items. Each query is logged in SpotifyQueries, the pages after the first wait for SpotifyPageGate, and SpotifyFailures
 // makes pages fail with HTTP 500.
 //
-// The search answers a query with the songs YtmResults lists for it, HTTP 500 for YtmBrokenQueries, and otherwise, when
+// The search answers a query with HTTP 403 as many times as YtmRefusals says, then with the songs YtmResults lists for it,
+// HTTP 500 for YtmBrokenQueries, and otherwise, when
 // the query is "<artists> <title>" of a track that Track built, with that song as id "yt<track id>"; anything else
 // has no results. Each search is logged in YtmQueries and waits for YtmGate.
 
@@ -38,6 +39,8 @@ public class FakeWeb {
 	// Songs as Song builds them, by the query that finds them; an empty list for no results
 	public readonly Dictionary<string, List<string>> YtmResults = new Dictionary<string, List<string>>();
 	public readonly HashSet<string> YtmBrokenQueries = new HashSet<string>();
+	// How many more times a search for the query gets HTTP 403, as YouTube Music refuses a search now and then
+	public readonly Dictionary<string, int> YtmRefusals = new Dictionary<string, int>();
 	// Every search waits for it, so a check can look at the app while it matches
 	public readonly ManualResetEvent YtmGate = new ManualResetEvent(true);
 	// The song each track Track built is found as, by "<artists> <title>"
@@ -207,6 +210,14 @@ public class FakeWeb {
 		if (JsonValue(request, "clientName") != "WEB_REMIX" || JsonValue(request, "params") != "EgWKAQIIAWoMEA4QChADEAQQCRAF" || query == null) {
 			status = 400;
 			return "";
+		}
+		lock (YtmRefusals) {
+			int refusals;
+			if (YtmRefusals.TryGetValue(query, out refusals) && refusals > 0) {
+				YtmRefusals[query] = refusals - 1;
+				status = 403;
+				return "";
+			}
 		}
 		if (YtmBrokenQueries.Contains(query)) { status = 500; return ""; }
 		List<string> songs;

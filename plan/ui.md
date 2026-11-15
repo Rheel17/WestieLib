@@ -633,7 +633,7 @@ a card that only changes (a sync reports progress) keeps its place.
 │ Time                    │ Level   │ Playlist / Track │ Message                                        │
 │ 2026-11-12 15:12:01.204 │ Info    │ —                │ Sync started: 4 playlists                      │
 │ 2026-11-12 15:12:03.871 │ Error   │ Slow & bluesy    │ Couldn't fetch the playlist: HTTP 404 from …   │
-│ 2026-11-12 15:13:30.016 │ Warning │ Feeling Good     │ Needs review (61%): "Feeling Good (Live)". …   │
+│ 2026-11-12 15:13:30.016 │ Warning │ Feeling Good     │ Needs review: "Feeling Good (Live)" by Nina …  │
 ```
 
 **Toolbar.** A white strip, 28 px tall including a 1 px `#E5E5E5` rule along its bottom. From the left: 8 px, `Log` in
@@ -646,8 +646,8 @@ edge.
 
   | Level   | Lines                                                                                       |
   |---------|---------------------------------------------------------------------------------------------|
-  | Debug   | details for finding a fault: each yt-dlp run and its exit code, searches and their result counts |
-  | Info    | what the app did: a sync started and finished, a playlist fetched, a track matched, a tool installed, a playlist added |
+  | Debug   | details for finding a fault: each yt-dlp run and its exit code, each search with its result count and best result |
+  | Info    | what the app did: a sync started and finished, a playlist fetched, a track matched, a tool installed, a playlist added. Lines state what happened, never what to do |
   | Warning | something the user may want to look at: a match that needs review, a fetch that waits for a tool |
   | Error   | something that failed: a fetch, a match, a tool install, saving the state                    |
 
