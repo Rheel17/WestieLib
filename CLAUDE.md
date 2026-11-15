@@ -28,8 +28,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 ```
 
 Use the session scratchpad as `$build`; `cmake-build-debug/` belongs to CLion. The build must have zero warnings.
-While working, run the check suites the change touches (`docs/testing.md` maps source folders to suites); at the end
-of a phase, run all of them (no `-Suite`). Either must report 0 failures.
+While working and at the end of a phase, run only the check suites the change touches (`docs/testing.md` maps source
+folders to suites); run all of them (no `-Suite`) only when the user asks, as the full run is slow. It must report 0
+failures.
 
 ## Workflow
 

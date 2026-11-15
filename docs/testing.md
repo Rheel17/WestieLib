@@ -9,7 +9,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - Starts the exe several times per suite and drives it with Win32 calls through P/Invoke (`Add-Type` C#). The check
   names in the output say what each one covers.
 - `-Suite` takes suite names, separated by commas, and runs those in that order. Without it, every suite runs.
-- While working on a change, run the suites it touches (see the table below). At the end of a phase, run them all.
+- While working on a change and at the end of a phase, run the suites it touches (see the table below). Run them all
+  only when asked: the full run is slow (the `sync` suite's refused searches alone wait about 30 s).
 - Prints `ok` or `FAIL` per check, then the failures per suite. The exit code is the number of failures. A suite that
   stops on an error counts as one failure, and the next suite still runs.
 - `-Screenshot` saves the window to a PNG via `PrintWindow(PW_RENDERFULLCONTENT)`, cropped to
