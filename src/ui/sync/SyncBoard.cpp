@@ -27,7 +27,9 @@ void SyncBoard::apply(const core::TracksQueued& queued) {
 }
 
 void SyncBoard::apply(const core::TrackMatching& matching) {
-    matching_track_ = matching.track;
+    if (auto found = track_playlists_.find(matching.track); found != track_playlists_.end()) {
+        matching_playlists_ = found->second;
+    }
 }
 
 void SyncBoard::finish_playlist(const std::string& playlist) {
@@ -49,9 +51,6 @@ void SyncBoard::finish_track(const std::string& track) {
     }
     track_playlists_.erase(found);
     ++tracks_finished_;
-    if (matching_track_ == track) {
-        matching_track_.reset();
-    }
 }
 
 void SyncBoard::finish() {
@@ -95,11 +94,7 @@ std::optional<MatchProgress> SyncBoard::match_progress(const std::string& playli
 }
 
 bool SyncBoard::matching_now(const std::string& playlist) const {
-    if (!matching_track_) {
-        return false;
-    }
-    auto found = track_playlists_.find(*matching_track_);
-    return found != track_playlists_.end() && std::ranges::contains(found->second, playlist);
+    return std::ranges::contains(matching_playlists_, playlist);
 }
 
 }

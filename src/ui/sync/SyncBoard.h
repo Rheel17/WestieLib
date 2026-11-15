@@ -56,7 +56,8 @@ private:
     std::map<std::string, MatchProgress> playlist_matches_;
     // The queued tracks whose match hasn't ended, with the playlists that list them
     std::map<std::string, std::vector<std::string>> track_playlists_;
-    std::optional<std::string> matching_track_;
+    // The playlists of the track the run last started matching, kept between its tracks so their rows keep spinning
+    std::vector<std::string> matching_playlists_;
 };
 
 }

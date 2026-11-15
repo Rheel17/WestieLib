@@ -242,7 +242,7 @@ With no playlists, the list reads `No playlists yet.` in gray.
   | queued      | it is in the run, and its sync hasn't started               | `Queued`              | ⟳, still and faded    |
   | syncing     | its data is read                                            | `Syncing…`            | ⟳, spinning           |
   |             | its sync waits for a tool                                   | ⧗ `Waiting for yt-dlp` | ⟳, still and faded   |
-  | matching    | Spotify only: the run's match queue holds tracks of it       | `Matching 12 of 340`  | ⟳, spinning while one of its tracks is matched; still and faded otherwise |
+  | matching    | Spotify only: the run's match queue holds tracks of it       | `Matching 12 of 340`  | ⟳, spinning while the track the update last started matching is one of its tracks, so it keeps turning between two of them; still and faded otherwise |
   | downloading | (with the Downloader) its tracks download                   | `Downloading 6 of 22` | ⟳, spinning           |
 
   The spinning ⟳ is blue and turns clockwise at about one turn per 1.2 s. A playlist whose phases are over shows its

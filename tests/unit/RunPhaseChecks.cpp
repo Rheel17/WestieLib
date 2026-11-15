@@ -56,7 +56,8 @@ void check_board() {
     CHECK(board.matching_now("spotify:B") && !board.matching_now("spotify:C"));
     board.finish_track("t1");
     check_progress(board, "spotify:B", "1 of 2");
-    CHECK(!board.matching_now("spotify:B"));
+    // Between its tracks it keeps spinning, until a track of another playlist starts
+    CHECK(board.matching_now("spotify:B"));
 
     // Refused: it is matched again later, and nothing ends it in between
     board.apply(core::TrackMatching{.track = "t2"});
