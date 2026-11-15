@@ -19,7 +19,7 @@ LogPanel::LogPanel(HWND parent, Callbacks callbacks) :
                 }
         ),
         table_(hwnd(), lines_) {
-    table_.show_lines(true);
+    show_lines(true);
 }
 
 void LogPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
@@ -29,9 +29,15 @@ void LogPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
 }
 
 void LogPanel::add(const core::LogLine& line) {
-    bool follow = table_.shows_last_line();
     lines_.append(line);
-    table_.show_lines(follow);
+    unshown_lines_ = true;
+}
+
+void LogPanel::show_added() {
+    // The list still has the count it showed, so it tells whether the newest line was in view
+    if (unshown_lines_) {
+        show_lines(table_.shows_last_line());
+    }
 }
 
 void LogPanel::set_selection(LogSelection selection) {
@@ -42,14 +48,14 @@ void LogPanel::set_selection(LogSelection selection) {
     bool follow = other || table_.shows_last_line();
     filter.selection = std::move(selection);
     if (lines_.set_filter(std::move(filter))) {
-        table_.show_lines(follow);
+        show_lines(follow);
     }
 }
 
 void LogPanel::rename_track(const std::string& from, const std::string& to) {
     bool follow = table_.shows_last_line();
     lines_.rename_track(from, to);
-    table_.show_lines(follow);
+    show_lines(follow);
 }
 
 LogView LogPanel::view() const {
@@ -84,7 +90,12 @@ void LogPanel::change_view(LogView view) {
     LogFilter filter = lines_.filter();
     filter.view = view;
     lines_.set_filter(std::move(filter));
-    table_.show_lines(true);
+    show_lines(true);
+}
+
+void LogPanel::show_lines(bool to_last_line) {
+    table_.show_lines(to_last_line);
+    unshown_lines_ = false;
 }
 
 LRESULT LogPanel::on_notify(NMHDR& header) {

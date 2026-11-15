@@ -92,7 +92,10 @@ void LogTable::show_lines(bool to_last_line) {
     // A scroll bar may have come or gone
     fit_message_column();
     if (to_last_line && count > 0) {
+        // While it draws, the list animates the scroll and paints every step of it, which took about 8 ms a line
+        SendMessageW(list_.hwnd(), WM_SETREDRAW, FALSE, 0);
         SendMessageW(list_.hwnd(), LVM_ENSUREVISIBLE, count - 1, FALSE);
+        SendMessageW(list_.hwnd(), WM_SETREDRAW, TRUE, 0);
     }
     // The list keeps the empty text it was given until told to ask again
     SendMessageW(list_.hwnd(), ResetEmptyTextMessage, 0, 0);

@@ -27,7 +27,9 @@ public:
     LogPanel(HWND parent, Callbacks callbacks);
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
+    // Lines added show at the next show_added, so a burst of them updates the list once
     void add(const core::LogLine& line);
+    void show_added();
     void set_selection(LogSelection selection);
     void rename_track(const std::string& from, const std::string& to);
     LogView view() const;
@@ -39,11 +41,13 @@ protected:
 private:
     void layout();
     void change_view(LogView view);
+    void show_lines(bool to_last_line);
     LRESULT on_notify(NMHDR& header);
 
     LogLines lines_;
     LogToolbar toolbar_;
     LogTable table_;
+    bool unshown_lines_ = false;
 };
 
 }

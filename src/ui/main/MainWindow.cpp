@@ -539,6 +539,10 @@ void MainWindow::on_core_events() {
     for (const core::CoreEvent& event : events_.take()) {
         std::visit([this](const auto& payload) { apply_event(payload); }, event);
     }
+    if (std::exchange(playlists_outdated_, false)) {
+        show_playlists();
+    }
+    log_.show_added();
     show_tools();
 }
 
@@ -562,52 +566,52 @@ void MainWindow::apply_event(const core::PlaylistLookedUp& event) {
 
 void MainWindow::apply_event(const core::SyncQueued& event) {
     sync_board_.apply(event);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistFetching& event) {
     sync_board_.apply(event);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistPageFetched&) {
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistFetched& event) {
     sync_board_.finish_playlist(event.playlist);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistFetchFailed& event) {
     sync_board_.finish_playlist(event.playlist);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TracksQueued& event) {
     sync_board_.apply(event);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TrackMatching& event) {
     sync_board_.apply(event);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TrackStatusChanged& event) {
     sync_board_.finish_track(event.track);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TracksMerged& event) {
     log_.rename_track(event.merged, event.survivor);
     sync_board_.finish_track(event.merged);
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::SyncFinished&) {
     sync_board_.finish();
-    show_playlists();
+    playlists_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::CandidateSearchResults& results) {

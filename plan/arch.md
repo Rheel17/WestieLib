@@ -1057,6 +1057,8 @@ Events are emitted from any thread through an `EventSink` interface, as a `CoreE
 structs). The Win32 implementation, `CoreEventQueue` (`src/ui/events/`), appends each event to a queue behind a
 mutex. When the queue was empty, it posts one message without a payload to the main window, which then takes every
 queued event at once. The queue owns the events, so nothing leaks when the window is gone before it takes them.
+The window applies the whole batch first and only then shows the playlists, the tracks and the new log lines, once.
+A burst of events then costs one update, so the window keeps up with a fast sync instead of falling behind it.
 
 ## Startup sequence
 

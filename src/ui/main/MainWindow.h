@@ -185,6 +185,8 @@ private:
     FetchFailureNotice fetch_failure_;
     // A playlist's key, or nothing while All tracks is selected
     std::optional<std::string> selected_playlist_;
+    // Set by the sync events, so a batch of them shows the playlists and tracks once
+    bool playlists_outdated_ = false;
     // Only while they're open, so tool, look-up and search events can reach them
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;
