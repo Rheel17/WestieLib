@@ -28,6 +28,10 @@ Control::Control(const CreateParams& params) {
     }
 }
 
+Control::Control(HWND existing) : hwnd_(existing) {
+    platform::win32::check(SetWindowSubclass(hwnd_, subclass_proc, SubclassId, reinterpret_cast<DWORD_PTR>(this)), "SetWindowSubclass");
+}
+
 Control::~Control() {
     if (hwnd_) {
         RemoveWindowSubclass(hwnd_, subclass_proc, SubclassId);

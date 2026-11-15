@@ -261,7 +261,7 @@ function Check-Cards($hwnd) {
 	Press-ListKey $hwnd 0x28
 }
 
-$PlaylistMenuItems = '&Sync, &Open in browser, &Copy link, -, &Remove playlist...'
+$PlaylistMenuItems = '&Sync, &Open in browser, &Copy link, -, &Remove playlist... [Del]'
 
 # A right-click on a row selects it first and opens the playlist menu where it was clicked, with every item enabled.
 # Shift+F10 sends (-1, -1), and opens it at the selected row's bottom-left corner; with All tracks selected it shows
@@ -300,12 +300,21 @@ function Check-PlaylistMenu($app) {
 	Click-PlaylistRow $hwnd 1
 }
 
-# Remove playlist asks first; Remove takes the playlist out of state.json and the list, and All tracks is selected.
-# Removing the last one, from the playlist card's button, brings back the welcome screen.
+# Del on All tracks, and Shift+Del, do nothing. Del on a playlist is Remove playlist, which asks first; Remove takes the
+# playlist out of state.json and the list, and All tracks is selected. Removing the last one, from the playlist card's
+# button, brings back the welcome screen. Del is posted, since the confirmation is modal.
 function Check-RemovePlaylists($hwnd) {
+	$list = Get-PlaylistList $hwnd
+	Click-AllTracks $hwnd
+	[void][W]::PostMessageW($list, 0x100, [IntPtr]0x2E, [IntPtr]1)
+	Start-Sleep -Milliseconds 300
+	Check 'Del on All tracks: no confirmation' ([W]::OwnedWindow($hwnd) -eq [IntPtr]::Zero) 'True'
 	Click-PlaylistRow $hwnd 1
-	Send-Command $hwnd '&Remove playlist...'
+	[W]::PostShiftKey($list, 0x2E)
+	Check 'Shift+Del on row 1: no confirmation' ([W]::OwnedWindow($hwnd) -eq [IntPtr]::Zero) 'True'
+	[void][W]::PostMessageW($list, 0x100, [IntPtr]0x2E, [IntPtr]1)
 	$dialog = Wait-OwnedWindow $hwnd
+	Check 'Del on row 1: the confirmation' ([W]::TextOf($dialog)) 'Remove playlist'
 	[void][W]::PostMessageW($dialog, 0x466, [IntPtr]1, [IntPtr]::Zero)
 	Wait-Closed $dialog
 	Check 'Remove row 1: state.json' (Get-SavedPlaylists) "ytm:PLx9k2_-Ab $YouTubeLink [$YouTubeName] True"

@@ -36,6 +36,7 @@ $Glyphs = [ordered]@{
 	syncgray = @{ Row = $true }
 	search = @{}
 	close = @{ Small = $true }
+	play = @{ Disabled = $true; Small = $true }
 	removed = @{}
 	kept = @{}
 	duplicate = @{}

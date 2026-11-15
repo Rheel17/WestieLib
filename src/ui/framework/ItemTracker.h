@@ -11,6 +11,8 @@ class ItemTracker {
 public:
     std::optional<std::size_t> hot() const noexcept;
     std::optional<std::size_t> pressed() const noexcept;
+    // Whether the button went down on an item and is still down, wherever the mouse is
+    bool held() const noexcept;
     bool move(HWND window, std::optional<std::size_t> item);
     bool leave() noexcept;
     bool press(HWND window, std::optional<std::size_t> item);

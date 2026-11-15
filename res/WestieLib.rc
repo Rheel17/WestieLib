@@ -32,6 +32,8 @@ IDI_REMOVED          ICON "glyphs/removed.ico"
 IDI_KEPT             ICON "glyphs/kept.ico"
 IDI_NOTE             ICON "glyphs/note.ico"
 IDI_DUPLICATE        ICON "glyphs/duplicate.ico"
+IDI_PLAY             ICON "glyphs/play.ico"
+IDI_PLAY_DISABLED    ICON "glyphs/play-disabled.ico"
 IDI_SPIN_0           ICON "glyphs/syncing-spin-00.ico"
 (IDI_SPIN_0 +  1)    ICON "glyphs/syncing-spin-01.ico"
 (IDI_SPIN_0 +  2)    ICON "glyphs/syncing-spin-02.ico"
@@ -102,23 +104,27 @@ BEGIN
 	PUSHBUTTON      "Cancel", IDCANCEL, 308, 85, 43, 12
 END
 
-IDD_CHOOSE_VIDEO DIALOGEX 0, 0, 370, 237
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+// The template's size is the dialog's smallest; the code opens it larger. The Spotify play button comes last in the tab
+// order, so the search field still gets the focus first
+IDD_CHOOSE_VIDEO DIALOGEX 0, 0, 370, 240
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN
 CAPTION "Choose a match"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
-	CONTROL         "", IDC_VIDEO_SOURCE, "Static", SS_OWNERDRAW, 9, 8, 352, 10
+	CONTROL         "", IDC_VIDEO_SOURCE, "Static", SS_OWNERDRAW, 9, 8, 332, 10
 	LTEXT           "", IDC_VIDEO_CURRENT, 9, 20, 352, 8, SS_ENDELLIPSIS | SS_NOPREFIX
 	LTEXT           "&Search YouTube Music:", -1, 9, 36, 352, 8
 	EDITTEXT        IDC_VIDEO_QUERY, 9, 46, 302, 12, ES_AUTOHSCROLL
 	PUSHBUTTON      "Search", IDC_VIDEO_SEARCH, 316, 46, 45, 12
 	CONTROL         "", IDC_VIDEO_LIST, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 9, 64, 352, 104
-	LTEXT           "Or paste a YouTube or YouTube Music &link:", -1, 9, 176, 352, 8
-	EDITTEXT        IDC_VIDEO_LINK, 9, 186, 352, 12, ES_AUTOHSCROLL
+	LTEXT           "Or paste a YouTube or YouTube Music &link:", IDC_VIDEO_LINK_LABEL, 9, 176, 352, 8
+	EDITTEXT        IDC_VIDEO_LINK, 9, 186, 332, 12, ES_AUTOHSCROLL
+	PUSHBUTTON      "Play on YouTube Music", IDC_PLAY_LINK, 345, 186, 16, 12, BS_ICON
 	CONTROL         "", IDC_VIDEO_LINK_KIND, "Static", SS_OWNERDRAW, 9, 202, 352, 10
-	PUSHBUTTON      "&Open in browser", IDC_OPEN_VIDEO, 9, 218, 64, 12
 	DEFPUSHBUTTON   "&Use this match", IDOK, 254, 218, 60, 12
 	PUSHBUTTON      "Cancel", IDCANCEL, 318, 218, 43, 12
+	PUSHBUTTON      "Play on Spotify", IDC_PLAY_SOURCE, 345, 6, 16, 12, BS_ICON
+	CONTROL         "", IDC_VIDEO_GRIP, "ScrollBar", SBS_SIZEGRIP | SBS_SIZEBOXBOTTOMRIGHTALIGN, 350, 220, 20, 20
 END
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "WestieLib.manifest"

@@ -11,6 +11,7 @@ public:
     IconResource(int resource_id, int size);
 
     int size() const noexcept;
+    HICON handle() const noexcept;
     void draw(HDC dc, int x, int y) const;
 
 private:

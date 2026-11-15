@@ -335,6 +335,11 @@ Select-TrackRow $h 0
 Check 'Shift+Down: two rows selected' (Get-SelectedRows $h) "0 $Cafe / 1 Late Night Swing"
 Check '  the selection card' (Wait-CardTexts $h 'Selection card') 'Selection card: 2 tracks selected / Status / Waiting / 2'
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-selection.png") }
+$table = Get-TrackTable $h
+[W]::PostCtrlKey($table, 0x41)
+$count = [int][W]::SendMessageW($table, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
+Check 'Ctrl+A: every row selected' "$(@((Get-SelectedRows $h) -split ' / ').Count) of $count | $(Wait-CardTexts $h 'Selection card')" (
+	"$count of $count | Selection card: $count tracks selected / Status / Waiting / $count")
 
 Click-PlaylistRow $h 1
 Check 'Playlist 1: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowA / 2 | $RowB / 3 | $RowC / 4 | $RowShared"

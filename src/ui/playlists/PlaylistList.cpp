@@ -349,6 +349,13 @@ void PlaylistList::on_timer(WPARAM timer) const {
 }
 
 bool PlaylistList::on_key_down(WPARAM key) {
+    bool modified = GetKeyState(VK_CONTROL) < 0 || GetKeyState(VK_SHIFT) < 0 || GetKeyState(VK_MENU) < 0;
+    // The command does nothing while All tracks is selected
+    if (key == VK_DELETE && !modified) {
+        events_.on_command(CommandId::RemovePlaylist);
+        return true;
+    }
+
     // All tracks comes before the first playlist
     int last = static_cast<int>(rows_.size());
     std::optional<std::size_t> selected = selected_index();

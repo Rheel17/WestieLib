@@ -29,7 +29,9 @@
 // The sync control's 12 steps of a turn are IDI_SPIN_0 to IDI_SPIN_0 + 11
 #define IDI_SPIN_0                50
 #define IDI_DUPLICATE             62
-#define IDD_SETTINGS              100
+#define IDI_PLAY                  63
+#define IDI_PLAY_DISABLED         64
+#define IDD_SETTINGS             100
 #define IDC_LIBRARY_FOLDER        1000
 #define IDC_BROWSE_LIBRARY_FOLDER 1001
 #define IDC_VERSION               1002
@@ -51,4 +53,8 @@
 #define IDC_VIDEO_LIST            1204
 #define IDC_VIDEO_LINK            1205
 #define IDC_VIDEO_LINK_KIND       1206
-#define IDC_OPEN_VIDEO            1207
+#define IDC_PLAY_SOURCE           1207
+#define IDC_PLAY_LINK             1208
+#define IDC_VIDEO_GRIP            1209
+#define IDC_VIDEO_LINK_LABEL      1210
+#define IDC_VIDEO_QUERY_LABEL     1211

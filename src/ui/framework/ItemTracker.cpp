@@ -12,6 +12,10 @@ std::optional<std::size_t> ItemTracker::pressed() const noexcept {
     return hot_ == pressed_ ? pressed_ : std::nullopt;
 }
 
+bool ItemTracker::held() const noexcept {
+    return pressed_.has_value();
+}
+
 bool ItemTracker::move(HWND window, std::optional<std::size_t> item) {
     track_leave(window);
     // While the button is held, only the pressed item reacts

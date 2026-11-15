@@ -17,6 +17,20 @@ namespace {
 constexpr int HairlinePixels = 1;
 constexpr UINT_PTR CellTipTool = 1;
 constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
+// Item -1 is every item
+constexpr int EveryItem = -1;
+constexpr WPARAM CtrlAChar = 0x01;
+
+void set_item_state(HWND list, int item, UINT state, UINT mask) {
+    LVITEMW entry{};
+    entry.state = state;
+    entry.stateMask = mask;
+    platform::win32::check(SendMessageW(list, LVM_SETITEMSTATE, item, reinterpret_cast<LPARAM>(&entry)), "LVM_SETITEMSTATE");
+}
+
+bool only_ctrl_down() {
+    return GetKeyState(VK_CONTROL) < 0 && GetKeyState(VK_SHIFT) >= 0 && GetKeyState(VK_MENU) >= 0;
+}
 
 }
 
@@ -159,23 +173,25 @@ std::optional<int> ListView::focused_item() const {
 }
 
 void ListView::select_items(std::span<const int> items, std::optional<int> focused) {
-    auto set_state = [this](int item, UINT state, UINT mask) {
-        LVITEMW entry{};
-        entry.state = state;
-        entry.stateMask = mask;
-        platform::win32::check(SendMessageW(hwnd(), LVM_SETITEMSTATE, item, reinterpret_cast<LPARAM>(&entry)), "LVM_SETITEMSTATE");
-    };
-    // Item -1 is every item
-    set_state(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+    set_item_state(hwnd(), EveryItem, 0, LVIS_SELECTED | LVIS_FOCUSED);
     for (int item : items) {
-        set_state(item, LVIS_SELECTED, LVIS_SELECTED);
+        set_item_state(hwnd(), item, LVIS_SELECTED, LVIS_SELECTED);
     }
     if (focused) {
-        set_state(*focused, LVIS_FOCUSED, LVIS_FOCUSED);
+        set_item_state(hwnd(), *focused, LVIS_FOCUSED, LVIS_FOCUSED);
     }
 }
 
 LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
+    // The list has no Ctrl+A of its own, and would search the rows for the character it makes
+    if (message == WM_KEYDOWN && wparam == 'A' && only_ctrl_down()) {
+        set_item_state(hwnd(), EveryItem, LVIS_SELECTED, LVIS_SELECTED);
+        return 0;
+    }
+    if (message == WM_CHAR && wparam == CtrlAChar) {
+        return 0;
+    }
+
     LRESULT result = Control::handle_message(message, wparam, lparam);
     switch (message) {
     case WM_MOUSEMOVE: show_cell_tip(lparam); return result;

@@ -15,6 +15,10 @@ int IconResource::size() const noexcept {
     return size_;
 }
 
+HICON IconResource::handle() const noexcept {
+    return icon_.get();
+}
+
 void IconResource::draw(HDC dc, int x, int y) const {
     platform::win32::check(DrawIconEx(dc, x, y, icon_.get(), size_, size_, 0, nullptr, DI_NORMAL), "DrawIconEx");
 }

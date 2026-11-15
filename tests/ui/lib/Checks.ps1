@@ -14,7 +14,8 @@ if (Get-Process WestieLib -ErrorAction SilentlyContinue) { throw 'WestieLib is r
 
 $KeyPath = 'HKCU:\Software\WestieLib\Window'
 $ColumnWidthDips = [ordered]@{ Number = 48; Status = 56; Title = 204; Artists = 156; Album = 132; Playlists = 114; Time = 48; Source = 60; Match = 70; File = 200 }
-$StateNames = @('Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible', 'LogLevel', 'LogScope') +
+$StateNames = @('Left', 'Top', 'Right', 'Bottom', 'Maximized', 'PlaylistsWidthDips', 'InspectorWidthDips', 'LogHeightDips', 'LogVisible', 'LogLevel', 'LogScope',
+	'ChooseMatchWidthDips', 'ChooseMatchHeightDips') +
 	@($ColumnWidthDips.Keys | ForEach-Object { "$($_)ColumnWidthDips" })
 # The app keeps its files here instead of %LOCALAPPDATA%\WestieLib, so the user's settings and tools stay untouched
 $DataDir = Join-Path ([IO.Path]::GetTempPath()) "WestieLib-checks-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
@@ -436,7 +437,7 @@ function Set-SavedAutoUpdate([bool]$on) {
 function Set-SavedWindow([hashtable]$values) {
 	$state = [ordered]@{
 		Left = 100; Top = 100; Right = 1380; Bottom = 900; Maximized = 0; PlaylistsWidthDips = 250; InspectorWidthDips = 290; LogHeightDips = 168; LogVisible = 0
-		LogLevel = 1; LogScope = 0
+		LogLevel = 1; LogScope = 0; ChooseMatchWidthDips = 900; ChooseMatchHeightDips = 600
 	}
 	foreach ($column in $ColumnWidthDips.Keys) { $state["$($column)ColumnWidthDips"] = $ColumnWidthDips[$column] }
 	foreach ($name in $values.Keys) { $state[$name] = $values[$name] }

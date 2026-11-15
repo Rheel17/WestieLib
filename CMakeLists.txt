@@ -132,8 +132,10 @@ add_executable(WestieLib WIN32
 	src/ui/dialogs/LinkLine.cpp
 	src/ui/dialogs/LinkLinePainter.cpp
 	src/ui/dialogs/LinkLookup.cpp
+	src/ui/dialogs/PlayButton.cpp
 	src/ui/dialogs/PlaylistLinkCheck.cpp
 	src/ui/dialogs/RemovePlaylistDialog.cpp
+	src/ui/dialogs/RowPlayButtons.cpp
 	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/dialogs/ToolListView.cpp
 	src/ui/dialogs/VideoChoice.cpp
@@ -148,6 +150,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/CommonControls.cpp
 	src/ui/framework/Control.cpp
 	src/ui/framework/DeferredPositions.cpp
+	src/ui/framework/DialogSizing.cpp
 	src/ui/framework/Edit.cpp
 	src/ui/framework/EditHistory.cpp
 	src/ui/framework/EditKeys.cpp

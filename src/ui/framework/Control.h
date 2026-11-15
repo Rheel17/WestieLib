@@ -25,6 +25,8 @@ protected:
     };
 
     explicit Control(const CreateParams& params);
+    // A control that already exists, such as a dialog's
+    explicit Control(HWND existing);
 
     virtual LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam);
 

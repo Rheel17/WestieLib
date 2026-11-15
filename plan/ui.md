@@ -47,8 +47,8 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
   way; its height comes back when the window grows.
 - The infobar row is 32 px tall, right under the toolbar, and takes its height from the panels.
 - The window placement (normal bounds and maximized state), the panel widths, the log height, whether the log
-  shows, the log's level and scope, and the track table's column widths are saved under `HKCU\Software\WestieLib\Window` when the window closes,
-  and restored on the next start. A minimized window comes back restored, or maximized if it was maximized before.
+  shows, the log's level and scope, the track table's column widths and the Choose a match dialog's size are saved
+  under `HKCU\Software\WestieLib\Window` when the window closes, and restored on the next start. A minimized window comes back restored, or maximized if it was maximized before.
 - The inspector is always shown. View › Log toggles the log pane.
 - Minimum window size is about 1100×680. The mockup draws the window at 1280×800, with a 250 px left panel and
   a 290 px inspector.
@@ -273,11 +273,13 @@ navigation pane:
 - A click also gives the playlist list the keyboard focus. Up and Down move the selection one item, Home and End to
   All tracks and the last playlist, PgUp and PgDn by as many rows as the list shows. All tracks counts as the item
   before the first playlist. The selected row scrolls into view.
+- While the list has the focus, Del is Remove playlist… for the selected playlist. With All tracks selected it does
+  nothing. Shift+Del, Ctrl+Del and Alt+Del do nothing either.
 - Adding a playlist selects it. When the selected playlist goes away, All tracks is selected.
 - Every start begins on All tracks; the selection isn't saved.
 
 **Context menu.** A playlist row's context menu has **S**ync, **O**pen in browser, **C**opy link, ─, **R**emove
-playlist….
+playlist… (Del). The shortcut is right-aligned, as in the menu bar.
 
 - A right-click selects the row under the mouse first, and gives the list the focus. A right-click between or below
   the rows, or on All tracks, shows no menu.
@@ -405,6 +407,8 @@ the column keep the order they had before the click, so sorting by Album after A
 reverse turns the whole list round, ties included. Rows that tie on every column the user sorted by go by the scope's
 default sort, then track key. The order holds while the rows are filtered or refreshed. Another scope starts at its
 default sort, and forgets the earlier clicks. The row context menu is the Track menu.
+
+Ctrl+A selects every row, as in Explorer; so does it in the log pane's list.
 
 The selection stays with its tracks while the rows are sorted, searched, filtered by source or refreshed by a sync; a
 track that is filtered out loses it. Selecting another status tab or another scope (All tracks or a playlist) clears it.
@@ -767,15 +771,18 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     playlist shows in the left panel.
 - **Choose a match**. Opened by `Choose match…` in the inspector, the Track menu or Edit track. One dialog
   covers both the case with several candidates and the case where nothing was found:
-  - At the top: the source track (glyph, title, then `by <artists> (<album>, <length>)` in gray), and under it the
-    track's video, by where it comes from: "Current match: <title>, 58% confidence", "Current match: <title>, from a
-    YouTube Music playlist", "Current match: <title or id>, chosen by you", or without one "No match found." (after a
-    failed match) or "Not matched yet."
+  - At the top: the source track (glyph, title, then `by <artists> (<album>, <length>)` in gray), with a play button
+    at the right end of the line (see Play buttons), which opens the track on Spotify. Under it the track's video,
+    by where it comes from: "Current match: <title>, 58% confidence", "Current match: <title>, from a YouTube Music
+    playlist", "Current match: <title or id>, chosen by you", or without one "No match found." (after a failed match)
+    or "Not matched yet."
   - `Search YouTube Music:` an edit pre-filled with the Matcher's first query, and `Search`. The search is the
     Matcher's own (`arch.md`, Matcher › Search): songs only, and no tool needed. A video that isn't a song is
     chosen by its link (below).
-  - A results list with Title | Artists | Album | Length | Match, in the Matcher's ranking (`arch.md`, Matcher ›
-    Verdict; ties in the order below), each video once:
+  - A results list with Title | Artists | Album | Length | Match and an untitled last column with each row's play
+    button, which opens that video on YouTube Music without selecting or choosing the row. Title takes the width the
+    other columns leave. The rows come in the Matcher's ranking (`arch.md`, Matcher › Verdict; ties in the order
+    below), each video once:
     - the current match, marked `(current)`;
     - the YouTube Music sources the playlists list that the Matcher doesn't reject for the track, marked
       `(in library)`;
@@ -790,32 +797,45 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     - While a search runs, the list is empty and reads "Searching YouTube Music…". Without rows after it, it reads
       "No results. Try fewer words, or paste a link below.", or "Couldn't search YouTube Music: <reason>" when the
       search failed.
-  - `Or paste a YouTube or YouTube Music link:` an edit with a live detection line under it. It reads nothing for an
-    empty edit, `Not a YouTube link` in gray, or the YouTube Music logo and `YouTube video <id>`, followed by the
-    title when the library has that video. The links it takes are in `arch.md` (Video links).
+  - `Or paste a YouTube or YouTube Music link:` an edit with a play button on its right, enabled once the link names
+    a video, and a live detection line under it. The line reads nothing for an empty edit, `Not a YouTube link` in
+    gray, or the YouTube Music logo and `YouTube video <id>`, followed by the title when the library has that video.
+    The links it takes are in `arch.md` (Video links).
   - A link that names a video wins over the list's selection; selecting a row leaves the link as it is.
-  - The footer has `Open in browser` on the left (it opens the video `Use this match` would take on YouTube
-    Music), then `Use this match` (default) and `Cancel`. Both of the first two are enabled once the link names a
-    video or a row is selected. A double-click on a row is `Use this match`.
+  - The footer has `Use this match` (default) and `Cancel`. `Use this match` is enabled once the link names a video
+    or a row is selected. A double-click on a row is `Use this match`.
   - `Use this match` on the current match confirms it. Any other video becomes the video override, which downloads
     the track again.
-  - It is 640 px wide:
+  - **Play buttons** open a track's page in the browser, so it can be heard before it's chosen. Each is a small
+    button with the 12 px play glyph and a tooltip: `Play on Spotify` for the track, `Play on YouTube Music` for a
+    video.
+    - The track's and the link's are push buttons, as tall as the search field. The link's grays out with its glyph
+      while the link names no video.
+    - A row's is painted in its cell: just the glyph, and on hover a box with the hover colors of the playlist rows'
+      sync control (`#E5F3FF`, `#CCE8FF` frame, `#99D1FF` on a selected row), `#CCE4F7` while pressed. It reacts like
+      a button: it opens the video when the mouse is released over it, and a double click on it is two clicks, never
+      `Use this match`.
+  - **Size.** It opens at 900 × 600 px and is resizable, with a size grip in the bottom right corner, down to the
+    size of its template, about 660 × 490 px. The list takes the extra height and its Title column the extra width; the fields and lines take the
+    extra width, and the buttons keep to their edges. The size is kept for the next time, and saved with the window
+    (see Window layout).
+  - At its smallest:
 
     ```
     ┌ Choose a match ─────────────────────────────────────────────────────────┐
-    │ ● Best Part by Daniel Caesar, H.E.R. (Freudian, 3:29)                    │
+    │ ● Best Part by Daniel Caesar, H.E.R. (Freudian, 3:29)               [▶]  │
     │ Current match: Best Part, 75% confidence                                 │
     │ Search YouTube Music: [Daniel Caesar H.E.R. Best Part        ] [Search]  │
-    │ ┌ Title            │ Artists       │ Album    │ Length │ Match          ┐│
-    │ │ Best Part (in li…│ Daniel Caesar │          │ 3:29   │ Same recording ││
-    │ │ Best Part (curre…│ Daniel Caesar │ Freudian │ 3:56   │ Check length   ││
-    │ │ Best Part - Live │ Daniel Caesar │ Live     │ 4:12   │ Other recording││
+    │ ┌ Title          │ Artists       │ Album    │ Length │ Match          │  ┐│
+    │ │ Best Part (in …│ Daniel Caesar │          │ 3:29   │ Same recording │▶ ││
+    │ │ Best Part (cur…│ Daniel Caesar │ Freudian │ 3:56   │ Check length   │▶ ││
+    │ │ Best Part - Li…│ Daniel Caesar │ Live     │ 4:12   │ Other recording│▶ ││
     │ └──────────────────────────────────────────────────────────────────────┘│
     │ Or paste a YouTube or YouTube Music link:                                │
-    │ [                                                                    ]   │
+    │ [                                                               ] [▶]    │
     │ ● YouTube video 5aM1xdk8lRw                                              │
     │                                                                          │
-    │ [Open in browser]                          [Use this match]  [Cancel]    │
+    │                                            [Use this match]  [Cancel]  ◢ │
     └──────────────────────────────────────────────────────────────────────────┘
     ```
   - So far it opens from the inspector and the Track menu, for an entry whose source is a Spotify track; Edit track
@@ -900,7 +920,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks. The log colors its rows through `clrText` at `CDDS_ITEMPREPAINT`, keeps to the bottom with `LVM_ENSUREVISIBLE`, and takes its empty text from `LVN_GETEMPTYMARKUP` |
 | Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the synced bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
-| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
+| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`; the rows' play buttons are painted at `CDDS_ITEMPOSTPAINT`, and the list is subclassed for their mouse handling and tooltip. Choose a match has `WS_THICKFRAME`, an `SBS_SIZEGRIP` scroll bar, `BS_ICON` push buttons, and moves its controls on `WM_SIZE` by their anchors; `WM_GETMINMAXINFO` holds its minimum. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also keeps the undo history (`EditHistory`), taking Ctrl+Z and Ctrl+Y (`WM_CHAR` `0x1A` and `0x19`) and swallowing the edit's own one-step undo: `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO` and Alt+Backspace. It swallows `WM_CONTEXTMENU` too |
 
 The UI uses the Windows 10 palette:

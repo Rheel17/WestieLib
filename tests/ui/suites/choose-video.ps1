@@ -34,12 +34,43 @@ function Click-CardButton($hwnd, [string]$text) {
 
 function Get-VideoList($dialog) { [W]::GetDlgItem($dialog, 1204) }
 
-# The list's rows, then what it reads while it has none (its window text)
+# The list's rows without the play column, which has no text, then what it reads while it has none (its window text)
 function Get-VideoRows($dialog) {
 	$list = Get-VideoList $dialog
 	$count = [int][W]::SendMessageW($list, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
-	$rows = @(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) } }) -join ' / '
+	$rows = @(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) -replace ' \| $', '' } }) -join ' / '
 	"[$rows] $([W]::TextOf($list))"
+}
+
+# The window's size in DIPs
+function Get-DialogDips($dialog) {
+	$r = New-Object W+RECT
+	[void][W]::GetWindowRect($dialog, [ref]$r)
+	"$([math]::Round(($r.Right - $r.Left) * 96 / $script:dpi)) x $([math]::Round(($r.Bottom - $r.Top) * 96 / $script:dpi))"
+}
+
+function Set-DialogDips($dialog, [int]$width, [int]$height) {
+	# SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+	[void][W]::SetWindowPos($dialog, [IntPtr]::Zero, 0, 0, (S $width), (S $height), 0x16)
+}
+
+# The controls the dialog moves, by id, with their rects in its client area, and the Title column's width
+$AnchoredIds = [ordered]@{ heading = 1200; spotify = 1207; list = 1204; link = 1205; play = 1208; ok = 1; grip = 1209 }
+function Get-DialogLayout($dialog) {
+	$layout = @{}
+	foreach ($name in $AnchoredIds.Keys) { $layout[$name] = [W]::RectIn([W]::GetDlgItem($dialog, $AnchoredIds[$name]), $dialog) }
+	$layout['title'] = [int](([W]::ListViewColumns((Get-VideoList $dialog)) -split ' \| ')[0] -replace '^Title ', '')
+	$layout
+}
+
+# How far each control's left, top, right and bottom edges moved, and the Title column's width grew
+function Get-LayoutMoves($from, $to) {
+	$moves = foreach ($name in $AnchoredIds.Keys) {
+		$a = $from[$name]
+		$b = $to[$name]
+		"$name $($b.Left - $a.Left) $($b.Top - $a.Top) $($b.Right - $a.Right) $($b.Bottom - $a.Bottom)"
+	}
+	(@($moves) + "title $($to['title'] - $from['title'])") -join ' | '
 }
 
 # Waits for the searches the dialog started after $searched searches had reached FakeWeb, then for their answer
@@ -49,9 +80,9 @@ function Wait-VideoRows($dialog, [int]$searched, [int]$count = 1) {
 	Get-VideoRows $dialog
 }
 
-# The link's detection line, then whether Open in browser and Use this match are enabled
+# The link's detection line, then whether the link's play button and Use this match are enabled
 function Get-ChoiceState($dialog) {
-	"$([W]::TextOf([W]::GetDlgItem($dialog, 1206))) | $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1207))) $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1)))"
+	"$([W]::TextOf([W]::GetDlgItem($dialog, 1206))) | $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1208))) $([W]::IsWindowEnabled([W]::GetDlgItem($dialog, 1)))"
 }
 
 function Set-VideoLink($dialog, [string]$link) { [W]::SetEditText([W]::GetDlgItem($dialog, 1205), $link) }
@@ -129,19 +160,44 @@ Check '  the Matcher''s query searched: the results, the library''s song and the
 	'[Tell Me | Rae | Tell | 3:20 | Same recording / Tell Me (in library) | Rae |  | 3:21 | Same recording / Tell Me | Rae | Tell | 3:45 | Check length / ' +
 	'Tell Me (Live) (current) | Rae |  | 4:20 | Other recording / Tell Me (Karaoke) | Sing | Karaoke | 3:30 | Other artist] ' +
 	'No results. Try fewer words, or paste a link below.')
-Check '  columns after Title' ([W]::ListViewColumns((Get-VideoList $dialog)) -replace '^Title \d+ \| ', '') (
-	"Artists $(S 115) | Album $(S 115) | Length $(S 52) | Match $(S 110)")
+Check '  columns after Title, the last for the play buttons' ([W]::ListViewColumns((Get-VideoList $dialog)) -replace '^Title \d+ \| ', '') (
+	"Artists $(S 115) | Album $(S 115) | Length $(S 52) | Match $(S 110) |  $(S 26)")
+Check '  opens at 900 x 600, the search field focused' "$(Get-DialogDips $dialog) $([W]::FocusOf($dialog) -eq [W]::GetDlgItem($dialog, 1202))" '900 x 600 True'
+$playButtons = foreach ($id in 1207, 1208) {
+	$button = [W]::GetDlgItem($dialog, $id)
+	# BS_ICON
+	"$([W]::TextOf($button)) $([W]::IsWindowEnabled($button)) $(([W]::GetWindowLongW($button, -16) -band 0x40) -ne 0)"
+}
+Check '  play buttons: Spotify enabled, the link''s waiting for a link' ($playButtons -join ' | ') 'Play on Spotify True True | Play on YouTube Music False True'
 if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-choose-video.png") }
+$defaultLayout = Get-DialogLayout $dialog
+Set-DialogDips $dialog 1000 700
+Check 'Resized to 1000 x 700: what the anchors move' (Get-LayoutMoves $defaultLayout (Get-DialogLayout $dialog)) (
+	"heading 0 0 $(S 100) 0 | spotify $(S 100) 0 $(S 100) 0 | list 0 0 $(S 100) $(S 100) | link 0 $(S 100) $(S 100) $(S 100) | " +
+	"play $(S 100) $(S 100) $(S 100) $(S 100) | ok $(S 100) $(S 100) $(S 100) $(S 100) | grip $(S 100) $(S 100) $(S 100) $(S 100) | title $(S 100)")
+$client = New-Object W+RECT
+[void][W]::GetClientRect($dialog, [ref]$client)
+$grip = [W]::RectIn([W]::GetDlgItem($dialog, 1209), $dialog)
+# The template's dialog units round it a pixel past the edge at some scales
+Check '  the size grip reaches the corner' "$($grip.Right -ge $client.Right) $($grip.Bottom -ge $client.Bottom)" 'True True'
+Set-DialogDips $dialog 300 200
+$smallest = Get-DialogDips $dialog
+$width, $height = [int[]]($smallest -split ' x ')
+Check-That '  shrunk to 300 x 200: held at the template''s size' $smallest ($width -ge 640 -and $width -le 680 -and $height -ge 480 -and $height -le 540) '640-680 x 480-540'
+$smallLayout = Get-DialogLayout $dialog
+Check '  there, the controls stand where the template has them' ((Get-LayoutMoves $smallLayout $defaultLayout) -replace "\b$(S (900 - $width))\b", 'W' -replace "\b$(S (600 - $height))\b", 'H') (
+	'heading 0 0 W 0 | spotify W 0 W 0 | list 0 0 W H | link 0 H W H | play W H W H | ok W H W H | grip W H W H | title W')
+Set-DialogDips $dialog 1000 700
 Check '  nothing chosen yet: no line, buttons disabled' (Get-ChoiceState $dialog) ' | False False'
 Select-ListRow (Get-VideoList $dialog) 1
-Check '  a row selected: buttons enabled' (Get-ChoiceState $dialog) ' | True True'
+Check '  a row selected: Use this match enabled' (Get-ChoiceState $dialog) ' | False True'
 $links = @(
-	@{ Link = 'hello'; Line = 'Not a YouTube link | True True' },
+	@{ Link = 'hello'; Line = 'Not a YouTube link | False True' },
 	@{ Link = ' https://youtu.be/libSong0001?si=x '; Line = "YouTube video libSong0001 Tell Me | True True" },
 	@{ Link = 'MUSIC.youtube.com/watch?list=x&v=abcdefghijk'; Line = "YouTube video abcdefghijk | True True" },
 	@{ Link = 'https://m.youtube.com/shorts/abcdefghijk'; Line = "YouTube video abcdefghijk | True True" },
-	@{ Link = 'abcdefghij'; Line = 'Not a YouTube link | True True' },
-	@{ Link = ''; Line = ' | True True' }
+	@{ Link = 'abcdefghij'; Line = 'Not a YouTube link | False True' },
+	@{ Link = ''; Line = ' | False True' }
 )
 foreach ($case in $links) {
 	Set-VideoLink $dialog $case.Link
@@ -169,6 +225,7 @@ Check '  Waiting now' ((Wait-TrackCard $h $TellKey) -like '* / Status / Waiting 
 
 $open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
 $dialog = $open.Dialog
+Check 'Opened again: the size it was closed at' (Get-DialogDips $dialog) '1000 x 700'
 [void](Wait-VideoRows $dialog $open.Before)
 # Under the result on the track's album
 Select-ListRow (Get-VideoList $dialog) 1
@@ -214,4 +271,21 @@ for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds
 Start-Sleep -Milliseconds 300
 Check 'Synced: no search, the videos kept' "$(@($Web.YtmQueries()).Count - $searches) | $(Get-SavedTrack $LostKey) | $(Get-SavedTrack $MergedKey)" (
 	"0 | pending [$LostKey] customVid01  | pending [$MergedKey] splitVid001 ")
+Stop-App $app
+$saved = Get-ItemProperty $KeyPath
+Check '  saved: the dialog''s size' "$($saved.ChooseMatchWidthDips) x $($saved.ChooseMatchHeightDips)" '1000 x 700'
+
+"--- Run 2: the saved size"
+Set-SavedWindow @{ ChooseMatchWidthDips = 820; ChooseMatchHeightDips = 560 }
+$app = Start-App
+$h = $app.Hwnd
+$script:TallRows = 1, 2
+Click-PlaylistRow $h 2
+Select-ListRow (Get-TrackTable $h) 1
+[void](Wait-TrackCard $h $LostKey)
+$open = Open-ChooseVideo $h { Send-Command $h 'C&hoose match...' }
+Check 'Choose a match opens at the saved size' (Get-DialogDips $open.Dialog) '820 x 560'
+[void](Wait-VideoRows $open.Dialog $open.Before)
+[void][W]::PostMessageW([W]::GetDlgItem($open.Dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Wait-Closed $open.Dialog
 Stop-App $app

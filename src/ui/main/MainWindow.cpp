@@ -123,6 +123,7 @@ MainWindow::MainWindow(
         panels_ = state->panels;
         tracks_.set_column_widths(state->column_dips);
         log_.set_view(state->log_view);
+        choose_video_dips_ = state->choose_video_dips.value_or(ChooseVideoDialog::DefaultWindowDips);
         placement_.restore(state->placement);
     } else {
         placement_.apply_initial_size(InitialWindowDips);
@@ -306,7 +307,13 @@ void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
 }
 
 void MainWindow::save_state() const {
-    save_window_state({.placement = placement_.current(), .panels = panels_, .column_dips = tracks_.column_widths(), .log_view = log_.view()});
+    save_window_state({
+            .placement = placement_.current(),
+            .panels = panels_,
+            .column_dips = tracks_.column_widths(),
+            .log_view = log_.view(),
+            .choose_video_dips = choose_video_dips_,
+    });
 }
 
 MainLayout MainWindow::current_layout() const {
@@ -437,9 +444,13 @@ void MainWindow::choose_video() {
     }
     std::string source = choice->source;
     choose_video_dialog_.emplace(
-            std::move(*choice), video_search_, [this](const std::string& video_id) { return library_video_title(*state_.snapshot(), video_id); }
+            std::move(*choice),
+            video_search_,
+            [this](const std::string& video_id) { return library_video_title(*state_.snapshot(), video_id); },
+            choose_video_dips_
     );
     std::optional<std::string> video = choose_video_dialog_->choose(hwnd());
+    choose_video_dips_ = choose_video_dialog_->window_dips();
     choose_video_dialog_.reset();
     if (!video) {
         return;

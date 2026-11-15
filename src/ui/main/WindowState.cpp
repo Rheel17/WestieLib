@@ -23,6 +23,8 @@ constexpr wchar_t LogHeightValue[] = L"LogHeightDips";
 constexpr wchar_t LogVisibleValue[] = L"LogVisible";
 constexpr wchar_t LogLevelValue[] = L"LogLevel";
 constexpr wchar_t LogScopeValue[] = L"LogScope";
+constexpr wchar_t ChooseMatchWidthValue[] = L"ChooseMatchWidthDips";
+constexpr wchar_t ChooseMatchHeightValue[] = L"ChooseMatchHeightDips";
 
 struct ColumnValue {
     TrackColumn column = TrackColumn::Title;
@@ -72,6 +74,15 @@ LogView read_log_view(const platform::win32::RegistryKey& key) {
     return view;
 }
 
+std::optional<framework::Size> read_size(const platform::win32::RegistryKey& key, const wchar_t* width_name, const wchar_t* height_name) {
+    std::optional<int> width = read_int(key, width_name);
+    std::optional<int> height = read_int(key, height_name);
+    if (!width || !height) {
+        return std::nullopt;
+    }
+    return framework::Size{*width, *height};
+}
+
 }
 
 std::optional<WindowState> load_window_state() {
@@ -103,6 +114,7 @@ std::optional<WindowState> load_window_state() {
         },
         .column_dips = read_columns(*key),
         .log_view = read_log_view(*key),
+        .choose_video_dips = read_size(*key, ChooseMatchWidthValue, ChooseMatchHeightValue),
     };
 }
 
@@ -120,6 +132,10 @@ void save_window_state(const WindowState& state) {
     write_int(key, LogVisibleValue, state.panels.log_visible);
     write_int(key, LogLevelValue, std::to_underlying(state.log_view.least));
     write_int(key, LogScopeValue, std::to_underlying(state.log_view.scope));
+    if (state.choose_video_dips) {
+        write_int(key, ChooseMatchWidthValue, state.choose_video_dips->width);
+        write_int(key, ChooseMatchHeightValue, state.choose_video_dips->height);
+    }
     for (const ColumnValue& value : ColumnValues) {
         if (auto width = state.column_dips.find(value.column); width != state.column_dips.end()) {
             write_int(key, value.name, width->second);

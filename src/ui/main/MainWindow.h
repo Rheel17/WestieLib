@@ -187,6 +187,7 @@ private:
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;
     std::optional<ChooseVideoDialog> choose_video_dialog_;
+    framework::Size choose_video_dips_ = ChooseVideoDialog::DefaultWindowDips;
 };
 
 }
