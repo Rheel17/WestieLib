@@ -16,6 +16,7 @@
 #include "core/log/Log.h"
 #include "core/log/LogSubject.h"
 #include "core/matching/Matcher.h"
+#include "core/matching/YouTubeMusicSearch.h"
 #include "core/playlists/PlaylistLink.h"
 #include "core/sources/PlaylistContents.h"
 #include "core/sources/SpotifyUrls.h"
@@ -33,7 +34,7 @@ class SyncEngine {
 public:
     SyncEngine(
             const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-            std::string youtube_music_api, StateStore& state, EventSink& events, Log& log
+            YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log
     );
 
     void sync(const std::vector<std::string>& playlists);

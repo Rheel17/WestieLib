@@ -11,6 +11,7 @@
 
 #include "platform/Cancelled.h"
 #include "platform/HttpError.h"
+#include "platform/HttpTimeout.h"
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32Error.h"
 
@@ -52,6 +53,10 @@ std::wstring header_text(const std::vector<HttpHeader>& headers) {
     return text;
 }
 
+void set_receive_timeout(HINTERNET request, DWORD timeout_ms) {
+    check(WinHttpSetOption(request, WINHTTP_OPTION_RECEIVE_TIMEOUT, &timeout_ms, sizeof(timeout_ms)), "WinHttpSetOption");
+}
+
 [[noreturn]] void fail(const std::stop_token& stop, const std::wstring& host) {
     DWORD error = GetLastError();
     // A stop request closes the request handle, so a call that fails after one was cancelled
@@ -76,9 +81,15 @@ std::string WinHttpClient::get(const std::string& url, const std::vector<HttpHea
     return body;
 }
 
-std::string WinHttpClient::post(const std::string& url, const std::vector<HttpHeader>& headers, const std::string& body, const std::stop_token& stop) {
+std::string WinHttpClient::post(
+        const std::string& url, const std::vector<HttpHeader>& headers, const std::string& body, std::chrono::milliseconds answer_timeout,
+        const std::stop_token& stop
+) {
     std::string answer;
-    request(url, headers, {.verb = L"POST", .body = body}, [&answer](std::span<const char> data) { answer.append(data.begin(), data.end()); }, stop);
+    request(
+            url, headers, {.verb = L"POST", .body = body, .answer_timeout = answer_timeout},
+            [&answer](std::span<const char> data) { answer.append(data.begin(), data.end()); }, stop
+    );
     return answer;
 }
 
@@ -127,6 +138,11 @@ void WinHttpClient::request(
     if (!request) {
         fail(stop, host);
     }
+    // WinHTTP doesn't hold a request to WINHTTP_OPTION_RECEIVE_RESPONSE_TIMEOUT, so the receive timeout bounds the wait
+    // for the answer, and goes back to the session's for the body
+    if (method.answer_timeout) {
+        set_receive_timeout(request.get(), static_cast<DWORD>(method.answer_timeout->count()));
+    }
 
     // Closing the handle from the stopping thread ends a call that is blocked on it. The calls below use a copy, so they
     // fail rather than race with the reset.
@@ -137,9 +153,17 @@ void WinHttpClient::request(
     // WinHTTP only reads the body, but takes it through a pointer to non-const
     LPVOID body = method.body.empty() ? WINHTTP_NO_REQUEST_DATA : const_cast<char*>(method.body.data());
     auto body_size = static_cast<DWORD>(method.body.size());
-    if (!WinHttpSendRequest(handle, header_data, static_cast<DWORD>(header_lines.size()), body, body_size, body_size, 0) ||
-        !WinHttpReceiveResponse(handle, nullptr)) {
+    if (!WinHttpSendRequest(handle, header_data, static_cast<DWORD>(header_lines.size()), body, body_size, body_size, 0)) {
         fail(stop, host);
+    }
+    if (!WinHttpReceiveResponse(handle, nullptr)) {
+        if (method.answer_timeout && !stop.stop_requested() && GetLastError() == ERROR_WINHTTP_TIMEOUT) {
+            throw HttpTimeout(to_utf8(host), *method.answer_timeout);
+        }
+        fail(stop, host);
+    }
+    if (method.answer_timeout) {
+        set_receive_timeout(handle, static_cast<DWORD>(ReceiveTimeoutMs));
     }
 
     DWORD status = 0;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <chrono>
 #include <cstddef>
 #include <format>
 #include <optional>
@@ -13,6 +14,7 @@
 #include <glaze/glaze.hpp>
 
 #include "core/json/JsonOptions.h"
+#include "platform/HttpTimeout.h"
 
 namespace westie::core {
 
@@ -248,12 +250,24 @@ std::optional<SongResult> song_of(const ItemRendererJson& item) {
 
 }
 
-std::vector<SongResult> search_youtube_music_songs(platform::HttpClient& http, std::string_view api_url, std::string_view query, const std::stop_token& stop) {
+YouTubeMusicSearch::YouTubeMusicSearch(platform::HttpClient& http, std::string api_url) : http_(http), api_url_(std::move(api_url)) {}
+
+std::vector<SongResult> YouTubeMusicSearch::songs(std::string_view query, const std::stop_token& stop) {
     glz::expected<std::string, glz::error_ctx> request = glz::write_json(RequestJson{.query = std::string(query)});
     if (!request) {
         throw std::runtime_error(std::format("Couldn't write the search for \"{}\": {}", query, glz::format_error(request.error())));
     }
-    std::string body = http.post(std::format("{}{}", api_url, SearchPath), {{.name = "Content-Type", .value = "application/json"}}, *request, stop);
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+    std::string body;
+    try {
+        body = http_.post(
+                std::format("{}{}", api_url_, SearchPath), {{.name = "Content-Type", .value = "application/json"}}, *request, timeout_.current(), stop
+        );
+    } catch (const platform::HttpTimeout&) {
+        timeout_.timed_out();
+        throw;
+    }
+    timeout_.answered(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started));
 
     AnswerJson answer;
     if (glz::error_ctx error = glz::read<JsonReadOptions>(answer, body)) {

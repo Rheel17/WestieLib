@@ -15,9 +15,7 @@
 #include "core/matching/RefusedSearch.h"
 #include "core/matching/SearchLogText.h"
 #include "core/matching/SongFacts.h"
-#include "core/matching/YouTubeMusicSearch.h"
 #include "platform/Cancelled.h"
-#include "platform/HttpError.h"
 
 namespace westie::core {
 
@@ -42,8 +40,7 @@ std::string joined(const std::vector<std::string>& parts, std::string_view separ
 
 }
 
-Matcher::Matcher(platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, Log& log) :
-        http_(http), normalizer_(normalizer), api_url_(std::move(api_url)), log_(log) {}
+Matcher::Matcher(YouTubeMusicSearch& search, const platform::TextNormalizer& normalizer, Log& log) : search_(search), normalizer_(normalizer), log_(log) {}
 
 std::expected<Match, std::string> Matcher::match(
         const Source& source, const std::set<std::string>& known_ytm_ids, const LogSubject& subject, const std::stop_token& stop
@@ -56,15 +53,12 @@ std::expected<Match, std::string> Matcher::match(
         log_.write(LogLevel::Debug, search_started_text(query), subject);
         std::vector<SongResult> results;
         try {
-            results = search_youtube_music_songs(http_, api_url_, query, stop);
+            results = search_.songs(query, stop);
         } catch (const platform::Cancelled&) {
             throw;
-        } catch (const platform::HttpError& error) {
-            bool refused = refused_search(error.status());
-            log_.write(refused ? LogLevel::Warning : LogLevel::Debug, search_failed_text(query, error.what(), refused), subject);
-            throw;
         } catch (const std::exception& error) {
-            log_.write(LogLevel::Debug, search_failed_text(query, error.what(), false), subject);
+            bool refused = refused_search(error);
+            log_.write(refused ? LogLevel::Warning : LogLevel::Debug, search_failed_text(query, error.what(), refused), subject);
             throw;
         }
         bool accepted = false;

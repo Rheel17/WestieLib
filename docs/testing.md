@@ -72,7 +72,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   user's library, the Spotify track against what YouTube Music listed, each with the verdict and doubts it must
   get, then the confidences, the ranking of candidates, and the words `version_difference` gives the track card's doubt
   list. `LogChecks` covers the log's texts: the time to the millisecond, the file's name and lines, a tool run, and the
-  match and doubt texts.
+  match and doubt texts. `SearchTimeoutChecks` covers how the search's timeout calibrates on the answers' times.
 - A rule change starts there: add the case that shows it, with the verdict it should get, and keep the rest passing.
   The Win32 normalizer runs for real, so the checks see the same words the app does.
 
@@ -108,7 +108,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
     empty list for no results), HTTP 500 when it is in `YtmBrokenQueries`, or else, when it is `"<artists> <title>"` of
     an item `Track` built, that song as id `yt<track id>`, as explicit as the track; anything else has no results. So
     a check that only fetches Spotify playlists sees their tracks matched and Waiting. Before all that, a query gets
-    HTTP 403 as many times as `YtmRefusals` says. `YtmQueries()` lists the
+    HTTP 403 as many times as `YtmRefusals` says, and an answer 5 s late as many times as `YtmDelays` says, which the
+    app's search gives up on. `YtmQueries()` lists the
     searches, and each waits for `YtmGate`, which the `sync` suite resets to look at the app while it matches and to
     cancel there. `Reset-Checks` empties both query lists (`ForgetQueries`), so a suite sees only its own.
   - The fake yt-dlp is a C# console program the script compiles (`lib/FakeYtDlp.cs`, with

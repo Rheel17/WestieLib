@@ -1,8 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <span>
 #include <stop_token>
 #include <string>
@@ -19,7 +21,10 @@ public:
     explicit WinHttpClient(const std::wstring& user_agent);
 
     std::string get(const std::string& url, const std::vector<HttpHeader>& headers, const std::stop_token& stop) override;
-    std::string post(const std::string& url, const std::vector<HttpHeader>& headers, const std::string& body, const std::stop_token& stop) override;
+    std::string post(
+            const std::string& url, const std::vector<HttpHeader>& headers, const std::string& body, std::chrono::milliseconds answer_timeout,
+            const std::stop_token& stop
+    ) override;
     void download(
             const std::string& url, const std::filesystem::path& file, const std::function<void(std::uint64_t received)>& progress, const std::stop_token& stop
     ) override;
@@ -28,6 +33,7 @@ private:
     struct Method {
         const wchar_t* verb = L"GET";
         std::string_view body{};
+        std::optional<std::chrono::milliseconds> answer_timeout{};
     };
 
     void request(

@@ -7,6 +7,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/matching/SearchTimeout.h"
 #include "platform/HttpClient.h"
 
 namespace westie::core {
@@ -20,6 +21,16 @@ struct SongResult {
     std::optional<bool> explicit_content{};
 };
 
-std::vector<SongResult> search_youtube_music_songs(platform::HttpClient& http, std::string_view api_url, std::string_view query, const std::stop_token& stop);
+class YouTubeMusicSearch {
+public:
+    YouTubeMusicSearch(platform::HttpClient& http, std::string api_url);
+
+    std::vector<SongResult> songs(std::string_view query, const std::stop_token& stop);
+
+private:
+    platform::HttpClient& http_;
+    std::string api_url_;
+    SearchTimeout timeout_;
+};
 
 }

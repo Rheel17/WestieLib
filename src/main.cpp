@@ -10,6 +10,7 @@
 #include "Version.h"
 #include "core/log/Log.h"
 #include "core/matching/CandidateSearch.h"
+#include "core/matching/YouTubeMusicSearch.h"
 #include "core/playlists/PlaylistLookup.h"
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
@@ -94,9 +95,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
             .api = service_url(L"WESTIELIB_SPOTIFY_API", "https://api-partner.spotify.com"),
         };
         westie::core::PlaylistLookup lookup(yt_dlp, http, spotify.web, events, log);
-        std::string youtube_music = service_url(L"WESTIELIB_YTMUSIC_API", "https://music.youtube.com");
+        // One for the sync and the Choose match dialog, which share the connection it calibrates its timeout on
+        westie::core::YouTubeMusicSearch youtube_music(http, service_url(L"WESTIELIB_YTMUSIC_API", "https://music.youtube.com"));
         westie::core::SyncEngine sync(yt_dlp, tool_folder, http, normalizer, spotify, youtube_music, state, events, log);
-        westie::core::CandidateSearch candidate_search(http, normalizer, youtube_music, state, events, log);
+        westie::core::CandidateSearch candidate_search(youtube_music, normalizer, state, events, log);
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;

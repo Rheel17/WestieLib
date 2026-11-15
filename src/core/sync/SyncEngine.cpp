@@ -36,7 +36,6 @@
 #include "core/sync/TracksToMatch.h"
 #include "core/tools/ToolMissing.h"
 #include "platform/Cancelled.h"
-#include "platform/HttpError.h"
 
 namespace westie::core {
 
@@ -74,14 +73,14 @@ std::string one_line(std::string_view text) {
 
 SyncEngine::SyncEngine(
         const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-        std::string youtube_music_api, StateStore& state, EventSink& events, Log& log
+        YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log
 ) :
         yt_dlp_(yt_dlp),
         tools_(tools),
         http_(http),
         spotify_(std::move(spotify)),
         normalizer_(normalizer),
-        matcher_(http, normalizer, std::move(youtube_music_api), log),
+        matcher_(youtube_music, normalizer, log),
         state_(state),
         events_(events),
         log_(log) {}
@@ -330,8 +329,8 @@ void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_to
         }
     } catch (const platform::Cancelled&) {
         return;
-    } catch (const platform::HttpError& error) {
-        if (!refused_search(error.status()) || tries >= MatchTries) {
+    } catch (const std::exception& error) {
+        if (!refused_search(error) || tries >= MatchTries) {
             fail_match(queued.track, TrackFailure::Search, error.what(), tries);
             return;
         }
@@ -339,8 +338,6 @@ void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_to
         queued.tries = tries;
         queued.not_before = std::chrono::steady_clock::now() + RetryDelay;
         queue.waiting.insert(queue.waiting.begin() + static_cast<std::ptrdiff_t>(std::min(RetryGap, queue.waiting.size())), std::move(queued));
-    } catch (const std::exception& error) {
-        fail_match(queued.track, TrackFailure::Search, error.what(), tries);
     }
 }
 

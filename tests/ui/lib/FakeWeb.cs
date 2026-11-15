@@ -5,7 +5,8 @@
 // items. Each query is logged in SpotifyQueries, the pages after the first wait for SpotifyPageGate, and SpotifyFailures
 // makes pages fail with HTTP 500.
 //
-// The search answers a query with HTTP 403 as many times as YtmRefusals says, then with the songs YtmResults lists for it,
+// The search answers a query 5 s late as many times as YtmDelays says, and with HTTP 403 as many times as YtmRefusals
+// says; then with the songs YtmResults lists for it,
 // HTTP 500 for YtmBrokenQueries, and otherwise, when
 // the query is "<artists> <title>" of a track that Track built, with that song as id "yt<track id>"; anything else
 // has no results. Each search is logged in YtmQueries and waits for YtmGate.
@@ -41,6 +42,8 @@ public class FakeWeb {
 	public readonly HashSet<string> YtmBrokenQueries = new HashSet<string>();
 	// How many more times a search for the query gets HTTP 403, as YouTube Music refuses a search now and then
 	public readonly Dictionary<string, int> YtmRefusals = new Dictionary<string, int>();
+	// How many more times a search for the query answers 5 s late, as YouTube Music takes that long to refuse one
+	public readonly Dictionary<string, int> YtmDelays = new Dictionary<string, int>();
 	// Every search waits for it, so a check can look at the app while it matches
 	public readonly ManualResetEvent YtmGate = new ManualResetEvent(true);
 	// The song each track Track built is found as, by "<artists> <title>"
@@ -211,6 +214,15 @@ public class FakeWeb {
 			status = 400;
 			return "";
 		}
+		bool late = false;
+		lock (YtmDelays) {
+			int delays;
+			if (YtmDelays.TryGetValue(query, out delays) && delays > 0) {
+				YtmDelays[query] = delays - 1;
+				late = true;
+			}
+		}
+		if (late) Thread.Sleep(5000);
 		lock (YtmRefusals) {
 			int refusals;
 			if (YtmRefusals.TryGetValue(query, out refusals) && refusals > 0) {

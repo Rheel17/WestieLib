@@ -431,7 +431,7 @@ every component that logs.
   | `Searching YouTube Music for "Taylor Swift Patient Zero"`, as a search starts | Debug |
   | `Searched "Taylor Swift Patient Zero": 20 results` (`1 result`, `no results`), as it ends | Debug |
   | `Best result for "Taylor Swift Patient Zero": "Patient Zero" by Taylor Swift (100%)`, the best ranked of that search's results, by the Matcher's ranking; left out without results | Debug |
-  | `YouTube Music refused the search for "…": HTTP 403 from music.youtube.com`, for HTTP 403 or 429, which the sync tries again (SyncEngine › So far) | Warning |
+  | `YouTube Music refused the search for "…": HTTP 403 from music.youtube.com`, for HTTP 403 or 429, or `No answer from music.youtube.com within 1200 ms` (the timeout it had), which the sync tries again (SyncEngine › So far) | Warning |
   | `Search for "…" failed: HTTP 500 from music.youtube.com`, for any other failure; the outcome line follows | Debug |
   | `Matched "Patient Zero" by Taylor Swift (100%)`, with `, and merged into the track with that YouTube Music id` after a merge | Info |
   | `Needs review: "Weekend Luv" by Quinn Lewis (75%), doubts: explicit` | Warning |
@@ -673,10 +673,14 @@ the Matcher:
    title without bracketed parts, a ` - ` suffix or a `feat.` tail (skipped when it is the same query). The Spotify
    fetch has no ISRC, so there is no ISRC query.
 2. **Search.** YouTube Music's own search, not yt-dlp: yt-dlp's flat search results carry only the id and
-   title, and extracting each candidate in full costs about 2 s. `search_youtube_music_songs`
+   title, and extracting each candidate in full costs about 2 s. `YouTubeMusicSearch::songs`
    (`src/core/matching/YouTubeMusicSearch`) sends `POST <api>/youtubei/v1/search?prettyPrint=false` with
    `context.client` (`WEB_REMIX`, a compiled-in `clientVersion`, `hl: en`), the query, and the songs filter's `params`.
-   One answer, about 0.5 to 1.7 s, holds some 20 songs. Each `musicResponsiveListItemRenderer` in a
+   One answer, about 0.4 to 1.2 s, holds some 20 songs. A refusal (HTTP 403) takes 5 s or more to arrive, so a
+   search without an answer in time throws `HttpTimeout` and counts as refused. The time is calibrated on the
+   connection (`SearchTimeout`): 4 s until 10 searches have answered, then twice the slowest of the last 50 answers,
+   from 1 s to 4 s. Three timeouts in a row, which refusals rarely make, start it again from 4 s. The sync and the
+   Choose match dialog share one `YouTubeMusicSearch`, so one calibration. Each `musicResponsiveListItemRenderer` in a
    `musicShelfRenderer` gives `playlistItemData.videoId`, the title (column 0's runs), and column 1's runs, which
    ` • ` splits into the artists (separated by `, ` and ` & ` runs), the album, and the length (`m:ss`). Its `badges`
    hold `MUSIC_EXPLICIT_BADGE` for an explicit song. An answer without a shelf has no results. `WESTIELIB_YTMUSIC_API`
@@ -782,7 +786,8 @@ the Matcher:
     - Reject, or no results: the track fails with `failure: noMatch` and the searched queries in `error`. A search
       that fails (no network, an HTTP error) fails the track with `failure: search` and the reason in `error`. Either
       way the next sync tries again. YouTube Music answers some searches with HTTP 403 (or 429) now and then, while
-      the ones around them go through, so a sync tries those again first (SyncEngine › So far).
+      the ones around them go through, so a sync tries those again first (SyncEngine › So far), and those that get no
+      answer in time too.
 
 `Matcher` (`src/core/matching/`) runs the queries. `MatchWords`, `TitleParts`, `Credits`, `NameMatch`, `SongFacts`,
 `MatchEvidence`, `MatchJudgement` and `MatchRank` are pure logic, which the unit checks hold against real cases
@@ -814,7 +819,7 @@ release, playlists are added again to match their tracks anew.
 `CandidateSearch` (`src/core/matching/CandidateSearch`) runs it on its own worker thread, outside any sync run; a new search
 stops the one before, and a stopped one answers nothing. It answers with `CandidateSearchResults`: the request's number,
 the candidates, and the error of a search that failed. Searching needs no tool: it is the Matcher's own search
-(`search_youtube_music_songs`), for the query, or without one for each of the Matcher's queries (`match_queries`,
+(`YouTubeMusicSearch::songs`), for the query, or without one for each of the Matcher's queries (`match_queries`,
 `src/core/matching/MatchQueries`).
 
 `match_candidates` (`src/core/matching/MatchCandidates`) makes the list from a fresh snapshot, each id once, by
@@ -990,7 +995,7 @@ downloads yet.
   - A failed match stores `failed` with `noMatch` or `search` and the error, and emits `TrackStatusChanged`.
   - A track that no longer needs a match by its turn (merged, or gone with its playlist) is skipped, with a
     `TrackStatusChanged` so the UI's counts still end it.
-  - A search that YouTube Music answers with HTTP 403 or 429 doesn't fail the track at once. It goes back into the queue
+  - A search that YouTube Music answers with HTTP 403 or 429, or doesn't answer in time (Matcher › Search), doesn't fail the track at once. It goes back into the queue
     10 tracks further on (`RetryGap`), or last when fewer are left, and waits at least 10 s (`RetryDelay`) from then;
     nothing is stored and no event is sent. The tracks in between go ahead. When only waiting tracks are left, the run
     sleeps until the first is due; a playlist queued meanwhile, or a cancel, ends the sleep. A track is tried 4 times

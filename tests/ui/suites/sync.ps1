@@ -1030,20 +1030,22 @@ Check 'Synced again: matches aren''t searched again' "[$(Get-YtmQueriesSince $se
 Stop-App $app
 
 "--- Run 8: refused searches"
-# A Spotify playlist with a song whose search YouTube Music refuses once, one whose search it keeps refusing, and three
-# more. The refused ones wait while the others go ahead: the first matches on its second try, the second fails after its
-# fourth.
+# A Spotify playlist with a song whose search YouTube Music refuses once, one whose search it keeps refusing, one whose
+# search answers too late once, and three more. The refused ones wait while the others go ahead: the first and the late
+# one match on their second try, the second fails after its fourth.
 $RefusedId = '7refusedrefusedrefused'
 $Web.SpotifyNames[$RefusedId] = 'Refused'
 $Web.SpotifyItems[$RefusedId] = [Collections.Generic.List[string]]@(
 	[FakeWeb]::Track('spRefusedOnce000000001', 'Once', @('Rae'), 'Once', 200000),
 	[FakeWeb]::Track('spRefusedAlways0000002', 'Always', @('Rae'), 'Always', 200000),
+	[FakeWeb]::Track('spRefusedSlow000000006', 'Slow', @('Rae'), 'Slow', 200000),
 	[FakeWeb]::Track('spRefusedAfter10000003', 'After One', @('Rae'), 'After', 200000),
 	[FakeWeb]::Track('spRefusedAfter20000004', 'After Two', @('Rae'), 'After', 200000),
 	[FakeWeb]::Track('spRefusedAfter30000005', 'After Three', @('Rae'), 'After', 200000)
 )
 $Web.YtmRefusals['Rae Once'] = 1
 $Web.YtmRefusals['Rae Always'] = 99
+$Web.YtmDelays['Rae Slow'] = 1
 Write-SyncPlaylists "spotify:$RefusedId"
 Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
 $app = Start-App
@@ -1057,10 +1059,11 @@ for ($i = 0; $i -lt 150 -and (Get-SpotifyQueries) -le $queries; $i++) { Start-Sl
 for ($i = 0; $i -lt 600 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
 $seconds = ((Get-Date) - $started).TotalSeconds
 Check 'Refused searches: the others go first, then the refused ones again' (Get-YtmQueriesSince $searches) (
-	'Rae Once / Rae Always / Rae After One / Rae After Two / Rae After Three / Rae Once / Rae Always / Rae Always / Rae Always')
+	'Rae Once / Rae Always / Rae Slow / Rae After One / Rae After Two / Rae After Three / Rae Once / Rae Always / Rae Slow / Rae Always / Rae Always')
 Check-That '  three waits of 10 s' "$([math]::Round($seconds)) s" ($seconds -ge 30 -and $seconds -lt 45) '30-45 s'
-Check '  refused once: matched like the others' (Get-SavedMatches) ('spRefusedAfter10000003 ytspRefusedAfter10000003 1 / ' +
-	'spRefusedAfter20000004 ytspRefusedAfter20000004 1 / spRefusedAfter30000005 ytspRefusedAfter30000005 1 / spRefusedOnce000000001 ytspRefusedOnce000000001 1')
+Check '  refused once, or late once: matched like the others' (Get-SavedMatches) ('spRefusedAfter10000003 ytspRefusedAfter10000003 1 / ' +
+	'spRefusedAfter20000004 ytspRefusedAfter20000004 1 / spRefusedAfter30000005 ytspRefusedAfter30000005 1 / spRefusedOnce000000001 ytspRefusedOnce000000001 1 / ' +
+	'spRefusedSlow000000006 ytspRefusedSlow000000006 1')
 Check '  refused four times: failed' (Get-SavedFailures) 'spRefusedAlways0000002 search [HTTP 403 from 127.0.0.1]'
 $RefusedOnce = 'Once; track spotify:spRefusedOnce000000001'
 $RefusedAlways = 'Always; track spotify:spRefusedAlways0000002'
@@ -1072,4 +1075,11 @@ Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-
 	"T DEBUG   Best result for `"Rae Once`": `"Once`" by Rae (100%) [$RefusedOnce] / T INFO    Matched `"Once`" by Rae (100%) [$RefusedOnce] / " +
 	(@(1..3 | ForEach-Object { "T DEBUG   Searching YouTube Music for `"Rae Always`" [$RefusedAlways] / T WARNING YouTube Music refused the search for `"Rae Always`": $Refusal [$RefusedAlways] / " }) -join '') +
 	"T ERROR   Couldn't search YouTube Music: $Refusal (tried 4 times) [$RefusedAlways]")
+$RefusedSlow = 'Slow; track spotify:spRefusedSlow000000006'
+# Before ten answers, the search waits 4 s
+Check '  log: a late answer given up on as a refusal' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefusedSlow' }) -join ' / ') (
+	"T DEBUG   Searching YouTube Music for `"Rae Slow`" [$RefusedSlow] / " +
+	"T WARNING YouTube Music refused the search for `"Rae Slow`": No answer from 127.0.0.1 within 4000 ms [$RefusedSlow] / " +
+	"T DEBUG   Searching YouTube Music for `"Rae Slow`" [$RefusedSlow] / T DEBUG   Searched `"Rae Slow`": 1 result [$RefusedSlow] / " +
+	"T DEBUG   Best result for `"Rae Slow`": `"Slow`" by Rae (100%) [$RefusedSlow] / T INFO    Matched `"Slow`" by Rae (100%) [$RefusedSlow]")
 Stop-App $app

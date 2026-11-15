@@ -13,15 +13,14 @@
 #include "core/matching/MatchCandidates.h"
 #include "core/matching/MatchQueries.h"
 #include "core/matching/SearchLogText.h"
-#include "core/matching/YouTubeMusicSearch.h"
 #include "platform/Cancelled.h"
 
 namespace westie::core {
 
 CandidateSearch::CandidateSearch(
-        platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, const StateStore& state, EventSink& events, Log& log
+        YouTubeMusicSearch& search, const platform::TextNormalizer& normalizer, const StateStore& state, EventSink& events, Log& log
 ) :
-        http_(http), normalizer_(normalizer), api_url_(std::move(api_url)), state_(state), events_(events), log_(log) {}
+        search_(search), normalizer_(normalizer), state_(state), events_(events), log_(log) {}
 
 int CandidateSearch::search(std::string source_key, std::optional<std::string> query) {
     int request = ++requests_;
@@ -52,7 +51,7 @@ void CandidateSearch::work(const std::stop_token& stop, int request, const std::
         }
         for (const std::string& searched : queries) {
             log_.write(LogLevel::Debug, search_started_text(searched), subject);
-            std::vector<SongResult> found = search_youtube_music_songs(http_, api_url_, searched, stop);
+            std::vector<SongResult> found = search_.songs(searched, stop);
             log_.write(LogLevel::Debug, search_finished_text(searched, found.size()), subject);
             results.insert(results.end(), std::make_move_iterator(found.begin()), std::make_move_iterator(found.end()));
         }

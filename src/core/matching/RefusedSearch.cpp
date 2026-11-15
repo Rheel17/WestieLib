@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <array>
 
+#include "platform/HttpError.h"
+#include "platform/HttpTimeout.h"
+
 namespace westie::core {
 
 namespace {
@@ -12,8 +15,12 @@ constexpr std::array RefusedStatuses = {403, 429};
 
 }
 
-bool refused_search(int status) noexcept {
-    return std::ranges::contains(RefusedStatuses, status);
+bool refused_search(const std::exception& error) noexcept {
+    if (dynamic_cast<const platform::HttpTimeout*>(&error)) {
+        return true;
+    }
+    auto http_error = dynamic_cast<const platform::HttpError*>(&error);
+    return http_error && std::ranges::contains(RefusedStatuses, http_error->status());
 }
 
 }

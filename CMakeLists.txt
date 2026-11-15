@@ -26,7 +26,7 @@ FetchContent_Declare(miniz
 	SYSTEM)
 FetchContent_MakeAvailable(miniz)
 
-# The Matcher's rules, the log's texts and what they use, which the unit checks build as well
+# The Matcher's rules, the search's timeout, the log's texts and what they use, which the unit checks build as well
 set(MATCHING_SOURCES
 	src/core/log/LogText.cpp
 	src/core/matching/Credits.cpp
@@ -37,6 +37,7 @@ set(MATCHING_SOURCES
 	src/core/matching/MatchWords.cpp
 	src/core/matching/NameMatch.cpp
 	src/core/matching/SearchLogText.cpp
+	src/core/matching/SearchTimeout.cpp
 	src/core/matching/SongFacts.cpp
 	src/core/matching/TitleParts.cpp
 	src/platform/win32/Utf16.cpp
@@ -273,6 +274,7 @@ add_executable(WestieLibTests
 	tests/unit/MatchWordsChecks.cpp
 	tests/unit/NameChecks.cpp
 	tests/unit/RunPhaseChecks.cpp
+	tests/unit/SearchTimeoutChecks.cpp
 	tests/unit/TitlePartsChecks.cpp
 	${MATCHING_SOURCES}
 	# The update's phases, as the playlist rows show them
