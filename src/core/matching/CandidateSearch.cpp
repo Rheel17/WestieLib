@@ -9,9 +9,10 @@
 
 #include "core/log/LogLevel.h"
 #include "core/log/LogSubject.h"
-#include "core/matching/MatchQueries.h"
-#include "core/matching/MatchCandidates.h"
 #include "core/matching/CandidateSearchResults.h"
+#include "core/matching/MatchCandidates.h"
+#include "core/matching/MatchQueries.h"
+#include "core/matching/SearchLogText.h"
 #include "core/matching/YouTubeMusicSearch.h"
 #include "platform/Cancelled.h"
 
@@ -50,8 +51,9 @@ void CandidateSearch::work(const std::stop_token& stop, int request, const std::
             queries.push_back(*query);
         }
         for (const std::string& searched : queries) {
+            log_.write(LogLevel::Debug, search_started_text(searched), subject);
             std::vector<SongResult> found = search_youtube_music_songs(http_, api_url_, searched, stop);
-            log_.write(LogLevel::Debug, std::format("Searched YouTube Music for \"{}\": {} results", searched, found.size()), subject);
+            log_.write(LogLevel::Debug, search_finished_text(searched, found.size()), subject);
             results.insert(results.end(), std::make_move_iterator(found.begin()), std::make_move_iterator(found.end()));
         }
     } catch (const platform::Cancelled&) {

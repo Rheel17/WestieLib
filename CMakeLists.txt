@@ -36,6 +36,7 @@ set(MATCHING_SOURCES
 	src/core/matching/MatchText.cpp
 	src/core/matching/MatchWords.cpp
 	src/core/matching/NameMatch.cpp
+	src/core/matching/SearchLogText.cpp
 	src/core/matching/SongFacts.cpp
 	src/core/matching/TitleParts.cpp
 	src/platform/win32/Utf16.cpp
@@ -52,15 +53,16 @@ add_executable(WestieLib WIN32
 	src/core/json/Utf8Path.cpp
 	src/core/log/Log.cpp
 	src/core/log/LogSubject.cpp
+	src/core/matching/CandidateSearch.cpp
 	src/core/matching/ConfirmMatch.cpp
 	src/core/matching/LibraryMatches.cpp
+	src/core/matching/MatchCandidates.cpp
 	src/core/matching/MatchQueries.cpp
 	src/core/matching/Matcher.cpp
-	src/core/matching/MatchCandidates.cpp
+	src/core/matching/RefusedSearch.cpp
 	src/core/matching/YouTubeMusicLink.cpp
-	src/core/matching/YtmOverride.cpp
-	src/core/matching/CandidateSearch.cpp
 	src/core/matching/YouTubeMusicSearch.cpp
+	src/core/matching/YtmOverride.cpp
 	src/core/playlists/AddPlaylist.cpp
 	src/core/playlists/PlaylistLink.cpp
 	src/core/playlists/PlaylistLookup.cpp
@@ -127,19 +129,19 @@ add_executable(WestieLib WIN32
 	src/ui/commands/CommandState.cpp
 	src/ui/dialogs/AboutDialog.cpp
 	src/ui/dialogs/AddPlaylistDialog.cpp
+	src/ui/dialogs/CandidateListView.cpp
 	src/ui/dialogs/ChooseMatchDialog.cpp
 	src/ui/dialogs/FolderPicker.cpp
 	src/ui/dialogs/LinkLine.cpp
 	src/ui/dialogs/LinkLinePainter.cpp
 	src/ui/dialogs/LinkLookup.cpp
+	src/ui/dialogs/MatchChoice.cpp
 	src/ui/dialogs/PlayButton.cpp
 	src/ui/dialogs/PlaylistLinkCheck.cpp
 	src/ui/dialogs/RemovePlaylistDialog.cpp
 	src/ui/dialogs/RowPlayButtons.cpp
 	src/ui/dialogs/SettingsDialog.cpp
 	src/ui/dialogs/ToolListView.cpp
-	src/ui/dialogs/MatchChoice.cpp
-	src/ui/dialogs/CandidateListView.cpp
 	src/ui/events/CoreEventQueue.cpp
 	src/ui/framework/AcceleratorTable.cpp
 	src/ui/framework/Animation.cpp

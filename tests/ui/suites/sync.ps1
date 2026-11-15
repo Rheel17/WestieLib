@@ -272,9 +272,13 @@ Check '  a successful one: only the size of its output' ((Get-LogToolRun 'PLtrac
 	'    exit code 0 / ' +
 	'    stdout: N bytes')
 Check '  the three runs at Debug too' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp *: exit code *' }).Count) 3
-Check '  each search at Debug, with its best result' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   Searched *' }) -join ' / ') (
-	'T DEBUG   Searched "Ana Ben Late Night Swing": 1 result, best "Late Night Swing" by Ana, Ben (100%) [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
-	"T DEBUG   Searched `"Earth, Wind & Fire $Senorita`": 1 result, best `"$Senorita`" by Earth, Wind & Fire (100%) [$Senorita; track spotify:spTrackSenorita0000002]")
+Check '  each search at Debug: it starts, it ends, its best result' (@(Get-LogLines | Where-Object { $_ -match '^T DEBUG   (Searching|Searched|Best result)' }) -join ' / ') (
+	'T DEBUG   Searching YouTube Music for "Ana Ben Late Night Swing" [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
+	'T DEBUG   Searched "Ana Ben Late Night Swing": 1 result [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
+	'T DEBUG   Best result for "Ana Ben Late Night Swing": "Late Night Swing" by Ana, Ben (100%) [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
+	"T DEBUG   Searching YouTube Music for `"Earth, Wind & Fire $Senorita`" [$Senorita; track spotify:spTrackSenorita0000002] / " +
+	"T DEBUG   Searched `"Earth, Wind & Fire $Senorita`": 1 result [$Senorita; track spotify:spTrackSenorita0000002] / " +
+	"T DEBUG   Best result for `"Earth, Wind & Fire $Senorita`": `"$Senorita`" by Earth, Wind & Fire (100%) [$Senorita; track spotify:spTrackSenorita0000002]")
 
 # The log pane has the same lines, from Info up; the error in red
 $FetchedRows = "T | Info | $TracksName | Fetched 4 tracks / T | Info | $SpotifyName | Fetched 2 tracks / T | Info | $SharedName | Fetched 2 tracks"
@@ -1058,13 +1062,14 @@ Check-That '  three waits of 10 s' "$([math]::Round($seconds)) s" ($seconds -ge 
 Check '  refused once: matched like the others' (Get-SavedMatches) ('spRefusedAfter10000003 ytspRefusedAfter10000003 1 / ' +
 	'spRefusedAfter20000004 ytspRefusedAfter20000004 1 / spRefusedAfter30000005 ytspRefusedAfter30000005 1 / spRefusedOnce000000001 ytspRefusedOnce000000001 1')
 Check '  refused four times: failed' (Get-SavedFailures) 'spRefusedAlways0000002 search [HTTP 403 from 127.0.0.1]'
-Check '  log: one line for each, the tries at Debug' (@(Get-LogLines | Where-Object { $_ -match '^T (DEBUG|INFO|ERROR) .*track spotify:spRefused(Once|Always)' }) -join ' / ') (
-	'T DEBUG   Searched "Rae Once": HTTP 403 from 127.0.0.1 [Once; track spotify:spRefusedOnce000000001] / ' +
-	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
-	'T DEBUG   Searched "Rae Once": 1 result, best "Once" by Rae (100%) [Once; track spotify:spRefusedOnce000000001] / ' +
-	'T INFO    Matched "Once" by Rae (100%) [Once; track spotify:spRefusedOnce000000001] / ' +
-	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
-	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
-	'T DEBUG   Searched "Rae Always": HTTP 403 from 127.0.0.1 [Always; track spotify:spRefusedAlways0000002] / ' +
-	"T ERROR   Couldn't search YouTube Music: HTTP 403 from 127.0.0.1 (tried 4 times) [Always; track spotify:spRefusedAlways0000002]")
+$RefusedOnce = 'Once; track spotify:spRefusedOnce000000001'
+$RefusedAlways = 'Always; track spotify:spRefusedAlways0000002'
+$Refusal = 'HTTP 403 from 127.0.0.1'
+Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefused(Once|Always)' }) -join ' / ') (
+	"T DEBUG   Searching YouTube Music for `"Rae Once`" [$RefusedOnce] / T WARNING YouTube Music refused the search for `"Rae Once`": $Refusal [$RefusedOnce] / " +
+	"T DEBUG   Searching YouTube Music for `"Rae Always`" [$RefusedAlways] / T WARNING YouTube Music refused the search for `"Rae Always`": $Refusal [$RefusedAlways] / " +
+	"T DEBUG   Searching YouTube Music for `"Rae Once`" [$RefusedOnce] / T DEBUG   Searched `"Rae Once`": 1 result [$RefusedOnce] / " +
+	"T DEBUG   Best result for `"Rae Once`": `"Once`" by Rae (100%) [$RefusedOnce] / T INFO    Matched `"Once`" by Rae (100%) [$RefusedOnce] / " +
+	(@(1..3 | ForEach-Object { "T DEBUG   Searching YouTube Music for `"Rae Always`" [$RefusedAlways] / T WARNING YouTube Music refused the search for `"Rae Always`": $Refusal [$RefusedAlways] / " }) -join '') +
+	"T ERROR   Couldn't search YouTube Music: $Refusal (tried 4 times) [$RefusedAlways]")
 Stop-App $app

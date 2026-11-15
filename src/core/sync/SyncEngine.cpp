@@ -1,7 +1,6 @@
 #include "core/sync/SyncEngine.h"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +15,7 @@
 #include "core/log/LogLevel.h"
 #include "core/matching/LibraryMatches.h"
 #include "core/matching/MatchText.h"
+#include "core/matching/RefusedSearch.h"
 #include "core/sources/SourceType.h"
 #include "core/sources/SpotifyPlaylist.h"
 #include "core/sources/YouTubeMusicPlaylist.h"
@@ -42,8 +42,6 @@ namespace westie::core {
 
 namespace {
 
-// What YouTube Music answers a search it won't serve right now: Forbidden, Too Many Requests
-constexpr std::array RefusedStatuses = {403, 429};
 constexpr int MatchTries = 4;
 // How many tracks a refused one lets go first, and how long it waits at least
 constexpr std::size_t RetryGap = 10;
@@ -333,7 +331,7 @@ void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_to
     } catch (const platform::Cancelled&) {
         return;
     } catch (const platform::HttpError& error) {
-        if (!std::ranges::contains(RefusedStatuses, error.status()) || tries >= MatchTries) {
+        if (!refused_search(error.status()) || tries >= MatchTries) {
             fail_match(queued.track, TrackFailure::Search, error.what(), tries);
             return;
         }

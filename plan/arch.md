@@ -419,15 +419,20 @@ every component that logs.
   success only its size is written, as yt-dlp's JSON answers run to megabytes. A Debug line gives the command line and
   the exit code in the pane.
 - So far it logs the sync (started, each fetch, the end), the tools (installed, updated, failed), the playlist
-  look-up, the Choose a match dialog's searches (at Debug, failures as warnings), and the commands that change the
+  look-up, the Choose a match dialog's searches (started and finished at Debug, as below; a failure as a warning), and
+  the commands that change the
   state from the UI (a playlist added or removed, a match confirmed, a match chosen). A merge that sends no
   `TracksMerged` writes its line about the track that is left.
-- A sync's match writes one Debug line per search, and one line for how the track ended, without the searches. A line
-  states what happened; it never tells the user what to do.
+- A sync's match writes three Debug lines per search (it started, it finished, its best result), and one line for how
+  the track ended, without the searches. A line states what happened; it never tells the user what to do.
 
   | Line | Level |
   |------|-------|
-  | `Searched "Taylor Swift Patient Zero": 20 results, best "Patient Zero" by Taylor Swift (100%)`, `Searched "…": no results`, or `Searched "…": HTTP 403 from music.youtube.com` | Debug |
+  | `Searching YouTube Music for "Taylor Swift Patient Zero"`, as a search starts | Debug |
+  | `Searched "Taylor Swift Patient Zero": 20 results` (`1 result`, `no results`), as it ends | Debug |
+  | `Best result for "Taylor Swift Patient Zero": "Patient Zero" by Taylor Swift (100%)`, the best ranked of that search's results, by the Matcher's ranking; left out without results | Debug |
+  | `YouTube Music refused the search for "…": HTTP 403 from music.youtube.com`, for HTTP 403 or 429, which the sync tries again (SyncEngine › So far) | Warning |
+  | `Search for "…" failed: HTTP 500 from music.youtube.com`, for any other failure; the outcome line follows | Debug |
   | `Matched "Patient Zero" by Taylor Swift (100%)`, with `, and merged into the track with that YouTube Music id` after a merge | Info |
   | `Needs review: "Weekend Luv" by Quinn Lewis (75%), doubts: explicit` | Warning |
   | `No match found` | Error |

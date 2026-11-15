@@ -12,10 +12,12 @@
 #include "core/matching/MatchJudgement.h"
 #include "core/matching/MatchQueries.h"
 #include "core/matching/MatchRank.h"
-#include "core/matching/MatchText.h"
+#include "core/matching/RefusedSearch.h"
+#include "core/matching/SearchLogText.h"
 #include "core/matching/SongFacts.h"
 #include "core/matching/YouTubeMusicSearch.h"
 #include "platform/Cancelled.h"
+#include "platform/HttpError.h"
 
 namespace westie::core {
 
@@ -38,18 +40,6 @@ std::string joined(const std::vector<std::string>& parts, std::string_view separ
     return text;
 }
 
-// What one search found, for the log: how many, and the best of them, which the pool may have from an earlier search
-std::string search_text(std::string_view query, const std::vector<Candidate>& pool, const std::vector<std::size_t>& found) {
-    if (found.empty()) {
-        return std::format("Searched \"{}\": no results", query);
-    }
-    const Candidate& best = pool[*std::ranges::max_element(found, {}, [&](std::size_t index) { return pool[index].rank; })];
-    return std::format(
-            "Searched \"{}\": {} result{}, best {}", query, found.size(), found.size() == 1 ? "" : "s",
-            result_text(best.song.title, best.song.artists, best.judgement.confidence)
-    );
-}
-
 }
 
 Matcher::Matcher(platform::HttpClient& http, const platform::TextNormalizer& normalizer, std::string api_url, Log& log) :
@@ -63,13 +53,18 @@ std::expected<Match, std::string> Matcher::match(
     std::vector<Candidate> pool;
     std::vector<std::string> searched;
     for (const std::string& query : match_queries(source)) {
+        log_.write(LogLevel::Debug, search_started_text(query), subject);
         std::vector<SongResult> results;
         try {
             results = search_youtube_music_songs(http_, api_url_, query, stop);
         } catch (const platform::Cancelled&) {
             throw;
+        } catch (const platform::HttpError& error) {
+            bool refused = refused_search(error.status());
+            log_.write(refused ? LogLevel::Warning : LogLevel::Debug, search_failed_text(query, error.what(), refused), subject);
+            throw;
         } catch (const std::exception& error) {
-            log_.write(LogLevel::Debug, std::format("Searched \"{}\": {}", query, error.what()), subject);
+            log_.write(LogLevel::Debug, search_failed_text(query, error.what(), false), subject);
             throw;
         }
         bool accepted = false;
@@ -88,7 +83,12 @@ std::expected<Match, std::string> Matcher::match(
             pool.push_back({.song = std::move(result), .judgement = std::move(judgement), .rank = rank});
             found.push_back(pool.size() - 1);
         }
-        log_.write(LogLevel::Debug, search_text(query, pool, found), subject);
+        log_.write(LogLevel::Debug, search_finished_text(query, results.size()), subject);
+        // The pool may have this search's best from an earlier one
+        if (!found.empty()) {
+            const Candidate& best = pool[*std::ranges::max_element(found, {}, [&](std::size_t index) { return pool[index].rank; })];
+            log_.write(LogLevel::Debug, best_result_text(query, best.song.title, best.song.artists, best.judgement.confidence), subject);
+        }
         searched.push_back(std::format("Searched \"{}\": {}", query, results.empty() ? "no results" : "no usable results"));
         if (accepted) {
             break;

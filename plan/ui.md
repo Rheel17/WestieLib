@@ -665,9 +665,9 @@ edge.
 
   | Level   | Lines                                                                                       |
   |---------|---------------------------------------------------------------------------------------------|
-  | Debug   | details for finding a fault: each yt-dlp run and its exit code, each search with its result count and best result |
+  | Debug   | details for finding a fault: each yt-dlp run and its exit code, each search as it starts and ends, with its result count, and its best result |
   | Info    | what the app did: an update started and finished, a playlist synced, a track matched, a tool installed, a playlist added. Lines state what happened, never what to do |
-  | Warning | something the user may want to look at: a match that needs review, a fetch that waits for a tool |
+  | Warning | something the user may want to look at: a match that needs review, a fetch that waits for a tool, a search YouTube Music refused |
   | Error   | something that failed: a fetch, a match, a tool install, saving the state                    |
 
 - **Scope** is three flat buttons, `All │ Selected playlist │ Selected track`, drawn like the status filter's (see

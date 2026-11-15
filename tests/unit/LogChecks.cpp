@@ -9,6 +9,7 @@
 #include "UnitChecks.h"
 #include "core/log/LogText.h"
 #include "core/matching/MatchText.h"
+#include "core/matching/SearchLogText.h"
 
 namespace westie::tests {
 
@@ -88,6 +89,19 @@ void check_match_texts() {
     check_text(core::doubts_text({core::MatchDoubt::Version, core::MatchDoubt::Length}), "doubts: version, length");
 }
 
+void check_search_texts() {
+    check_text(core::search_started_text("Taylor Swift Patient Zero"), "Searching YouTube Music for \"Taylor Swift Patient Zero\"");
+    check_text(core::search_finished_text("Rae Once", 0), "Searched \"Rae Once\": no results");
+    check_text(core::search_finished_text("Rae Once", 1), "Searched \"Rae Once\": 1 result");
+    check_text(core::search_finished_text("Rae Once", 20), "Searched \"Rae Once\": 20 results");
+    check_text(core::best_result_text("Rae Once", "Once", {"Rae"}, 1.0), "Best result for \"Rae Once\": \"Once\" by Rae (100%)");
+    check_text(
+            core::search_failed_text("Rae Once", "HTTP 403 from music.youtube.com", true),
+            "YouTube Music refused the search for \"Rae Once\": HTTP 403 from music.youtube.com"
+    );
+    check_text(core::search_failed_text("Rae Once", "HTTP 500 from music.youtube.com", false), "Search for \"Rae Once\" failed: HTTP 500 from music.youtube.com");
+}
+
 }
 
 void check_log_texts() {
@@ -95,6 +109,7 @@ void check_log_texts() {
     check_file_lines();
     check_tool_runs();
     check_match_texts();
+    check_search_texts();
 }
 
 }
