@@ -25,7 +25,10 @@ file names such as `Win32Error.cpp`.
 - `WestieLibTests` is a console program (`main`, no `-municode`) from `tests/unit/` and `MATCHING_SOURCES`, with the
   same definitions and warnings, linked statically with `normaliz`.
 - Include roots: `src/` (so `#include "ui/framework/Window.h"`), `res/`, and `<build>/generated/`.
-- Definitions: `UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00` (Windows 10).
+- Definitions: `UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00` (Windows 10),
+  and `_GLIBCXX_ASSERTIONS` in every build type. libstdc++ turns its precondition checks (`std::clamp`'s bounds,
+  `operator[]`'s index) on by itself only without optimization, so a Release build would hide a broken call from the
+  UI checks. A failed check prints the assertion and aborts.
 - `-municode` (entry point `wWinMain`), `-static`, WIN32 subsystem.
 - Links `comctl32` (TaskDialog and the common controls) and `uxtheme` (the menu bar's drawing). The manifest selects
   ComCtl32 v6, which `TaskDialogIndirect` needs. MinGW's `uxtheme` import library has no `OpenThemeDataForDpi`, so

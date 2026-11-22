@@ -930,6 +930,13 @@ Send-Command $h 'Update &all'
 for ($i = 0; $i -lt 100 -and @($Web.YtmQueries()).Count -le $searches; $i++) { Start-Sleep -Milliseconds 100 }
 Check 'A search held: syncing' (Test-Syncing $h) 'True'
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-matching.png") }
+# Minimized, the panels are 0x0 while the row's sync icon goes on spinning
+[void][W]::ShowWindow($h, 6)
+$exited = $app.Process.WaitForExit(1000)
+[void][W]::ShowWindow($h, 9)
+$exited = $exited -or $app.Process.WaitForExit(500)
+Check '  minimized and restored: the app keeps running' $exited 'False'
+Check '  still syncing' (Test-Syncing $h) 'True'
 Send-Command $h '&Cancel'
 for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
 [void]$Web.YtmGate.Set()

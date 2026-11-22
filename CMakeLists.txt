@@ -45,6 +45,9 @@ set(MATCHING_SOURCES
 	src/platform/win32/Win32TextNormalizer.cpp
 )
 set(WINDOWS_DEFINITIONS UNICODE _UNICODE STRICT WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+# libstdc++ checks preconditions such as std::clamp's bounds only in unoptimized builds unless asked, and the UI checks
+# should catch a broken one whatever the build type
+set(LIBSTDCXX_DEFINITIONS _GLIBCXX_ASSERTIONS)
 
 add_executable(WestieLib WIN32
 	src/main.cpp
@@ -260,7 +263,7 @@ set_source_files_properties(res/WestieLib.rc PROPERTIES OBJECT_DEPENDS
 # windres also searches these directories for the files named in the .rc
 target_include_directories(WestieLib PRIVATE src res "${GENERATED_DIR}")
 
-target_compile_definitions(WestieLib PRIVATE ${WINDOWS_DEFINITIONS})
+target_compile_definitions(WestieLib PRIVATE ${WINDOWS_DEFINITIONS} ${LIBSTDCXX_DEFINITIONS})
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
 target_link_libraries(WestieLib PRIVATE glaze::glaze miniz comctl32 uxtheme gdiplus shell32 ole32 uuid winhttp bcrypt normaliz)
@@ -286,7 +289,7 @@ add_executable(WestieLibTests
 	src/ui/sync/WaitingText.cpp
 )
 target_include_directories(WestieLibTests PRIVATE src)
-target_compile_definitions(WestieLibTests PRIVATE ${WINDOWS_DEFINITIONS})
+target_compile_definitions(WestieLibTests PRIVATE ${WINDOWS_DEFINITIONS} ${LIBSTDCXX_DEFINITIONS})
 target_compile_options(WestieLibTests PRIVATE -Wall -Wextra)
 target_link_options(WestieLibTests PRIVATE -static)
 target_link_libraries(WestieLibTests PRIVATE normaliz)
