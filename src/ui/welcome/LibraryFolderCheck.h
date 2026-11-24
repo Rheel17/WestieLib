@@ -8,9 +8,11 @@
 
 namespace westie::ui {
 
-enum class FolderHint { None, NotFullPath, NoSuchDrive, NotAFolder, WillBeCreated };
+enum class FolderHint { None, NotFullPath, EndsInSpaceOrPeriod, ReservedName, NoSuchDrive, NotAFolder, WillBeCreated };
 
-constexpr std::array ShownFolderHints = {FolderHint::NotFullPath, FolderHint::NoSuchDrive, FolderHint::NotAFolder, FolderHint::WillBeCreated};
+constexpr std::array ShownFolderHints = {
+    FolderHint::NotFullPath, FolderHint::EndsInSpaceOrPeriod, FolderHint::ReservedName, FolderHint::NoSuchDrive, FolderHint::NotAFolder, FolderHint::WillBeCreated
+};
 
 struct LibraryFolderCheck {
     std::optional<std::filesystem::path> folder{};

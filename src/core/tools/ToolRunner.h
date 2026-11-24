@@ -1,5 +1,6 @@
 #pragma once
 
+#include <span>
 #include <stop_token>
 #include <string>
 #include <vector>
@@ -18,6 +19,11 @@ public:
 
     platform::ProcessResult run(
             ToolPackage package, const std::vector<std::string>& arguments, const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
+    ) const;
+    // For a tool that runs the others in turn, which must stay in place while it runs
+    platform::ProcessResult run(
+            ToolPackage package, std::span<const ToolPackage> also_uses, const std::vector<std::string>& arguments,
+            const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
     ) const;
 
 private:

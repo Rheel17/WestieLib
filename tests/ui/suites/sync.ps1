@@ -71,7 +71,7 @@ function Get-YtmQueriesSince([int]$count) { @($Web.YtmQueries() | Select-Object 
 
 function Get-FetchRuns {
 	if (-not (Test-Path $FakeYtDlpRuns)) { return 0 }
-	@(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Where-Object { $_ -notlike '*--playlist-items*' }).Count
+	@(Get-YtDlpRuns | Where-Object { $_ -notlike '*--playlist-items*' }).Count
 }
 
 function Get-SpotifyQueries { @($Web.SpotifyQueries()).Count }
@@ -92,13 +92,13 @@ function Get-BigPlaylist {
 
 function New-BigTrack([int]$n) { [FakeWeb]::Track("spBigTrack$('{0:D12}' -f $n)", "Big Song $('{0:D3}' -f $n)", @('Many'), 'Big', 60000) }
 
-# Waits until $count fetches more than $before have started, and then for the sync to end. yt-dlp logs a fetch only
-# after the sync was queued, so by then the window knows a sync is going. With -Spotify, it counts FakeWeb's Spotify
-# queries instead, which come after the sync was queued too.
+# Waits until $count fetches more than $before have started, and then for the sync to end, downloads and all. yt-dlp
+# logs a fetch only after the sync was queued, so by then the window knows a sync is going. With -Spotify, it counts
+# FakeWeb's Spotify queries instead, which come after the sync was queued too.
 function Wait-Fetches($hwnd, [int]$before, [int]$count, [switch]$Spotify) {
 	$counter = if ($Spotify) { { Get-SpotifyQueries } } else { { Get-FetchRuns } }
 	for ($i = 0; $i -lt 150 -and (& $counter) -lt $before + $count; $i++) { Start-Sleep -Milliseconds 100 }
-	for ($i = 0; $i -lt 150 -and (Test-Syncing $hwnd); $i++) { Start-Sleep -Milliseconds 100 }
+	for ($i = 0; $i -lt 600 -and (Test-Syncing $hwnd); $i++) { Start-Sleep -Milliseconds 100 }
 	Start-Sleep -Milliseconds 200
 }
 
@@ -195,6 +195,19 @@ $RowSenorita = " | $Senorita | Earth, Wind & Fire | Summer | $SpotifyName | 3:05
 $SpotifyQuery = "$SpotifyId 0 100 Bearer fake-token-$SpotifyId WebPlayer"
 # A match from before the Matcher stored its doubts
 $LowConfidence = "$Bullet Low confidence"
+# What the first update downloads, in playlist order: the log file's lines, and the log pane's rows
+$Downloads = @(
+	[pscustomobject]@{ Title = 'Way Down We Go'; File = 'KALEO - Way Down We Go.opus'; Track = 'ytm:trackAAAAA1' },
+	[pscustomobject]@{ Title = $Cafe; File = "Nova - $Cafe.opus"; Track = 'ytm:trackBBBBB2' },
+	[pscustomobject]@{ Title = 'No Length'; File = 'Somebody - No Length.opus'; Track = 'ytm:trackCCCCC4' },
+	[pscustomobject]@{ Title = 'Shared Song'; File = 'Both - Shared Song.opus'; Track = 'ytm:trackSHARE5' },
+	[pscustomobject]@{ Title = 'Late Night Swing'; File = 'Ana, Ben - Late Night Swing.opus'; Track = 'spotify:spTrackLateNight000001' },
+	[pscustomobject]@{ Title = $Senorita; File = "Earth, Wind & Fire - $Senorita.opus"; Track = 'spotify:spTrackSenorita0000002' }
+)
+$DownloadedLines = @($Downloads | ForEach-Object { "T INFO    Downloaded as `"$($_.File)`" [$($_.Title); track $($_.Track)]" }) -join ' / '
+function Get-DownloadedRows([int[]]$which) { @($which | ForEach-Object { "T | Info | $($Downloads[$_].Title) | Downloaded as `"$($Downloads[$_].File)`"" }) -join ' / ' }
+$DownloadError = 'ERROR: [youtube] trackDDDDD6: Video unavailable'
+$DownloadErrorRow = "T | Error | Only Here | Couldn't download: $DownloadError"
 
 # The Spotify playlist: two tracks, one by a single artist with a comma in its name, an episode and a local file (both
 # left out), and a repeat
@@ -218,6 +231,10 @@ $Web.SpotifyItems[$BigSpotifyId] = [Collections.Generic.List[string]]@(1..150 | 
 Set-SavedWindow @{}
 Install-FakeTools
 Set-SavedAutoUpdate $false
+# An update downloads too, one track at a time so the log keeps its order; this track fails to, so it has no file when
+# its playlist is removed
+Set-SavedSetting concurrency 1
+[IO.File]::WriteAllText((Join-Path $ToolsDir 'fail-ids.txt'), "trackDDDDD6`n")
 Write-SyncPlaylists 'ytm:PLtracks1', $SyncSpotifyKey, 'ytm:PLshared1', 'ytm:PLbroken1'
 $app = Start-App
 $h = $app.Hwnd
@@ -227,7 +244,7 @@ $runs = Get-FetchRuns
 Send-Command $h 'Update &all'
 Wait-Fetches $h $runs 3
 Check 'Sync all: YouTube Music playlists fetched by yt-dlp' (Get-FetchRuns) ($runs + 3)
-Check '  each fetch reads the whole playlist' (@(Get-Content $FakeYtDlpRuns -Encoding UTF8)[-1]) '--ignore-config|--flat-playlist|--dump-single-json|https://music.youtube.com/playlist?list=PLbroken1'
+Check '  each fetch reads the whole playlist' (@(Get-YtDlpRuns)[-1]) '--ignore-config|--flat-playlist|--dump-single-json|https://music.youtube.com/playlist?list=PLbroken1'
 Check '  the Spotify playlist: one query, with the page''s token' ($Web.SpotifyQueries() -join ' / ') $SpotifyQuery
 Check '  playlists' (Get-SavedPlaylistSync) ("$SyncSpotifyKey [$SpotifyName] spTrackLateNight000001,spTrackSenorita0000002,spTrackLateNight000001 synced True / " +
 	"ytm:PLbroken1 [Named PLbroken1]  synced False error: $BrokenError at True / " +
@@ -237,16 +254,17 @@ Check '  sources: Topic dropped, a private entry, an episode and a local file le
 	"spTrackSenorita0000002 $Senorita [Earth, Wind & Fire] (Summer) 185000 > spTrackSenorita0000002 / " +
 	"AAAAA1 Way Down We Go [KALEO] 214000 > AAAAA1 / BBBBB2 $Cafe [Nova] 191000 > BBBBB2 / " +
 	'CCCCC4 No Length [Somebody] 0 > CCCCC4 / DDDDD6 Only Here [Solo] 65000 > DDDDD6 / SHARE5 Shared Song [Both] 200000 > SHARE5')
-Check '  tracks' (Get-SavedTracks) ('spTrackLateNight000001 pending [spTrackLateNight000001] True / spTrackSenorita0000002 pending [spTrackSenorita0000002] True / ' +
-	'AAAAA1 pending [AAAAA1] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / DDDDD6 pending [DDDDD6] True / SHARE5 pending [SHARE5] True')
+Check '  tracks: downloaded, one download failed' (Get-SavedTracks) (
+	'spTrackLateNight000001 downloaded [spTrackLateNight000001] True / spTrackSenorita0000002 downloaded [spTrackSenorita0000002] True / ' +
+	'AAAAA1 downloaded [AAAAA1] True / BBBBB2 downloaded [BBBBB2] True / CCCCC4 downloaded [CCCCC4] True / DDDDD6 failed [DDDDD6] True / SHARE5 downloaded [SHARE5] True')
 Check '  the Spotify tracks searched on YouTube Music, once each' ($Web.YtmQueries() -join ' / ') "Ana Ben Late Night Swing / Earth, Wind & Fire $Senorita"
 Check '  All tracks: rows, by title' (Get-TrackRows $h) "$RowB / $RowLate / $RowC / $RowD / $RowSenorita / $RowShared / $RowA"
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Downloaded 0 | Waiting 7 | Needs review 0 | Failed 0 | Showing 7 of 7'
-Check '  Library card' (Get-CardTexts $h) "Library card: All tracks / Library / Folder / $DefaultLibrary / Tracks / 7 tracks, 0 downloaded / Open library folder"
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Downloaded 6 | Waiting 0 | Needs review 0 | Failed 1 | Showing 7 of 7'
+Check '  Library card' (Get-CardTexts $h) "Library card: All tracks / Library / Folder / $LibraryDir / Tracks / 7 tracks, 6 downloaded / Open library folder"
 Check '  syncing after it' (Test-Syncing $h) 'False'
-# The rows with tracks waiting have a line for them
-$script:TallRows = 1, 2, 3
-Check-ListButton '  rows 1 to 3 a line taller: Add playlist under them' $h 4
+# The row with the failed track has a line for it
+$script:TallRows = @(3)
+Check-ListButton '  row 3 a line taller: Add playlist under them' $h 4
 Check '  infobar: the failed fetch' (Get-InfobarText $h) "True $FetchMessage"
 Check '  the rows sync controls tooltips' "$([W]::TooltipText((Get-PlaylistList $h), 0)) / $([W]::TooltipText((Get-PlaylistList $h), 3))" "Update $TracksName / Update Named PLbroken1"
 
@@ -260,6 +278,8 @@ Check '  what the sync did' (Get-LogLevelLines 'INFO|WARNING|ERROR') (
 	"T ERROR   Couldn't fetch the playlist: $BrokenError [Named PLbroken1; playlist ytm:PLbroken1] / " +
 	'T INFO    Matched "Late Night Swing" by Ana, Ben (100%) [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
 	"T INFO    Matched `"$Senorita`" by Earth, Wind & Fire (100%) [$Senorita; track spotify:spTrackSenorita0000002] / " +
+	"$DownloadedLines / " +
+	"T ERROR   Couldn't download: $DownloadError [Only Here; track ytm:trackDDDDD6] / " +
 	'T INFO    Update finished')
 Check '  a failed yt-dlp run: its command, exit code and stderr' (Get-LogToolRun 'PLbroken1$') (
 	'T TOOL    yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLbroken1 / ' +
@@ -271,7 +291,9 @@ Check '  a successful one: only the size of its output' ((Get-LogToolRun 'PLtrac
 	'T TOOL    yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLtracks1 / ' +
 	'    exit code 0 / ' +
 	'    stdout: N bytes')
-Check '  the three runs at Debug too' (@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp *: exit code *' }).Count) 3
+Check '  the three fetches at Debug too, and the seven downloads' (
+	"$(@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp --ignore-config --flat-playlist *: exit code *' }).Count) " +
+	"$(@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp --ignore-config -f *: exit code *' }).Count)") '3 7'
 Check '  each search at Debug: it starts, it ends, its best result' (@(Get-LogLines | Where-Object { $_ -match '^T DEBUG   (Searching|Searched|Best result)' }) -join ' / ') (
 	'T DEBUG   Searching YouTube Music for "Ana Ben Late Night Swing" [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
 	'T DEBUG   Searched "Ana Ben Late Night Swing": 1 result [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
@@ -289,27 +311,28 @@ Send-Command $h '&Log'
 Start-Sleep -Milliseconds 200
 $logList = Get-LogList $h
 Check 'Log pane: the lines from Info up' (Get-LogRows $h) (
-	"T | Info | $([char]0x2014) | Update started: 4 playlists / $FetchedRows / $ErrorRow / $LateRow / $SenoritaRow / T | Info | $([char]0x2014) | Update finished")
-Check '  the times, to the millisecond' (@(0..7 | Where-Object { ([W]::ListViewRow($logList, $_) -split ' \| ')[0] -match '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$' }).Count) 8
-Check '  the error in red, no warning' "$([W]::RedInk($h, $logList)) $([W]::AmberInk($h, $logList))" 'True False'
+	"T | Info | $([char]0x2014) | Update started: 4 playlists / $FetchedRows / $ErrorRow / $LateRow / $SenoritaRow / " +
+	"$(Get-DownloadedRows (0..5)) / $DownloadErrorRow / T | Info | $([char]0x2014) | Update finished")
+Check '  the times, to the millisecond' (@(0..14 | Where-Object { ([W]::ListViewRow($logList, $_) -split ' \| ')[0] -match '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$' }).Count) 15
+Check '  the errors in red, no warning' "$([W]::RedInk($h, $logList)) $([W]::AmberInk($h, $logList))" 'True False'
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-log.png") }
 Choose-LogLevel $h 3
-Check 'Errors only' (Get-LogRows $h) $ErrorRow
+Check 'Errors only' (Get-LogRows $h) "$ErrorRow / $DownloadErrorRow"
 Choose-LogLevel $h 0
-Check 'Debug and up: the yt-dlp runs too' (@((Get-LogRows $h) -split ' / ' | Where-Object { $_ -like 'T | Debug | *yt-dlp --ignore-config*' }).Count) 3
+Check 'Debug and up: the yt-dlp runs too' (@((Get-LogRows $h) -split ' / ' | Where-Object { $_ -like 'T | Debug | *yt-dlp --ignore-config --flat-playlist*' }).Count) 3
 Choose-LogLevel $h 1
 Click-LogScope $h 1
-Check 'Selected playlist, with All tracks: every line' (@((Get-LogRows $h) -split ' / ').Count) 8
+Check 'Selected playlist, with All tracks: every line' (@((Get-LogRows $h) -split ' / ').Count) 15
 Click-PlaylistRow $h 1
-Check '  the first playlist: its line' (Get-LogRows $h) "T | Info | $TracksName | Fetched 4 tracks"
+Check '  the first playlist: its line and its tracks''' (Get-LogRows $h) "T | Info | $TracksName | Fetched 4 tracks / $(Get-DownloadedRows (0..3))"
 Click-PlaylistRow $h 2
-Check '  the Spotify playlist: its line and its tracks''' (Get-LogRows $h) "T | Info | $SpotifyName | Fetched 2 tracks / $LateRow / $SenoritaRow"
+Check '  the Spotify playlist: its line and its tracks''' (Get-LogRows $h) "T | Info | $SpotifyName | Fetched 2 tracks / $LateRow / $SenoritaRow / $(Get-DownloadedRows 4, 5)"
 Click-LogScope $h 2
 Check 'Selected track, none selected' "[$(Get-LogRows $h)] $([W]::TextOf($logList))" '[] Select a track to see its lines.'
 Select-TrackRow $h 0
 # The selection reaches the log on a posted message
 Start-Sleep -Milliseconds 200
-Check '  Late Night Swing: its line' "$(Get-LogRows $h) [$([W]::TextOf($logList))]" "$LateRow []"
+Check '  Late Night Swing: its lines' "$(Get-LogRows $h) [$([W]::TextOf($logList))]" "$LateRow / $(Get-DownloadedRows 4) []"
 Click-LogScope $h 0
 Click-AllTracks $h
 Send-Command $h '&Log'
@@ -318,11 +341,11 @@ Start-Sleep -Milliseconds 200
 # One selected track shows its card; a link to one of its playlists selects that playlist
 Select-TrackRow $h 5
 Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Shared Song / Both / No album yet / " +
-	"Status / Waiting / Downloads on the next update. / Source / Source / YouTube Music / Playlists / $TracksName, $SharedName / " +
+	"Status / Downloaded / The file is in the library and tagged. / Source / Source / YouTube Music / Playlists / $TracksName, $SharedName / " +
 	"Key / ytm:trackSHARE5 / Audio / ID / trackSHARE5 / Chosen by / Playlist / File / Not downloaded yet.")
 Select-TrackRow $h 1
 Check 'Late Night Swing selected: its card' (Wait-TrackCard $h 'spotify:spTrackLateNight000001') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
-	"Status / Waiting / Downloads on the next update. / Source / Source / Spotify / Playlists / $SpotifyName / " +
+	"Status / Downloaded / The file is in the library and tagged. / Source / Source / Spotify / Playlists / $SpotifyName / " +
 	"Key / spotify:spTrackLateNight000001 / Audio / Matched / Late Night Swing / Artists / Ana, Ben / Length / 4:01 (Spotify 4:01) / " +
 	"ID / ytspTrackLateNight000001 / Chosen by / Matcher / Confidence / 100% / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-track.png") }
@@ -340,22 +363,22 @@ Click-AllTracks $h
 Select-TrackRow $h 0
 [W]::PostShiftKey((Get-TrackTable $h), 0x28)
 Check 'Shift+Down: two rows selected' (Get-SelectedRows $h) "0 $Cafe / 1 Late Night Swing"
-Check '  the selection card' (Wait-CardTexts $h 'Selection card') 'Selection card: 2 tracks selected / Status / Waiting / 2'
+Check '  the selection card' (Wait-CardTexts $h 'Selection card') 'Selection card: 2 tracks selected / Status / Downloaded / 2'
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-selection.png") }
 $table = Get-TrackTable $h
 [W]::PostCtrlKey($table, 0x41)
 $count = [int][W]::SendMessageW($table, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
 Check 'Ctrl+A: every row selected' "$(@((Get-SelectedRows $h) -split ' / ').Count) of $count | $(Wait-CardTexts $h 'Selection card')" (
-	"$count of $count | Selection card: $count tracks selected / Status / Waiting / $count")
+	"$count of $count | Selection card: $count tracks selected / Status / Downloaded / 6 / Failed / 1")
 
 Click-PlaylistRow $h 1
 Check 'Playlist 1: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowA / 2 | $RowB / 3 | $RowC / 4 | $RowShared"
-Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Downloaded 0 | Waiting 4 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 4 of 7 in $TracksName"
+Check '  tabs | result line' (Get-TrackSummary $h) "All 4 | Downloaded 4 | Waiting 0 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 4 of 7 in $TracksName"
 Check '  card' ((Get-CardTexts $h) -replace 'today \d\d:\d\d', 'today HH:MM') ("Playlist card: $TracksName / YouTube Music playlist / Playlist / Link / PLtracks1 / " +
-	"Tracks / 4 / Downloaded / 0/4 / Waiting / 4 / Shared / 1 / Last update / today HH:MM / Update playlist / Remove playlist$Ellipsis")
+	"Tracks / 4 / Downloaded / 4/4 / Shared / 1 / Last update / today HH:MM / Update playlist / Remove playlist$Ellipsis")
 Click-PlaylistRow $h 2
 Check 'The Spotify playlist: rows by position, a repeat once' (Get-TrackRows $h) "1 | $RowLate / 2 | $RowSenorita"
-Check '  tabs | result line' (Get-TrackSummary $h) "All 2 | Downloaded 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 7 in $SpotifyName"
+Check '  tabs | result line' (Get-TrackSummary $h) "All 2 | Downloaded 2 | Waiting 0 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 7 in $SpotifyName"
 $runs = Get-FetchRuns
 $queries = Get-SpotifyQueries
 Send-Command $h 'Update &selected playlist'
@@ -384,7 +407,7 @@ $control = [W]::ToolRect($list, 0)
 $runs = Get-FetchRuns
 Send-Click $list ([int](($control.Left + $control.Right) / 2)) ([int](($control.Top + $control.Bottom) / 2))
 Wait-Fetches $h $runs 1
-Check 'Row 1 sync control: one fetch, its playlist' "$((Get-FetchRuns) - $runs) $(@(Get-Content $FakeYtDlpRuns -Encoding UTF8)[-1] -replace '^.*list=', '')" '1 PLtracks1'
+Check 'Row 1 sync control: one fetch, its playlist' "$((Get-FetchRuns) - $runs) $(@(Get-YtDlpRuns)[-1] -replace '^.*list=', '')" '1 PLtracks1'
 
 # Sync now syncs the playlist that was just added; Cancel stops its fetch, which keeps the playlist as it was
 $runs = Get-FetchRuns
@@ -404,9 +427,9 @@ Check '  rows' (Get-TrackRows $h) ''
 $runs = Get-FetchRuns
 Send-Command $h 'Update &selected playlist'
 Wait-Fetches $h $runs 1
-$script:TallRows = 1, 2, 3, 5
+$script:TallRows = @(3)
 Check 'Sync selected: its rows' (Get-TrackRows $h) "1 | $RowSlow"
-Check '  tabs | result line' (Get-TrackSummary $h) "All 1 | Downloaded 0 | Waiting 1 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 1 of 8 in $SlowName"
+Check '  tabs | result line' (Get-TrackSummary $h) "All 1 | Downloaded 1 | Waiting 0 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 1 of 8 in $SlowName"
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-sync.png") }
 
 # Removing a playlist deletes the tracks it alone listed, which have no file yet
@@ -415,20 +438,21 @@ Send-Command $h '&Remove playlist...'
 $dialog = Wait-OwnedWindow $h
 [void][W]::PostMessageW($dialog, 0x466, [IntPtr]1, [IntPtr]::Zero)
 Wait-Closed $dialog
-$script:TallRows = 1, 2, 4
-Check 'Remove the third playlist: tracks' (Get-SavedTracks) ('spTrackLateNight000001 pending [spTrackLateNight000001] True / spTrackSenorita0000002 pending [spTrackSenorita0000002] True / ' +
-	'AAAAA1 pending [AAAAA1] True / BBBBB2 pending [BBBBB2] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True / SLOWW7 pending [SLOWW7] True')
+$script:TallRows = @()
+Check 'Remove the third playlist: tracks' (Get-SavedTracks) ('spTrackLateNight000001 downloaded [spTrackLateNight000001] True / spTrackSenorita0000002 downloaded [spTrackSenorita0000002] True / ' +
+	'AAAAA1 downloaded [AAAAA1] True / BBBBB2 downloaded [BBBBB2] True / CCCCC4 downloaded [CCCCC4] True / SHARE5 downloaded [SHARE5] True / SLOWW7 downloaded [SLOWW7] True')
 Check '  sources' (@((Get-SavedState).sources.PSObject.Properties | ForEach-Object { $_.Name -replace $KeyPrefix, '' }) -join ' ') (
 	'spTrackLateNight000001 spTrackSenorita0000002 AAAAA1 BBBBB2 CCCCC4 SHARE5 SLOWW7')
 Check '  All tracks: rows' (Get-TrackRows $h) "$RowB / $RowLate / $RowC / $RowSenorita / $RowSharedAlone / $RowSlow / $RowA"
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Downloaded 0 | Waiting 7 | Needs review 0 | Failed 0 | Showing 7 of 7'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Downloaded 7 | Waiting 0 | Needs review 0 | Failed 0 | Showing 7 of 7'
 Stop-App $app
 
 "--- Run 2: tracks kept"
+Remove-Item (Join-Path $ToolsDir 'fail-ids.txt')
 $app = Start-App
 $h = $app.Hwnd
 Check 'Rows after a restart' (Get-TrackRows $h) "$RowB / $RowLate / $RowC / $RowSenorita / $RowSharedAlone / $RowSlow / $RowA"
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Downloaded 0 | Waiting 7 | Needs review 0 | Failed 0 | Showing 7 of 7'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 7 | Downloaded 7 | Waiting 0 | Needs review 0 | Failed 0 | Showing 7 of 7'
 
 # A header click sorts the rows by its column, a second one turns them round; rows that tie keep the order they had
 Click-Header $h 5
@@ -449,11 +473,11 @@ Check 'Select row 5' (Get-SelectedRows $h) '4 Slow One'
 Click-Header $h 5
 Check '  sorted by Time: it moves along' (Get-SelectedRows $h) '6 Slow One'
 Choose-Source $h 1
-Check 'Source YouTube Music: tabs | result line' (Get-TrackSummary $h) 'All 5 | Downloaded 0 | Waiting 5 | Needs review 0 | Failed 0 | Showing 5 of 7'
+Check 'Source YouTube Music: tabs | result line' (Get-TrackSummary $h) 'All 5 | Downloaded 5 | Waiting 0 | Needs review 0 | Failed 0 | Showing 5 of 7'
 Check '  selection kept' (Get-SelectedRows $h) '4 Slow One'
 Choose-Source $h 2
 Check 'Source Spotify: rows | tabs | result line' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
-	"$RowSenorita / $RowLate | All 2 | Downloaded 0 | Waiting 2 | Needs review 0 | Failed 0 | Showing 2 of 7")
+	"$RowSenorita / $RowLate | All 2 | Downloaded 2 | Waiting 0 | Needs review 0 | Failed 0 | Showing 2 of 7")
 Check '  the YouTube Music row filtered out: no selection' "[$(Get-SelectedRows $h)]" '[]'
 Choose-Source $h 0
 Check '  back to All: the track filtered out stays unselected' "[$(Get-SelectedRows $h)]" '[]'
@@ -468,7 +492,7 @@ foreach ($case in @(
 	[W]::SetEditText($search, $case.Text)
 	Check "Search '$($case.Text)': rows" (Get-TrackRows $h) $case.Rows
 }
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 1 | Downloaded 0 | Waiting 1 | Needs review 0 | Failed 0 | Showing 1 of 7'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 1 | Downloaded 1 | Waiting 0 | Needs review 0 | Failed 0 | Showing 1 of 7'
 [W]::SetEditText($search, 'zzz')
 Check "Search 'zzz': rows | tabs | result line" "[$(Get-TrackRows $h)] | $(Get-TrackSummary $h)" '[] | All 0 | Downloaded 0 | Waiting 0 | Needs review 0 | Failed 0 | Showing 0 of 7'
 [W]::SetEditText($search, 'night')
@@ -493,10 +517,10 @@ Check "  'cafe': filtered out, so unselected" "[$(Get-SelectedRows $h)]" '[]'
 
 # Another tab or scope starts with nothing selected
 Select-TrackRow $h 1
-Click-Tab $h 1
-Check 'Synced tab: rows | tabs | result line' "$(Get-TrackRows $h)| $(Get-TrackSummary $h)" '| All 7 | Downloaded 0 | Waiting 7 | Needs review 0 | Failed 0 | Showing 0 of 7'
 Click-Tab $h 2
-Check 'Waiting tab: rows' (Get-TrackRows $h) "$RowC / $RowSenorita / $RowB / $RowSharedAlone / $RowA / $RowLate / $RowSlow"
+Check 'Waiting tab: rows | tabs | result line' "$(Get-TrackRows $h)| $(Get-TrackSummary $h)" '| All 7 | Downloaded 7 | Waiting 0 | Needs review 0 | Failed 0 | Showing 0 of 7'
+Click-Tab $h 1
+Check 'Downloaded tab: rows' (Get-TrackRows $h) "$RowC / $RowSenorita / $RowB / $RowSharedAlone / $RowA / $RowLate / $RowSlow"
 Check '  the row selected under All is not' "[$(Get-SelectedRows $h)]" '[]'
 Select-TrackRow $h 1
 Click-Tab $h 0
@@ -516,7 +540,8 @@ Check '  by title, # kept' (Get-TrackRows $h) "2 | $RowB / 3 | $RowC / 4 | $RowS
 Stop-App $app
 
 "--- Run 3: a fetch waits for yt-dlp"
-Remove-Item $ToolsDir -Recurse -Force
+# ffmpeg and deno stay, so the update's downloads don't wait for them too
+foreach ($file in 'yt-dlp.exe', 'yt-dlp-runs.txt', 'tools.json') { Remove-Item (Join-Path $ToolsDir $file) }
 Write-SyncPlaylists 'ytm:PLtracks1'
 Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
 $Web.YtDlp = [IO.File]::ReadAllBytes($FakeYtDlp)
@@ -538,6 +563,8 @@ Wait-ToolsIdle $h
 Stop-App $app
 
 "--- Run 4: Spotify pages and errors"
+# The order of the downloads doesn't matter here, and there are many
+Set-SavedSetting concurrency 4
 Write-SyncPlaylists "spotify:$BigSpotifyId", "spotify:$MissingSpotifyId", "spotify:$ErrorSpotifyId"
 Remove-Item "$StateFile.bak" -ErrorAction SilentlyContinue
 $app = Start-App
@@ -573,7 +600,7 @@ Check '  synced, no error' (Get-BigPlaylist) "Big One 150 spBigTrack000000000001
 Check '  the failures' (@((Get-SavedPlaylistSync) -split ' / ' | Where-Object { $_ -notlike "spotify:$BigSpotifyId*" }) -join ' / ') (
 	"spotify:$MissingSpotifyId [Named $MissingSpotifyId]  synced False error: The playlist doesn't exist or is private. at True / " +
 	"spotify:$ErrorSpotifyId [Named $ErrorSpotifyId]  synced False error: Spotify said: PersistedQueryNotFound at True")
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 150 | Downloaded 0 | Waiting 150 | Needs review 0 | Failed 0 | Showing 150 of 150'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 150 | Downloaded 150 | Waiting 0 | Needs review 0 | Failed 0 | Showing 150 of 150'
 Check '  infobar: the first failure' (Get-InfobarText $h) (
 	"True Couldn't fetch `"Named $MissingSpotifyId`". It may be private or deleted.")
 
@@ -585,23 +612,23 @@ $queries = Get-SpotifyQueries
 Send-Command $h 'Update &all'
 Wait-Fetches $h $queries 3 -Spotify
 Check 'Scrolled down, then a sync: the table stays there' "$(Get-TopRow $h) $($top -gt 0)" "$top True"
-Click-Tab $h 2
-Check '  the Waiting tab: at the top' (Get-TopRow $h) 0
+Click-Tab $h 1
+Check '  the Downloaded tab: at the top' (Get-TopRow $h) 0
 Click-Tab $h 0
 
 # The playlist changes: 110 new tracks, then the first 40 it had. Between the pages, its earlier tracks stay after the
-# new ones, so none leaves; at the end, the ones it dropped go.
+# new ones, so none leaves; at the end, the ones it dropped are Removed, since they have files.
 $Web.SpotifyItems[$BigSpotifyId] = [Collections.Generic.List[string]]@(@(151..260) + @(1..40) | ForEach-Object { New-BigTrack $_ })
 [void]$Web.SpotifyPageGate.Reset()
 $queries = Get-SpotifyQueries
 Send-Command $h 'Update &all'
 Wait-SpotifyQueries ($queries + 2)
 Check 'A changed list, first page: new tracks, then the earlier ones' (Get-BigPlaylist) "Big One 250 spBigTrack000000000151 spBigTrack000000000001 synced True error []"
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 250 | Downloaded 0 | Waiting 250 | Needs review 0 | Failed 0 | Showing 250 of 250'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 250 | Downloaded 150 | Waiting 100 | Needs review 0 | Failed 0 | Showing 250 of 250'
 [void]$Web.SpotifyPageGate.Set()
 Wait-Fetches $h $queries 3 -Spotify
 Check '  all pages: the dropped tracks gone' (Get-BigPlaylist) "Big One 150 spBigTrack000000000151 spBigTrack000000000251 synced True error []"
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 150 | Downloaded 0 | Waiting 150 | Needs review 0 | Failed 0 | Showing 150 of 150'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 260 | Downloaded 150 | Waiting 0 | Needs review 0 | Failed 0 | Removed 110 | Showing 260 of 260'
 
 # A page that fails again when asked for once more fails the fetch; the page before it stays
 $Web.SpotifyFailures["$BigSpotifyId 100"] = 2
@@ -878,24 +905,25 @@ Check '  log: the failed search' (@($outcomes | Where-Object { $_ -like '*spBrok
 	"T ERROR   Couldn't search YouTube Music: HTTP 500 from 127.0.0.1 [Offline; track spotify:spBrokenSearch00000004]")
 Check '  log: a review names its doubts' (@($outcomes | Where-Object { $_ -like '*spRuleOnlyGuest*' }) -join ' / ') (
 	'T WARNING Needs review: "Glow (feat. Zed)" by Ama, Zed (75%), doubts: version [Glow; track spotify:spRuleOnlyGuest0000019]')
+# Every track with an id downloads, but the two whose matches need review wait
 Check '  tracks: Way Down We Go and Cafe Lights on both are one track each' (Get-SavedTracks) ('spBrokenSearch00000004 failed [spBrokenSearch00000004] True / ' +
-	'spClearMatch0000000001 pending [spClearMatch0000000001] True / spJoinedLater000000006 pending [spJoinedLater000000006] True / ' +
-	'spLetterArtist00000010 pending [spLetterArtist00000010] True / spLibraryLater00000008 pending [spLibraryLater00000008] True / ' +
-	'spLiveLoses00000000002 pending [spLiveLoses00000000002] True / spNoResults00000000003 failed [spNoResults00000000003] True / ' +
-	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / spRuleChannel000000023 pending [spRuleChannel000000023] True / ' +
-	'spRuleDollar0000000017 pending [spRuleDollar0000000017] True / spRuleExplicit00000026 pending [spRuleExplicit00000026] True / ' +
-	'spRuleHalfTitle0000018 failed [spRuleHalfTitle0000018] True / spRuleLanguage00000014 pending [spRuleLanguage00000014] True / ' +
+	'spClearMatch0000000001 downloaded [spClearMatch0000000001] True / spJoinedLater000000006 downloaded [spJoinedLater000000006] True / ' +
+	'spLetterArtist00000010 downloaded [spLetterArtist00000010] True / spLibraryLater00000008 downloaded [spLibraryLater00000008] True / ' +
+	'spLiveLoses00000000002 downloaded [spLiveLoses00000000002] True / spNoResults00000000003 failed [spNoResults00000000003] True / ' +
+	'spOtherTitle0000000007 failed [spOtherTitle0000000007] True / spRuleChannel000000023 downloaded [spRuleChannel000000023] True / ' +
+	'spRuleDollar0000000017 downloaded [spRuleDollar0000000017] True / spRuleExplicit00000026 downloaded [spRuleExplicit00000026] True / ' +
+	'spRuleHalfTitle0000018 failed [spRuleHalfTitle0000018] True / spRuleLanguage00000014 downloaded [spRuleLanguage00000014] True / ' +
 	'spRuleOnlyGuest0000019 pending [spRuleOnlyGuest0000019] True / spRuleOnlyLive00000021 failed [spRuleOnlyLive00000021] True / ' +
 	'spRuleOtherAlbum000025 pending [spRuleOtherAlbum000025] True / spRuleOtherArtist00015 failed [spRuleOtherArtist00015] True / ' +
-	'spRuleOwnVersion000013 pending [spRuleOwnVersion000013] True / spRulePlainWins0000020 pending [spRulePlainWins0000020] True / ' +
-	'spRuleRemixer000000012 pending [spRuleRemixer000000012] True / spRuleSameAlbum0000024 pending [spRuleSameAlbum0000024] True / ' +
-	'spRuleSpacedTitle00016 pending [spRuleSpacedTitle00016] True / spRuleWithFeat00000022 pending [spRuleWithFeat00000022] True / ' +
-	'spWithTail000000000011 pending [spWithTail000000000011] True / AAAAA1 pending [AAAAA1,spMergesYtm00000000005] True / ' +
-	'BBBBB2 pending [BBBBB2,spLibraryFirst00000009] True / CCCCC4 pending [CCCCC4] True / SHARE5 pending [SHARE5] True')
+	'spRuleOwnVersion000013 downloaded [spRuleOwnVersion000013] True / spRulePlainWins0000020 downloaded [spRulePlainWins0000020] True / ' +
+	'spRuleRemixer000000012 downloaded [spRuleRemixer000000012] True / spRuleSameAlbum0000024 downloaded [spRuleSameAlbum0000024] True / ' +
+	'spRuleSpacedTitle00016 downloaded [spRuleSpacedTitle00016] True / spRuleWithFeat00000022 downloaded [spRuleWithFeat00000022] True / ' +
+	'spWithTail000000000011 downloaded [spWithTail000000000011] True / AAAAA1 downloaded [AAAAA1,spMergesYtm00000000005] True / ' +
+	'BBBBB2 downloaded [BBBBB2,spLibraryFirst00000009] True / CCCCC4 downloaded [CCCCC4] True / SHARE5 downloaded [SHARE5] True')
 Check '  its row: one, both playlists, the album from Spotify' (@((Get-TrackRows $h) -split ' / ' | Where-Object { $_ -like '*Way Down We Go*' }) -join ' / ') (
 	" | Way Down We Go | KALEO | A/B | $TracksName, Matches | 3:34")
-Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 12) 'Waiting'
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 28 | Downloaded 0 | Waiting 22 | Needs review 2 | Failed 6 | Showing 28 of 28'
+Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 12) 'Downloaded'
+Check '  tabs | result line' (Get-TrackSummary $h) 'All 28 | Downloaded 20 | Waiting 2 | Needs review 2 | Failed 6 | Showing 28 of 28'
 
 # A playlist with another id of Slow One: the Spotify track takes it and merges, the order of the playlists aside. The
 # playlist with the id Only Here was matched to: its source joins that track. Only the failed tracks are searched
@@ -908,18 +936,18 @@ Send-Command $h 'Update &all'
 Wait-Fetches $h $runs 3
 Check 'Sync all again: only the failed tracks searched' (Get-YtmQueriesSince $searches) $FailedQueries
 Check '  Only Here: the YouTube Music source joined the Spotify track' (@((Get-SavedTracks) -split ' / ' | Where-Object { $_ -like 'spJoinedLater*' }) -join ' / ') (
-	'spJoinedLater000000006 pending [spJoinedLater000000006,DDDDD6] True')
+	'spJoinedLater000000006 downloaded [spJoinedLater000000006,DDDDD6] True')
 Check '  Slow One: the Spotify track merged into the playlist''s' "$(@((Get-SavedTracks) -split ' / ' | Where-Object { $_ -like '*Slow*' })) | $(
-	@((Get-SavedMatches) -split ' / ' | Where-Object { $_ -like 'spLibraryLater*' }))" 'SLOWW7 pending [SLOWW7,spLibraryLater00000008] True | spLibraryLater00000008 trackSLOWW7 1'
+	@((Get-SavedMatches) -split ' / ' | Where-Object { $_ -like 'spLibraryLater*' }))" 'SLOWW7 downloaded [SLOWW7,spLibraryLater00000008] True | spLibraryLater00000008 trackSLOWW7 1'
 Check '  failures as before' (Get-SavedFailures) $MatchFailures
 Check '  the added playlist selected: Only Here among its rows' "$(Get-TrackRows $h) | $(Get-TrackSummary $h)" (
 	"1 | $RowShared / 2 |  | Only Here | Solo | Here | Matches, $SharedName | 1:05 | " +
-	"All 2 | Downloaded 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 28 in $SharedName")
+	"All 2 | Downloaded 2 | Waiting 0 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 28 in $SharedName")
 # Matches lists the track too, but that is another playlist: here it is no duplicate
-Check '  Only Here there: no duplicate' (Get-StatusTip $h 1 1) 'Waiting'
+Check '  Only Here there: no duplicate' (Get-StatusTip $h 1 1) 'Downloaded'
 Select-TrackRow $h 1
-Check '  its card' (Wait-TrackCard $h 'ytm:trackDDDDD6') ("Track card:  / Only Here / Solo / Here / Status / Waiting / " +
-	"Downloads on the next update. / Sources / Listed on / YouTube Music /  / " +
+Check '  its card' (Wait-TrackCard $h 'ytm:trackDDDDD6') ("Track card:  / Only Here / Solo / Here / Status / Downloaded / " +
+	"The file is in the library and tagged. / Sources / Listed on / YouTube Music /  / " +
 	"Spotify / Playlists / Matches, $SharedName / Key / ytm:trackDDDDD6 / Audio / ID / trackDDDDD6 / Chosen by / Playlist / " +
 	"Spotify match / Same ID (100%) / File / Not downloaded yet.")
 
@@ -986,8 +1014,9 @@ Wait-Fetches $h $queries 1 -Spotify
 Check 'Synced: both matched, neither confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 False / spReviewApart000000002 apartVid001 False'
 Check '  confidences and doubts: the cut, the cut with a longer title' (Get-SavedJudgements '^spReview') (
 	'spReviewAlone000000001 reviewVid01 0.75 [length] / spReviewApart000000002 apartVid001 0.65 [title,length]')
+# The update downloads the entry too, as it downloads every track that waits; the two to review wait
 Check '  the one with the entry''s id stays apart' (Get-SavedTracks) ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
-	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 pending [ytm:apartVid001] True')
+	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 downloaded [ytm:apartVid001] True')
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 2 | Downloaded 0 | Waiting 2 | Needs review 2 | Failed 0 | Duplicates 0 | Showing 2 of 3 in Reviews'
 Check '  Status tooltips' "$(Get-StatusTip $h 0 1) | $(Get-StatusTip $h 1 1)" 'Needs review | Needs review'
 Check '  the playlist card counts them' ((Wait-CardTexts $h 'Playlist card') -like '* / To review / 2 / *') 'True'
@@ -1024,9 +1053,9 @@ Check 'Apart Song: a line for each doubt' (Wait-TrackCard $h 'spotify:spReviewAp
 	"Artists / Rae / Length / 3:45 (Spotify 3:20) / ID / apartVid001 / Chosen by / Matcher / Confidence / 65% / File / Not downloaded yet.")
 Send-Command $h '&Confirm match'
 Check 'Confirm match: merged into the entry''s track' (Wait-SavedTracks '*apartVid001,spReview*') ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
-	'ytm:apartVid001 pending [ytm:apartVid001,spReviewApart000000002] True')
+	'ytm:apartVid001 downloaded [ytm:apartVid001,spReviewApart000000002] True')
 Check '  saved confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True'
-Check '  tabs' (Get-TrackSummary $h) 'All 2 | Downloaded 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 2 in Reviews'
+Check '  tabs' (Get-TrackSummary $h) 'All 2 | Downloaded 1 | Waiting 1 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 2 in Reviews'
 
 $searches = @($Web.YtmQueries()).Count
 $queries = Get-SpotifyQueries
@@ -1075,7 +1104,7 @@ Check '  refused four times: failed' (Get-SavedFailures) 'spRefusedAlways0000002
 $RefusedOnce = 'Once; track spotify:spRefusedOnce000000001'
 $RefusedAlways = 'Always; track spotify:spRefusedAlways0000002'
 $Refusal = 'HTTP 403 from 127.0.0.1'
-Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefused(Once|Always)' }) -join ' / ') (
+Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefused(Once|Always)' -and $_ -notmatch ' Downloaded as ' }) -join ' / ') (
 	"T DEBUG   Searching YouTube Music for `"Rae Once`" [$RefusedOnce] / T WARNING YouTube Music refused the search for `"Rae Once`": $Refusal [$RefusedOnce] / " +
 	"T DEBUG   Searching YouTube Music for `"Rae Always`" [$RefusedAlways] / T WARNING YouTube Music refused the search for `"Rae Always`": $Refusal [$RefusedAlways] / " +
 	"T DEBUG   Searching YouTube Music for `"Rae Once`" [$RefusedOnce] / T DEBUG   Searched `"Rae Once`": 1 result [$RefusedOnce] / " +
@@ -1084,7 +1113,7 @@ Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-
 	"T ERROR   Couldn't search YouTube Music: $Refusal (tried 4 times) [$RefusedAlways]")
 $RefusedSlow = 'Slow; track spotify:spRefusedSlow000000006'
 # Before ten answers, the search waits 4 s
-Check '  log: a late answer given up on as a refusal' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefusedSlow' }) -join ' / ') (
+Check '  log: a late answer given up on as a refusal' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefusedSlow' -and $_ -notmatch ' Downloaded as ' }) -join ' / ') (
 	"T DEBUG   Searching YouTube Music for `"Rae Slow`" [$RefusedSlow] / " +
 	"T WARNING YouTube Music refused the search for `"Rae Slow`": No answer from 127.0.0.1 within 4000 ms [$RefusedSlow] / " +
 	"T DEBUG   Searching YouTube Music for `"Rae Slow`" [$RefusedSlow] / T DEBUG   Searched `"Rae Slow`": 1 result [$RefusedSlow] / " +

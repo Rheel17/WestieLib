@@ -11,5 +11,7 @@ void check_judgements(const platform::TextNormalizer& normalizer);
 void check_log_texts();
 void check_run_phases();
 void check_search_timeout();
+void check_library();
+void check_downloads_to_queue();
 
 }

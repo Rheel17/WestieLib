@@ -351,11 +351,11 @@ Check-RowMouse $h
 Check-Cards $h
 Send-Command $h '&Add playlist...'
 $dialog = Wait-OwnedWindow $h
-$runs = @(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count
+$runs = @(Get-YtDlpRuns).Count
 Set-PlaylistLink $dialog $YouTubeLink
 Check '  a kept playlist is already added, with its name' (Get-LinkLine $dialog) "$YouTubeFound | Already added False"
 Start-Sleep -Milliseconds 500
-Check '  which needs no look-up' (@(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count - $runs) 0
+Check '  which needs no look-up' (@(Get-YtDlpRuns).Count - $runs) 0
 [void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 Wait-Closed $dialog
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-playlists.png") }

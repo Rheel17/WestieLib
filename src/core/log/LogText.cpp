@@ -117,6 +117,19 @@ std::string command_line(std::string_view tool, std::span<const std::string> arg
     return command;
 }
 
+// A log line is a row in the pane
+std::string one_line(std::string_view text) {
+    std::string line;
+    for (char character : text) {
+        if (character == '\n') {
+            line += "; ";
+        } else if (character != '\r') {
+            line += character;
+        }
+    }
+    return line;
+}
+
 std::string log_tool_run(
         std::chrono::local_time<std::chrono::milliseconds> time, std::string_view tool, std::span<const std::string> arguments,
         const platform::ProcessResult& result

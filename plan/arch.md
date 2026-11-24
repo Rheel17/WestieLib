@@ -261,6 +261,9 @@ made. Resolution runs for tracks without a file, and again when the override cha
 re-downloads the track (or merges it, see below), and clears `failure`; the track's YouTube Music id then no longer comes from
 the match, so it no longer needs review.
 
+A track that needs review doesn't download: its match may be another recording, and a wrong file in the library is
+worse than a track that waits. It stays `pending` until `confirmMatch` confirms the match or an override is set.
+
 `needs_review` (`src/core/state/MatchReview`) gives it, for a match and for a track.
 
 **Merging.** No two tracks share a YouTube Music id. An id gets resolved in three ways:
@@ -299,8 +302,8 @@ take a row out of a playlist: when it lists several sources of one track, the la
 Tracks, sources and entries). `track_entries` (`src/ui/tracks/TrackEntries`) lists every entry in the left panel's
 order, which picks the source All tracks shows a track by.
 
-So far no track has a file, and a merge (`merge_tracks`, `src/core/state/MergeTracks`) only moves the sources: there
-is nothing to recycle, re-tag or rename yet.
+So far a merge (`merge_tracks`, `src/core/state/MergeTracks`) only moves the sources: files don't take part in it
+yet.
 
 **Tracks that leave every playlist.** After a fetch and after `removePlaylist`, a track none of whose sources is in a
 playlist anymore is looked at again (`prune_tracks`, `src/core/state/`):
@@ -812,7 +815,7 @@ playlist owner's choice wins over a search result. A Review leaves the track to 
 It looks at the whole library, not only at the playlists the sync fetched, so the order in which playlists are added
 or synced doesn't matter: a Spotify track the search matched earlier joins a YouTube Music playlist's entry on the
 first sync after one lists the song, and a Spotify track that comes after the entry merges before it is searched for.
-A downloaded track merges by the Merging rules, its own file going to the Recycle Bin; so far no track has a file.
+A downloaded track merges by the Merging rules; so far files don't take part in merges.
 
 A stored match keeps the confidence and doubts it got; a later change to the rules applies to new matches only. Until
 release, playlists are added again to match their tracks anew.
@@ -870,16 +873,27 @@ yt-dlp -f "bestaudio[acodec=opus]/bestaudio" -x --audio-format <format>
     quality.
 
   A format change applies to new downloads only. Existing files keep their format, so a library can mix both.
-- Progress lines from `--progress-template` become `TrackProgress` events.
+- Progress lines from `--progress-template` become `TrackProgress` events. `download_percent`
+  (`src/core/download/DownloadProgress`) reads a line: `download:` and a percentage such as ` 45.3%`, rounded down to
+  a whole percent from 0 to 100; any other line is no progress. yt-dlp prints a line per update, so the Downloader
+  sends an event only when the whole percent changes.
+- yt-dlp runs under the shared locks of yt-dlp, ffmpeg and deno (Tool folder), as it runs the other two. A missing
+  one throws `ToolMissing` for it, before anything starts.
+- A non-zero exit code throws `DownloadFailed`, whose text is the `ERROR:` lines of stderr, or its last two lines when
+  it has none.
+- yt-dlp names the audio file after the id and the format (`<ytmId>.opus`, `<ytmId>.flac`), the info JSON
+  `<ytmId>.info.json`, and the thumbnail `<ytmId>.jpg`. A run that exits with 0 without the audio file fails too.
 - **Cover art.** The first of these that applies:
   1. a custom cover from `edits` (`covers\<track key>.jpg`);
-  2. when the track has a Spotify source, its Spotify image (square, 640 px), fetched with `HttpClient`;
-  3. the YouTube Music thumbnail, center-cropped to a square with `ffmpeg -vf "crop=min(iw\,ih):min(iw\,ih)"`.
+  2. when the track has a Spotify source, its Spotify image (square, 640 px), fetched with `HttpClient` into
+     `cover.jpg` in the work folder;
+  3. the YouTube Music thumbnail, center-cropped to a square with `ffmpeg -vf "crop=min(iw\,ih):min(iw\,ih)"` into
+     `cover.jpg`.
 
-  No cover is fetched when `embedCover` is off.
-- **Metadata.** The info JSON fills the album and year of the track's YouTube Music sources: `track` (falling
-  back to `title`), `artists` (falling back to `artist`), `album`, `release_year`. The tags then use the
-  effective metadata.
+  No cover is fetched when `embedCover` is off. A cover that fails is a Warning line, and the file goes without one
+  (`src/core/download/CoverArt`). So far there are no custom covers.
+- **Metadata.** The info JSON fills the `album` and `year` (`release_year`) of the track's YouTube Music sources,
+  which a fetch never sets. The tags then use the effective metadata.
 
 ### Tagger
 
@@ -904,19 +918,29 @@ effective metadata, so `edits` win over source values:
 
 The Tagger also re-tags finished library files in place, after `editTrack` and after a merge.
 
+`Tagger` (`src/core/tagging/`) replaces the file's own Vorbis comments and pictures with these, so the tags yt-dlp's
+ffmpeg left from the video don't stay. It opens the file by its wide name, and a file TagLib can't read or save
+throws.
+
 ### Library
 
 The Library places finished files and handles the library folder as a whole.
 
 - **File names.** `<ARTIST> - <TITLE>.<opus|flac>`, built from the effective metadata. Characters `<>:"/\|?*` and
   control characters become `_`, trailing dots and spaces are trimmed, reserved device names (`CON`, `NUL`, `COM1`, ...)
-  get a `_` suffix, and names are capped at 200 characters. A name that already belongs to another track gets ` (2)`,
-  ` (3)`, ... appended.
-- **Placement.** The tagged file moves from `work\` into the library with `MoveFileExW`, so the library only ever
-  contains complete files.
+  get a `_` suffix, and names are capped at 200 characters. A name that already belongs to another track, or to a file
+  in the folder, compared without case, gets ` (2)`, ` (3)`, ... appended. Without a title the name is the id
+  (`library_file_name`, `src/core/library/LibraryFileName`).
+- **Windows names.** `windows_name_problem` (`src/core/library/WindowsNames`) tells why a file or folder name can't be
+  used as it is: it ends in a space or a period, which Windows drops, or it is a reserved device name, with or without
+  an extension. The file names above use it, and so does the library folder field (`ui.md`), for each folder of the
+  path, so the folder the app creates is the one `settings.json` names.
+- **Placement.** The library folder is created when it is missing. The tagged file moves from `work\` into the library
+  with `FileOps::move_new`, so the library only ever contains complete files, and a name another file took meanwhile
+  moves on to the next number.
 - **Rename.** When `editTrack` or a merge changes the effective artists or title, the file is renamed with the
   same rules.
-- **Removal.** Files go to the Recycle Bin through `FileOps`.
+- **Removal.** Files are deleted through `FileOps`, not sent to the Recycle Bin.
 - **Relocation.** `relocateLibrary(newPath)` updates `libraryPath`; all `file` entries are relative, so they stay valid.
 - **Rebuild.** `rebuildState()` scans the library folder for `.opus` and `.flac` files. From each one it reads
   `WESTIELIB_SOURCE` / `WESTIELIB_YTMID` and the regular tags, and recreates the track and its sources.
@@ -963,8 +987,8 @@ A `kept` or `orphaned` track that one of its sources brings back into a playlist
 **Cancellation** sets the run's `CancelToken` and terminates the Job Object. In-flight tracks return to `pending`
 and their work folders are cleaned.
 
-**So far** (`src/core/sync/`), a run fetches, YouTube Music and Spotify playlists alike, and then matches; nothing
-downloads yet.
+**So far** (`src/core/sync/`), a run fetches, YouTube Music and Spotify playlists alike, then matches, then
+downloads. Files don't take part in merges and orphans yet, and there is no `retry` or `resolveRemovals`.
 - `sync(keys)` queues the playlists that aren't queued yet and emits `SyncQueued`. Without a run it starts one on a
   worker thread (`std::jthread`); during a run they join its queue. The queue is behind a mutex, so a run that finds
   it empty and ends can't miss a `sync` that comes at the same moment.
@@ -1004,9 +1028,30 @@ downloads yet.
     (`MatchTries`); the fourth failure fails it with `search`. Any other failed search fails the track at once. Else a
     track is tried once a run.
   - A playlist queued meanwhile is fetched before the next track, and the tracks it brings join the queue.
+- Once the match queue is empty, the run queues the downloads. `tracks_to_download` (`TracksToDownload.cpp`) lists
+  the tracks that are `pending`, or `failed` with `download`, have a YouTube Music id (`resolved_ytm_id`) and don't need
+  review, in playlist order, each once, each with the playlists that list it. The run emits `DownloadsQueued` with the
+  ones it hasn't queued yet, and hands them to its download pool (`DownloadPool`, `src/core/sync/`):
+  - `concurrency` worker threads, read from the settings as the pool starts, take tracks in order and start them
+    `delayBetweenTracksSeconds` apart. A track whose id another worker is downloading waits until that one ends.
+  - Meanwhile the run's own thread fetches the playlists queued since, and matches their tracks; their downloads join
+    the pool's queue. The run ends once nothing is left to fetch, match or download.
+  - Per track (`TrackDownload`): a snapshot shows whether it still qualifies, else it is skipped with a
+    `TrackStatusChanged`. It emits `TrackDownloading`, clears `work\<track key>\` (`:` becomes `_`), and runs the
+    Downloader, the cover, the Tagger and the placement, with the settings of that moment. Then `apply_download`
+    (`ApplyDownload.cpp`) stores `downloaded`, `ytmId` and `file`, clears the failure, and fills the YouTube Music
+    sources' album and year from the info JSON. A track that left the state meanwhile (its playlist was removed) has
+    its new file deleted. The work folder is removed, and the run emits `TrackStatusChanged` and logs `Downloaded as
+    "<file>"`.
+  - A failed download, tag or placement stores `failed` with `download` and the error, logs `Couldn't download:
+    <error>`, and emits `TrackStatusChanged`; the next sync tries again.
+  - A missing tool stops the pool from starting tracks: each queued track, and the one that found it missing, gets a
+    `TrackStatusChanged` with the tools it waits for (`waitingFor`), and the log a Warning `Waiting for ffmpeg to
+    install`. Nothing is written to the state. When `ToolFolder` reports the install, the tracks go on.
 - `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, apart from the pages a
-  Spotify fetch already read (as for a failure); a track being matched stays as it was; the queue is dropped, and
-  nothing more is written.
+  Spotify fetch already read (as for a failure); a track being matched or downloaded stays as it was, and a download's
+  work folder is removed; the queues are dropped, and nothing more is written. A run starts by removing what an
+  earlier one left in `work\`.
 - Every run ends with `SyncFinished`, cancelled or not.
 
 The UI calls a run an *update*, and its first step for a playlist, the fetch, *syncing* (`ui.md`, Vocabulary). The
@@ -1048,7 +1093,9 @@ cancelled`.
 | `PlaylistFetchFailed`          | playlist id, error                              |
 | `TracksQueued`                 | so far: the tracks the run will match, each with the keys of the playlists that list it |
 | `TrackMatching`                | so far: track key, as the run starts matching it (again after a refused search) |
-| `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for (so far without the tools) |
+| `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for |
+| `DownloadsQueued`              | so far: the tracks the run will download, each with the keys of the playlists that list it |
+| `TrackDownloading`             | so far: track key, as a worker starts downloading it |
 | `TrackProgress`                | track key, percent                              |
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |
@@ -1103,8 +1150,10 @@ src/
         state/      State, StateStore, prune_tracks
         sync/       SyncEngine, apply_fetch and the sync events
         tools/      ToolManager, ToolInstaller, ToolSource, ToolsStore, ToolFolder, YtDlp and the tool types
-                    later areas get folders of their own: Downloader, Tagger,
-                    Library, SelfUpdater, RemoteConfig
+                    later areas get folders of their own: SelfUpdater, RemoteConfig
+        download/   the Downloader: yt-dlp's download, its progress lines, the cover art
+        library/    the library's file names and the names Windows can't use
+        tagging/    the Tagger
     platform/       service interfaces
     platform/win32/ Win32 implementations of the platform services
     ui/             Win32 windows, EventSink implementation

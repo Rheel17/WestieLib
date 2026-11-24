@@ -17,6 +17,7 @@ std::string format_log_time(std::chrono::local_time<std::chrono::milliseconds> t
 std::filesystem::path log_file_name(std::chrono::local_time<std::chrono::milliseconds> time);
 std::string log_file_line(const LogLine& line);
 std::string command_line(std::string_view tool, std::span<const std::string> arguments);
+std::string one_line(std::string_view text);
 std::string log_tool_run(
         std::chrono::local_time<std::chrono::milliseconds> time, std::string_view tool, std::span<const std::string> arguments,
         const platform::ProcessResult& result

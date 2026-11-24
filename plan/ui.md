@@ -72,7 +72,8 @@ downloaded track is **Downloaded**.
 | (a playlist's later entry of a track) | Duplicate         | two overlapping gray squares, nearly square-cornered |
 
 In the Status column, Needs review wins over Downloaded and Waiting and shows ⚠, because review is the state the user
-can act on. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a
+can act on. A track that needs review doesn't download until its match is confirmed or another one chosen
+(`arch.md`, YouTube Music id resolution), so it is a Waiting one. Duplicate wins over all of them, but only in the Status column and the inspector's status line: a
 duplicate counts under its track's status everywhere else.
 
 **Needs review.** A Spotify track needs review when its YouTube Music id comes from a match the Matcher wasn't sure of (`arch.md`,
@@ -258,8 +259,10 @@ With no playlists, the list reads `No playlists yet.` in gray.
 The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
 with `0/0`, and `○ Never updated ↻`.
 
-**So far** an update syncs playlists, YouTube Music and Spotify alike, and then matches the Spotify tracks: their
-tracks show as Waiting, a track whose match fails as Failed, and nothing downloads. Meanwhile:
+**So far** an update syncs playlists, YouTube Music and Spotify alike, matches the Spotify tracks, and downloads
+the tracks that have a YouTube Music id and don't need review. A track shows as Waiting until its download ends, then
+as Downloaded, or as Failed when its match or download fails. The rows don't show the downloading phase yet, and the
+table shows no progress ring. Meanwhile:
 
 - a YouTube Music playlist whose sync waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of
   a queued one. A Spotify sync needs no tool, so it never waits;
@@ -268,7 +271,7 @@ tracks show as Waiting, a track whose match fails as Failed, and nothing downloa
   playlist had; the next sync that succeeds settles the list;
 - a sync that succeeds sets the time of the last update, so once its matching is over a playlist whose tracks all
   wait reads `○ Updated today 14:03 ↻`;
-- each match updates the table, the cards and the rows' counts as it ends. A matched track that merges into one
+- each match and each download updates the table, the cards and the rows' counts as it ends. A matched track that merges into one
   with the same YouTube Music id leaves the table; when it was selected, the selection is gone with it.
 
 An `+ Add playlist` button closes the list. It and `No playlists yet.` line up with the text of the rows above them,
@@ -345,6 +348,8 @@ The library folder:
   |----------|------|
   | isn't a full path (`C:\…` or `\\server\share\…`), or has a character a folder name can't have | "Enter a full folder path, such as `<default folder>`." in red |
   | is on a drive letter this PC doesn't have | "That drive isn't on this PC." in red |
+  | has a folder name that ends in a space or a period, which Windows drops | "A folder name can't end in a space or a period." in red |
+  | has a folder name Windows keeps for devices (`CON`, `NUL`, `COM1`, … with or without an extension) | "CON, NUL, COM1 and the like are names Windows keeps for devices." in red |
   | is a file | "That's a file, not a folder." in red |
   | is a folder that doesn't exist yet | "This folder doesn't exist yet. The first update creates it." in gray |
   | is a folder that exists, or one on a network drive or share | nothing. Network paths aren't looked up while typing, because an unreachable server would hang the window |
@@ -363,7 +368,7 @@ The library folder:
 - **Search**: an edit with the cue banner "Search title, artist, album". It matches title, artists, album and
   file name, case- and accent-insensitive through `TextNormalizer`. The text splits into words at spaces, and a row
   shows when each word appears somewhere in those fields, in any order: `ana late` finds Late Night Swing by Ana, Ben.
-  So far no track has a file, so the search matches the other three. Esc empties the field. Ctrl+F (not in a menu)
+  So far the search matches the other three, not yet the file name. Esc empties the field. Ctrl+F (not in a menu)
   puts the focus in it and selects its text. A 16 px magnifier sits inside the field, 5 px from its left edge, and the
   text starts 5 px after it.
 - **Source**: the label `Source`, its text level with the search field's, then a drop-down list with All, YouTube
@@ -483,7 +488,8 @@ tab, search or source starts it at the top.
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
-So far no track has a file, so the track card shows no cover, no year, and `File` not downloaded yet. It shows the
+So far the track card shows no cover and no year, and its `File` section reads `Not downloaded yet.` even for a
+downloaded track. A failed download's reason is `Couldn't download`, with the error in the box. It shows the
 status with its explanation, a failure's reason and output, and the Audio rows of the YouTube Music id that a
 YouTube Music source, the Matcher or an override chose. The only action so far is `Choose match…`, for Needs review and for Failed,
 no match. The ISRC and the other action buttons come with their

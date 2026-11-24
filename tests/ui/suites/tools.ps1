@@ -39,7 +39,7 @@ function Check-SettingsTools($hwnd) {
 	Check-That '  Check for updates, GitHub unreachable' $actual ($actual -match "^$pattern$") $pattern
 	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure / deno: $LookupFailure"
 	$kept = @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe' | ForEach-Object { (Get-Item (Join-Path $ToolsDir $_)).Length }) -join ' '
-	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" "$((Get-Item $FakeYtDlp).Length) 0 0 0 False"
+	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" "$((Get-Item $FakeYtDlp).Length) $((Get-Item $FakeFfmpeg).Length) 0 0 False"
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)

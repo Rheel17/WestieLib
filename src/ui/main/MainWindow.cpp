@@ -598,6 +598,13 @@ void MainWindow::apply_event(const core::TrackMatching& event) {
     playlists_outdated_ = true;
 }
 
+// The downloading phase doesn't show yet; a download shows as it ends, with TrackStatusChanged
+void MainWindow::apply_event(const core::DownloadsQueued&) {}
+
+void MainWindow::apply_event(const core::TrackDownloading&) {}
+
+void MainWindow::apply_event(const core::TrackProgress&) {}
+
 void MainWindow::apply_event(const core::TrackStatusChanged& event) {
     sync_board_.finish_track(event.track);
     playlists_outdated_ = true;

@@ -16,13 +16,29 @@ ToolRunner::ToolRunner(ToolFolder& folder, const platform::FileOps& files, const
 platform::ProcessResult ToolRunner::run(
         ToolPackage package, const std::vector<std::string>& arguments, const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
 ) const {
-    // Held while it runs, so an update waits to replace it
-    std::shared_lock in_use = folder_.lock_for_use(package);
-    std::filesystem::path program = folder_.program(package);
-    if (!files_.is_file(program)) {
+    return run(package, {}, arguments, on_output_line, stop);
+}
+
+platform::ProcessResult ToolRunner::run(
+        ToolPackage package, std::span<const ToolPackage> also_uses, const std::vector<std::string>& arguments,
+        const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
+) const {
+    // Held while it runs, so an update waits to replace them
+    std::vector<std::shared_lock<std::shared_mutex>> in_use;
+    in_use.push_back(folder_.lock_for_use(package));
+    for (ToolPackage used : also_uses) {
+        in_use.push_back(folder_.lock_for_use(used));
+    }
+    if (!files_.is_file(folder_.program(package))) {
         throw ToolMissing(package);
     }
-    platform::ProcessResult result = runner_.run(program, arguments, on_output_line, stop);
+    for (ToolPackage used : also_uses) {
+        if (!files_.is_file(folder_.program(used))) {
+            throw ToolMissing(used);
+        }
+    }
+
+    platform::ProcessResult result = runner_.run(folder_.program(package), arguments, on_output_line, stop);
     std::string_view name = tool_package_name(package);
     log_.write_tool_run(name, arguments, result);
     log_.write(LogLevel::Debug, std::format("{}: exit code {}", command_line(name, arguments), result.exit_code));

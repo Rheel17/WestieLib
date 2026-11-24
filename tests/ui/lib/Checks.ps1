@@ -28,11 +28,17 @@ $ToolsDir = Join-Path $DataDir 'tools'
 $FakeYtDlp = Join-Path $DataDir 'fakes\yt-dlp.exe'
 New-Item -ItemType Directory -Force (Split-Path $FakeYtDlp) | Out-Null
 Add-Type -Path (Join-Path $PSScriptRoot 'FakeYtDlp.cs') -OutputAssembly $FakeYtDlp -OutputType ConsoleApplication
+$FakeFfmpeg = Join-Path $DataDir 'fakes\ffmpeg.exe'
+Add-Type -Path (Join-Path $PSScriptRoot 'FakeFfmpeg.cs') -OutputAssembly $FakeFfmpeg -OutputType ConsoleApplication
 $FakeYtDlpRuns = Join-Path $ToolsDir 'yt-dlp-runs.txt'
+$Fixtures = Join-Path $PSScriptRoot '..\fixtures'
+# With tools installed an update downloads, so the checks keep the files away from the user's music
+$LibraryDir = Join-Path $DataDir 'library'
 $Web = New-Object FakeWeb
 $env:WESTIELIB_SPOTIFY_URL = $Web.Url
 $env:WESTIELIB_SPOTIFY_API = $Web.Url
 $env:WESTIELIB_YTMUSIC_API = $Web.Url
+$Web.Cover = [IO.File]::ReadAllBytes((Join-Path $Fixtures 'thumbnail.jpg'))
 $Ellipsis = [char]0x2026
 $script:failures = 0
 $script:dpi = 96
@@ -414,23 +420,45 @@ function Get-LastCheckedText {
 	"Last checked $($local.Day) $($local.ToString('MMM', $Invariant))$year"
 }
 
-# Installed tools as the app would leave them: tools.json, checked at $CheckedAt, and the executables: the fake yt-dlp,
-# and empty files for ffmpeg and deno, which nothing runs yet
+# Installed tools as the app would leave them: tools.json, checked at $CheckedAt, and the executables: the fake yt-dlp
+# with its fixtures, the fake ffmpeg, and empty files for ffprobe and deno, which only the real yt-dlp runs. With tools
+# an update downloads, so settings.json also points the library at a scratch folder, without a pause between tracks.
 function Install-FakeTools {
 	New-Item -ItemType Directory -Force $ToolsDir | Out-Null
 	Copy-Item $FakeYtDlp $ToolsDir
-	foreach ($file in 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
+	Copy-Item $FakeFfmpeg $ToolsDir
+	$fakeFixtures = Join-Path $ToolsDir 'fake-fixtures'
+	New-Item -ItemType Directory -Force $fakeFixtures | Out-Null
+	Copy-Item (Join-Path $Fixtures '*') $fakeFixtures
+	foreach ($file in 'ffprobe.exe', 'deno.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
+	Set-SavedSetting libraryPath $LibraryDir
+	Set-SavedSetting delayBetweenTracksSeconds 0
 	$json = '{"version": 1, "checkedAt": "' + $CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $Invariant) + '", "tools": {' +
 		'"yt-dlp": {"release": "2026.10.21", "digest": "sha256:0"}, "ffmpeg": {"release": "n9.0", "digest": "sha256:0"}, "deno": {"release": "v2.5.4", "digest": "sha256:0"}}}'
 	[IO.File]::WriteAllText((Join-Path $ToolsDir 'tools.json'), $json)
 }
 
-# Sets settings.json's autoUpdateTools, in a new file when there's none
-function Set-SavedAutoUpdate([bool]$on) {
+# The fake yt-dlp's runs that read playlists, without the downloads
+function Get-YtDlpRuns {
+	if (-not (Test-Path $FakeYtDlpRuns)) { return @() }
+	@(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Where-Object { $_ -notlike '*|-x|*' })
+}
+
+# The fake yt-dlp's downloads, as the ids they downloaded
+function Get-DownloadRuns {
+	if (-not (Test-Path $FakeYtDlpRuns)) { return @() }
+	@(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Where-Object { $_ -like '*|-x|*' } | ForEach-Object { $_ -replace '^.*v=', '' })
+}
+
+# Sets one of settings.json's keys, in a new file when there's none
+function Set-SavedSetting([string]$name, $value) {
+	New-Item -ItemType Directory -Force $DataDir | Out-Null
 	$json = if (Test-Path $SettingsFile) { Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json } else { [pscustomobject]@{ version = 1 } }
-	$json | Add-Member autoUpdateTools $on -Force
+	$json | Add-Member $name $value -Force
 	[IO.File]::WriteAllText($SettingsFile, ($json | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
 }
+
+function Set-SavedAutoUpdate([bool]$on) { Set-SavedSetting autoUpdateTools $on }
 
 # Saves a window state for the next start, as the app would: a normal window at 100,100, 1280x800 at 96 DPI, the
 # default panel widths and the log hidden, with $values (names of the values, to DWORDs) instead

@@ -10,6 +10,9 @@
 // HTTP 500 for YtmBrokenQueries, and otherwise, when
 // the query is "<artists> <title>" of a track that Track built, with that song as id "yt<track id>"; anything else
 // has no results. Each search is logged in YtmQueries and waits for YtmGate.
+//
+// The covers of the tracks Track built are served from /image/<track id> as the bytes in Cover, or 404 without them,
+// and each request for one is logged in CoverRequests.
 
 using System;
 using System.Collections.Generic;
@@ -48,6 +51,10 @@ public class FakeWeb {
 	public readonly ManualResetEvent YtmGate = new ManualResetEvent(true);
 	// The song each track Track built is found as, by "<artists> <title>"
 	static readonly Dictionary<string, string> TrackSongs = new Dictionary<string, string>();
+	// Where Track points the covers: this server, so the checks never fetch one from Spotify
+	static string coverBase = "http://127.0.0.1:9/image/";
+	readonly List<string> coverRequests = new List<string>();
+	public byte[] Cover;
 	public byte[] YtDlp;
 	public int Port;
 	public string Url { get { return "http://127.0.0.1:" + Port; } }
@@ -55,6 +62,7 @@ public class FakeWeb {
 	public FakeWeb() {
 		listener.Start();
 		Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+		coverBase = Url + "/image/";
 		var thread = new Thread(Accept);
 		thread.IsBackground = true;
 		thread.Start();
@@ -77,10 +85,16 @@ public class FakeWeb {
 		lock (ytmQueries) return ytmQueries.ToArray();
 	}
 
+	// The track ids whose covers were asked for, in the order they came
+	public string[] CoverRequests() {
+		lock (coverRequests) return coverRequests.ToArray();
+	}
+
 	// So a suite sees only the queries it caused
 	public void ForgetQueries() {
 		lock (spotifyQueries) spotifyQueries.Clear();
 		lock (ytmQueries) ytmQueries.Clear();
+		lock (coverRequests) coverRequests.Clear();
 	}
 
 	// A song as YouTube Music's search lists it: the title, then "<artists> • <album> • <length>", then the plays, and the
@@ -120,7 +134,7 @@ public class FakeWeb {
 		string artistItems = string.Join(",", artists.Select(a => "{\"profile\":{\"name\":" + Json(a) + "},\"uri\":\"spotify:artist:" + id + "\"}"));
 		return "{\"addedAt\":{\"isoString\":\"2026-07-09T14:06:14.326Z\"},\"addedBy\":null,\"itemV2\":{\"__typename\":\"TrackResponseWrapper\",\"data\":{" +
 			"\"__typename\":\"Track\",\"albumOfTrack\":{\"artists\":{\"items\":[" + artistItems + "]},\"coverArt\":{\"sources\":[{\"height\":640," +
-			"\"url\":\"https://i.scdn.co/image/" + id + "\",\"width\":640}]},\"name\":" + Json(album) + ",\"uri\":\"spotify:album:" + id + "\"}," +
+			"\"url\":\"" + coverBase + id + "\",\"width\":640}]},\"name\":" + Json(album) + ",\"uri\":\"spotify:album:" + id + "\"}," +
 			"\"artists\":{\"items\":[" + artistItems + "]},\"contentRating\":{\"label\":\"" + (isExplicit ? "EXPLICIT" : "NONE") + "\"}," +
 			"\"discNumber\":1,\"trackDuration\":{\"totalMilliseconds\":" + milliseconds + "}," +
 			"\"name\":" + Json(title) + ",\"playability\":{\"playable\":true,\"reason\":\"PLAYABLE\"},\"playcount\":\"1234\",\"trackNumber\":1," +
@@ -259,6 +273,10 @@ public class FakeWeb {
 					"\"accessToken\":\"fake-token-" + id + "\",\"accessTokenExpirationTimestampMs\":1792757766234,\"isAnonymous\":true}}}}}}"
 				: "{\"props\":{\"pageProps\":{\"status\":500,\"title\":\"Page not available\"}}}";
 			return Encoding.UTF8.GetBytes("<html><body><script id=\"__NEXT_DATA__\" type=\"application/json\">" + data + "</script></body></html>");
+		}
+		if (path.StartsWith("/image/")) {
+			lock (coverRequests) coverRequests.Add(path.Substring("/image/".Length));
+			if (Cover != null) return Cover;
 		}
 		if (path.StartsWith(Query)) {
 			return Encoding.UTF8.GetBytes(QueryAnswer(path.Substring(Query.Length), headers, ref status));

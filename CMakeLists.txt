@@ -41,9 +41,21 @@ FetchContent_Declare(taglib
 	GIT_SUBMODULES 3rdparty/utfcpp
 	SYSTEM)
 FetchContent_MakeAvailable(taglib)
+# Its target names include folders only for an installed TagLib, so a build of its own lists them by hand
+set(TAGLIB_INCLUDE_DIRS
+	"${taglib_SOURCE_DIR}/taglib"
+	"${taglib_SOURCE_DIR}/taglib/toolkit"
+	"${taglib_SOURCE_DIR}/taglib/ogg"
+	"${taglib_SOURCE_DIR}/taglib/ogg/opus"
+	"${taglib_SOURCE_DIR}/taglib/flac"
+	"${taglib_BINARY_DIR}")
 
-# The Matcher's rules, the search's timeout, the log's texts and what they use, which the unit checks build as well
+# The Matcher's rules, the search's timeout, the log's texts, the library's file names, the download queue and what
+# they use, which the unit checks build as well
 set(MATCHING_SOURCES
+	src/core/download/DownloadProgress.cpp
+	src/core/library/LibraryFileName.cpp
+	src/core/library/WindowsNames.cpp
 	src/core/log/LogText.cpp
 	src/core/matching/Credits.cpp
 	src/core/matching/MatchEvidence.cpp
@@ -56,6 +68,11 @@ set(MATCHING_SOURCES
 	src/core/matching/SearchTimeout.cpp
 	src/core/matching/SongFacts.cpp
 	src/core/matching/TitleParts.cpp
+	src/core/sources/SourceType.cpp
+	src/core/state/MatchReview.cpp
+	src/core/state/TrackYtmIds.cpp
+	src/core/sync/PlaylistOrder.cpp
+	src/core/sync/TracksToDownload.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32TextNormalizer.cpp
@@ -68,6 +85,8 @@ set(LIBSTDCXX_DEFINITIONS _GLIBCXX_ASSERTIONS)
 add_executable(WestieLib WIN32
 	src/main.cpp
 	${MATCHING_SOURCES}
+	src/core/download/CoverArt.cpp
+	src/core/download/Downloader.cpp
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
@@ -90,7 +109,6 @@ add_executable(WestieLib WIN32
 	src/core/settings/SettingsStore.cpp
 	src/core/sources/LinkUrl.cpp
 	src/core/sources/SourcePage.cpp
-	src/core/sources/SourceType.cpp
 	src/core/sources/SpotifyEmbedPage.cpp
 	src/core/sources/SpotifyPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylist.cpp
@@ -98,16 +116,18 @@ add_executable(WestieLib WIN32
 	src/core/sources/YtDlpError.cpp
 	src/core/state/EffectiveMetadata.cpp
 	src/core/state/ListedSources.cpp
-	src/core/state/MatchReview.cpp
 	src/core/state/MergeTracks.cpp
 	src/core/state/PruneTracks.cpp
 	src/core/state/SplitSource.cpp
 	src/core/state/StateStore.cpp
-	src/core/state/TrackYtmIds.cpp
+	src/core/sync/ApplyDownload.cpp
 	src/core/sync/ApplyFetch.cpp
 	src/core/sync/ApplyMatch.cpp
+	src/core/sync/DownloadPool.cpp
 	src/core/sync/SyncEngine.cpp
+	src/core/sync/TrackDownload.cpp
 	src/core/sync/TracksToMatch.cpp
+	src/core/tagging/Tagger.cpp
 	src/core/tools/Ffmpeg.cpp
 	src/core/tools/ToolFolder.cpp
 	src/core/tools/ToolInstaller.cpp
@@ -280,6 +300,7 @@ set_source_files_properties(res/WestieLib.rc PROPERTIES OBJECT_DEPENDS
 
 # windres also searches these directories for the files named in the .rc
 target_include_directories(WestieLib PRIVATE src res "${GENERATED_DIR}")
+target_include_directories(WestieLib SYSTEM PRIVATE ${TAGLIB_INCLUDE_DIRS})
 
 target_compile_definitions(WestieLib PRIVATE ${WINDOWS_DEFINITIONS} ${LIBSTDCXX_DEFINITIONS})
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
@@ -291,6 +312,8 @@ add_executable(WestieLibTests
 	tests/unit/main.cpp
 	tests/unit/Checks.cpp
 	tests/unit/JudgementChecks.cpp
+	tests/unit/DownloadQueueChecks.cpp
+	tests/unit/LibraryChecks.cpp
 	tests/unit/LogChecks.cpp
 	tests/unit/MatchWordsChecks.cpp
 	tests/unit/NameChecks.cpp

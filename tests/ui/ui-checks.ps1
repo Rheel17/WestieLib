@@ -30,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Suites = 'unit', 'window', 'settings', 'tools', 'add-playlist', 'playlists', 'tracks', 'sync', 'choose-match', 'painting', 'dpi'
+$Suites = 'unit', 'window', 'settings', 'tools', 'add-playlist', 'playlists', 'tracks', 'sync', 'download', 'choose-match', 'painting', 'dpi'
 # powershell -File passes "a,b" as one string
 $chosen = if ($Suite) { @($Suite -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { $Suites }
 $unknown = @($chosen | Where-Object { $_ -notin $Suites })

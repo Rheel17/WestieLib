@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "core/log/LogLevel.h"
+#include "core/log/LogText.h"
 #include "core/matching/LibraryMatches.h"
 #include "core/matching/MatchText.h"
 #include "core/matching/RefusedSearch.h"
@@ -33,6 +34,7 @@
 #include "core/sync/TrackStatusChanged.h"
 #include "core/sync/TracksMerged.h"
 #include "core/sync/TracksQueued.h"
+#include "core/sync/TracksToDownload.h"
 #include "core/sync/TracksToMatch.h"
 #include "core/tools/ToolMissing.h"
 #include "platform/Cancelled.h"
@@ -56,24 +58,11 @@ std::size_t playlist_size(const State& state, const std::string& playlist) {
     return found == state.playlists.end() ? 0 : std::set<std::string>(found->second.sources.begin(), found->second.sources.end()).size();
 }
 
-// A log line is a row in the pane
-std::string one_line(std::string_view text) {
-    std::string line;
-    for (char character : text) {
-        if (character == '\n') {
-            line += "; ";
-        } else if (character != '\r') {
-            line += character;
-        }
-    }
-    return line;
-}
-
 }
 
 SyncEngine::SyncEngine(
         const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-        YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log
+        YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log, Downloads downloads
 ) :
         yt_dlp_(yt_dlp),
         tools_(tools),
@@ -83,7 +72,8 @@ SyncEngine::SyncEngine(
         matcher_(youtube_music, normalizer, log),
         state_(state),
         events_(events),
-        log_(log) {}
+        log_(log),
+        downloads_(std::move(downloads)) {}
 
 void SyncEngine::sync(const std::vector<std::string>& playlists) {
     std::unique_lock lock(mutex_);
@@ -125,14 +115,19 @@ void SyncEngine::cancel() noexcept {
 }
 
 void SyncEngine::work(const std::stop_token& stop) {
+    clear_work_folder();
     MatchQueue tracks;
     // Whether a fetch may have brought tracks to match since they were last looked for
     bool fetched = true;
+    // Whether a fetch or a match may have made tracks ready to download since they were last looked for
+    bool changed = true;
+    std::optional<DownloadPool> downloads;
     while (true) {
         // A playlist queued meanwhile goes before the next track
         if (std::optional<std::string> playlist = take_next(stop)) {
             fetch(*playlist, stop);
             fetched = true;
+            changed = true;
             continue;
         }
         if (fetched && !stop.stop_requested()) {
@@ -143,12 +138,66 @@ void SyncEngine::work(const std::stop_token& stop) {
         if (!tracks.waiting.empty() && !stop.stop_requested()) {
             if (std::optional<QueuedMatch> next = take_track(tracks, stop)) {
                 match(std::move(*next), tracks, stop);
+                changed = true;
             }
             continue;
         }
+        if (changed && !stop.stop_requested()) {
+            queue_downloads(downloads, stop);
+            changed = false;
+        }
+        // The downloads go on while a playlist queued meanwhile is fetched and matched
+        if (downloads && !stop.stop_requested() && !wait_for_downloads(*downloads, stop)) {
+            continue;
+        }
+        // Joined before the run ends, so no download reports after it
+        downloads.reset();
         if (finish(stop)) {
             return;
         }
+    }
+}
+
+void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::stop_token& stop) {
+    std::vector<QueuedTrack> ready = tracks_to_download(*state_.snapshot());
+    if (ready.empty()) {
+        return;
+    }
+    if (!pool) {
+        pool.emplace(
+                DownloadServices{
+                    .download = downloads_.download,
+                    .tools = tools_,
+                    .files = downloads_.files,
+                    .settings = downloads_.settings,
+                    .state = state_,
+                    .events = events_,
+                    .log = log_,
+                },
+                downloads_.work_folder, stop,
+                [this] {
+                    // Under the lock, so the run can't miss it between looking and waiting
+                    { std::scoped_lock lock(mutex_); }
+                    wake_.notify_all();
+                }
+        );
+    }
+    pool->add(std::move(ready));
+}
+
+// True once the downloads are done, or the run is stopped; false when a playlist was queued meanwhile
+bool SyncEngine::wait_for_downloads(DownloadPool& pool, const std::stop_token& stop) {
+    std::unique_lock lock(mutex_);
+    wake_.wait(lock, stop, [&] { return !queue_.empty() || pool.idle(); });
+    return queue_.empty() || stop.stop_requested();
+}
+
+// What an earlier run left, as one that was stopped with the app
+void SyncEngine::clear_work_folder() {
+    try {
+        downloads_.files.remove_tree(downloads_.work_folder);
+    } catch (const std::exception& error) {
+        log_.write(LogLevel::Debug, std::format("Couldn't clear the work folder: {}", error.what()));
     }
 }
 

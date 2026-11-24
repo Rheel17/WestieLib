@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <filesystem>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -18,23 +19,35 @@
 #include "core/matching/Matcher.h"
 #include "core/matching/YouTubeMusicSearch.h"
 #include "core/playlists/PlaylistLink.h"
+#include "core/settings/SettingsStore.h"
 #include "core/sources/PlaylistContents.h"
 #include "core/sources/SpotifyUrls.h"
 #include "core/state/Match.h"
 #include "core/state/StateStore.h"
 #include "core/state/Track.h"
+#include "core/sync/DownloadPool.h"
+#include "core/sync/TrackDownload.h"
 #include "core/tools/ToolFolder.h"
 #include "core/tools/YtDlp.h"
+#include "platform/FileOps.h"
 #include "platform/HttpClient.h"
 #include "platform/TextNormalizer.h"
 
 namespace westie::core {
 
+// What the download step needs beyond what the fetch and the match use
+struct Downloads {
+    const TrackDownload& download;
+    platform::FileOps& files;
+    const SettingsStore& settings;
+    std::filesystem::path work_folder{};
+};
+
 class SyncEngine {
 public:
     SyncEngine(
             const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-            YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log
+            YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log, Downloads downloads
     );
 
     void sync(const std::vector<std::string>& playlists);
@@ -57,6 +70,9 @@ private:
     void work(const std::stop_token& stop);
     std::optional<std::string> take_next(const std::stop_token& stop);
     std::optional<QueuedMatch> take_track(MatchQueue& queue, const std::stop_token& stop);
+    void queue_downloads(std::optional<DownloadPool>& pool, const std::stop_token& stop);
+    bool wait_for_downloads(DownloadPool& pool, const std::stop_token& stop);
+    void clear_work_folder();
     bool finish(const std::stop_token& stop);
     void fetch(const std::string& playlist, const std::stop_token& stop);
     PlaylistContents fetch_contents(const PlaylistLink& link, const std::stop_token& stop);
@@ -77,6 +93,7 @@ private:
     StateStore& state_;
     EventSink& events_;
     Log& log_;
+    Downloads downloads_;
     // Guards the queue and whether a run goes, which the UI's sync and the run's end both change
     std::mutex mutex_;
     // Wakes a run that waits for a track to be due when a playlist is queued

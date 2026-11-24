@@ -124,10 +124,10 @@ function Check-YouTubeLookups($hwnd) {
 	Set-PlaylistLink $dialog 'https://music.youtube.com/playlist?list=PLslow1'
 	Check '  while yt-dlp looks it up' (Get-LinkLine $dialog) "Looking up the YouTube Music playlist$Ellipsis | Add False"
 	Check '  then' (Wait-LinkLine $dialog) 'Checked PLslow1 YouTube Music playlist | Add True'
-	$runs = @(Get-Content $FakeYtDlpRuns -Encoding UTF8).Count
+	$runs = @(Get-YtDlpRuns).Count
 	foreach ($id in 'PLquick1', 'PLquick2', 'PLquick3') { [W]::SetEditText([W]::GetDlgItem($dialog, 1100), "https://music.youtube.com/playlist?list=$id") }
 	Check '  three quick changes' (Wait-LinkLine $dialog) 'Checked PLquick3 YouTube Music playlist | Add True'
-	$new = @(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Select-Object -Skip $runs)
+	$new = @(Get-YtDlpRuns | Select-Object -Skip $runs)
 	Check '  run yt-dlp once, with these arguments' ($new -join ' / ') '--ignore-config|--flat-playlist|--dump-single-json|--playlist-items|0|https://music.youtube.com/playlist?list=PLquick3'
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog

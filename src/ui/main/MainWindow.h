@@ -134,6 +134,9 @@ private:
     void apply_event(const core::PlaylistFetchFailed& event);
     void apply_event(const core::TracksQueued& event);
     void apply_event(const core::TrackMatching& event);
+    void apply_event(const core::DownloadsQueued& event);
+    void apply_event(const core::TrackDownloading& event);
+    void apply_event(const core::TrackProgress& event);
     void apply_event(const core::TrackStatusChanged& event);
     void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);

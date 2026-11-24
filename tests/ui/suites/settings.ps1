@@ -5,6 +5,8 @@ $HintNotFullPath = "Enter a full folder path, such as $DefaultLibrary."
 $HintNoSuchDrive = "That drive isn't on this PC."
 $HintNotAFolder = "That's a file, not a folder."
 $HintWillBeCreated = "This folder doesn't exist yet. The first update creates it."
+$HintEndsInSpaceOrPeriod = "A folder name can't end in a space or a period."
+$HintReservedName = 'CON, NUL, COM1 and the like are names Windows keeps for devices.'
 # Folders no test leaves behind: they're only typed, never created
 $Unique = [guid]::NewGuid().ToString('N').Substring(0, 8)
 $MissingFolder = "C:\WestieLib-check-$Unique"
@@ -63,6 +65,9 @@ function Check-LibraryFolder($hwnd) {
 	Check '  typing a relative path' (Get-HintFor $hwnd 'Music\WestieLib') "$HintNotFullPath | red True | moved False"
 	Check '  typing a path on a missing drive' (Get-HintFor $hwnd "$($drive):\Music") "$HintNoSuchDrive | red True | moved False"
 	Check '  typing the path of a file' (Get-HintFor $hwnd (Resolve-Path $Exe).Path) "$HintNotAFolder | red True | moved False"
+	# Windows would drop the period, or open a device, so the folder made would not be the one typed
+	Check '  typing a folder name with a period at its end' (Get-HintFor $hwnd "$MissingFolder\Music.") "$HintEndsInSpaceOrPeriod | red True | moved False"
+	Check '  typing a device name for a folder' (Get-HintFor $hwnd "$MissingFolder\con.mp3\Music") "$HintReservedName | red True | moved False"
 	Check '  typing a folder that does not exist' (Get-HintFor $hwnd $MissingFolder) "$HintWillBeCreated | red False | moved False"
 	Check '  typing a folder that exists' (Get-HintFor $hwnd $music) ' | red False | moved False'
 
