@@ -26,6 +26,22 @@ FetchContent_Declare(miniz
 	SYSTEM)
 FetchContent_MakeAvailable(miniz)
 
+# Tags in the downloaded files; static, without zlib, which only compressed ID3v2 frames need. Its CMake files are
+# older than option() honoring variables, unless the policy says so.
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set(BUILD_SHARED_LIBS OFF)
+set(WITH_ZLIB OFF)
+set(BUILD_TESTING OFF)
+set(BUILD_EXAMPLES OFF)
+set(BUILD_BINDINGS OFF)
+FetchContent_Declare(taglib
+	GIT_REPOSITORY https://github.com/taglib/taglib.git
+	GIT_TAG v2.1.1
+	GIT_SHALLOW TRUE
+	GIT_SUBMODULES 3rdparty/utfcpp
+	SYSTEM)
+FetchContent_MakeAvailable(taglib)
+
 # The Matcher's rules, the search's timeout, the log's texts and what they use, which the unit checks build as well
 set(MATCHING_SOURCES
 	src/core/log/LogText.cpp
@@ -92,10 +108,12 @@ add_executable(WestieLib WIN32
 	src/core/sync/ApplyMatch.cpp
 	src/core/sync/SyncEngine.cpp
 	src/core/sync/TracksToMatch.cpp
+	src/core/tools/Ffmpeg.cpp
 	src/core/tools/ToolFolder.cpp
 	src/core/tools/ToolInstaller.cpp
 	src/core/tools/ToolManager.cpp
 	src/core/tools/ToolPackage.cpp
+	src/core/tools/ToolRunner.cpp
 	src/core/tools/ToolSource.cpp
 	src/core/tools/ToolsStore.cpp
 	src/core/tools/YtDlp.cpp
@@ -266,7 +284,7 @@ target_include_directories(WestieLib PRIVATE src res "${GENERATED_DIR}")
 target_compile_definitions(WestieLib PRIVATE ${WINDOWS_DEFINITIONS} ${LIBSTDCXX_DEFINITIONS})
 target_compile_options(WestieLib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -municode>)
 target_link_options(WestieLib PRIVATE -municode -static)
-target_link_libraries(WestieLib PRIVATE glaze::glaze miniz comctl32 uxtheme gdiplus shell32 ole32 uuid winhttp bcrypt normaliz)
+target_link_libraries(WestieLib PRIVATE glaze::glaze miniz tag comctl32 uxtheme gdiplus shell32 ole32 uuid winhttp bcrypt normaliz)
 
 # The unit checks: a console program that tests/ui/ui-checks.ps1 runs as its unit suite
 add_executable(WestieLibTests

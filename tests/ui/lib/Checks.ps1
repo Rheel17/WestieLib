@@ -285,7 +285,7 @@ function Get-PartWidth([int]$barWidth, [int]$minimum, [int]$percent) { [math]::M
 
 # The Tools part is as wide as the widest thing it can say: the word, the icon, and what the tools are doing, with the
 # padding and the gap the bar keeps between a part's edge and its rect
-$ToolsWorkTexts = 'checking', 'checking for updates', 'installing yt-dlp 100%', 'updating yt-dlp 100%', 'installing ffmpeg 100%', 'updating ffmpeg 100%'
+$ToolsWorkTexts = 'checking', 'checking for updates', 'installing yt-dlp 100%', 'updating yt-dlp 100%', 'installing ffmpeg 100%', 'updating ffmpeg 100%', 'installing deno 100%', 'updating deno 100%'
 function Get-ToolsWidth($status) {
 	$result = 0L
 	$borders = [W]::SendForBuffer($status, 0x407, [IntPtr]::Zero, 12, [ref]$result)
@@ -415,13 +415,13 @@ function Get-LastCheckedText {
 }
 
 # Installed tools as the app would leave them: tools.json, checked at $CheckedAt, and the executables: the fake yt-dlp,
-# and empty files for ffmpeg, which nothing runs yet
+# and empty files for ffmpeg and deno, which nothing runs yet
 function Install-FakeTools {
 	New-Item -ItemType Directory -Force $ToolsDir | Out-Null
 	Copy-Item $FakeYtDlp $ToolsDir
-	foreach ($file in 'ffmpeg.exe', 'ffprobe.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
+	foreach ($file in 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe') { [IO.File]::WriteAllBytes((Join-Path $ToolsDir $file), [byte[]]@()) }
 	$json = '{"version": 1, "checkedAt": "' + $CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $Invariant) + '", "tools": {' +
-		'"yt-dlp": {"release": "2026.10.21", "digest": "sha256:0"}, "ffmpeg": {"release": "n9.0", "digest": "sha256:0"}}}'
+		'"yt-dlp": {"release": "2026.10.21", "digest": "sha256:0"}, "ffmpeg": {"release": "n9.0", "digest": "sha256:0"}, "deno": {"release": "v2.5.4", "digest": "sha256:0"}}}'
 	[IO.File]::WriteAllText((Join-Path $ToolsDir 'tools.json'), $json)
 }
 

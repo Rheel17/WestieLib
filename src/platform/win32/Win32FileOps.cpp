@@ -34,18 +34,27 @@ void write_flushed(const std::filesystem::path& file, std::string_view contents)
     check(FlushFileBuffers(handle.get()), "FlushFileBuffers");
 }
 
-}
-
-bool Win32FileOps::is_file(const std::filesystem::path& file) const {
-    DWORD attributes = GetFileAttributesW(file.c_str());
+std::optional<DWORD> attributes_of(const std::filesystem::path& path) {
+    DWORD attributes = GetFileAttributesW(path.c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES) {
         DWORD error = GetLastError();
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
-            return false;
+            return std::nullopt;
         }
         throw_error(error, "GetFileAttributesW");
     }
-    return (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    return attributes;
+}
+
+}
+
+bool Win32FileOps::is_file(const std::filesystem::path& file) const {
+    std::optional<DWORD> attributes = attributes_of(file);
+    return attributes && (*attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+bool Win32FileOps::exists(const std::filesystem::path& path) const {
+    return attributes_of(path).has_value();
 }
 
 std::optional<std::string> Win32FileOps::read_file(const std::filesystem::path& file) const {
@@ -98,6 +107,18 @@ void Win32FileOps::remove_tree(const std::filesystem::path& path) {
 
 void Win32FileOps::move_replacing(const std::filesystem::path& from, const std::filesystem::path& to) {
     check(MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
+}
+
+bool Win32FileOps::move_new(const std::filesystem::path& from, const std::filesystem::path& to) {
+    // The library may be on another volume than the work folder
+    if (MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH)) {
+        return true;
+    }
+    DWORD error = GetLastError();
+    if (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS) {
+        return false;
+    }
+    throw_error(error, "MoveFileExW");
 }
 
 std::unique_ptr<AppendFile> Win32FileOps::open_for_append(const std::filesystem::path& file) {

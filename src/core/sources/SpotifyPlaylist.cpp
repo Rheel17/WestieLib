@@ -1,5 +1,6 @@
 #include "core/sources/SpotifyPlaylist.h"
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -55,8 +56,22 @@ struct ArtistsJson {
     std::vector<ArtistJson> items{};
 };
 
+struct ImageJson {
+    std::string url{};
+    std::optional<std::int64_t> width{};
+};
+
+struct CoverArtJson {
+    std::vector<ImageJson> sources{};
+};
+
 struct AlbumJson {
     std::string name{};
+    std::optional<CoverArtJson> cover_art{};
+
+    struct glaze {
+        constexpr static auto value = glz::object("name", &AlbumJson::name, "coverArt", &AlbumJson::cover_art);
+    };
 };
 
 struct ContentRatingJson {
@@ -207,6 +222,14 @@ ContentJson read_page(platform::HttpClient& http, const std::string& url, const 
     return std::move(answer.data->playlist_v2.content);
 }
 
+std::optional<std::string> largest_cover(const std::optional<AlbumJson>& album) {
+    if (!album || !album->cover_art || album->cover_art->sources.empty()) {
+        return std::nullopt;
+    }
+    const std::vector<ImageJson>& images = album->cover_art->sources;
+    return std::ranges::max(images, {}, [](const ImageJson& image) { return image.width.value_or(0); }).url;
+}
+
 std::optional<SourceTrack> source_track(const ItemJson& item) {
     if (item.item_v2.type_name != TrackWrapperType) {
         return std::nullopt;
@@ -223,6 +246,7 @@ std::optional<SourceTrack> source_track(const ItemJson& item) {
     for (ArtistJson& artist : track.artists.items) {
         artists.push_back(std::move(artist.profile.name));
     }
+    std::optional<std::string> cover_url = largest_cover(track.album_of_track);
     return SourceTrack{
         .key = std::format("{}:{}", source_prefix(SourceType::Spotify), std::string_view(track.uri).substr(TrackUriPrefix.size())),
         .title = std::move(track.name),
@@ -230,6 +254,7 @@ std::optional<SourceTrack> source_track(const ItemJson& item) {
         .album = std::move(track.album_of_track).value_or(AlbumJson{}).name,
         .duration = std::chrono::milliseconds(track.track_duration.total_milliseconds),
         .explicit_content = track.content_rating ? std::optional(track.content_rating->label == ExplicitLabel) : std::nullopt,
+        .cover_url = std::move(cover_url),
     };
 }
 

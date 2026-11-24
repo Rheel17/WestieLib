@@ -32,14 +32,14 @@ function Check-SettingsTools($hwnd) {
 	$checked = Get-LastCheckedText
 	Send-Command $hwnd '&Settings...'
 	$dialog = Wait-OwnedWindow $hwnd
-	Check 'Settings, tools installed' (Get-SettingsTools $dialog) "yt-dlp | 2026.10.21 | Installed / ffmpeg | n9.0 | Installed | auto 0 | $checked | check True"
+	Check 'Settings, tools installed' (Get-SettingsTools $dialog) "yt-dlp | 2026.10.21 | Installed / ffmpeg | n9.0 | Installed / deno | v2.5.4 | Installed | auto 0 | $checked | check True"
 	Invoke-CheckForUpdates $dialog
-	$pattern = "yt-dlp \| 2026\.10\.21 \| Failed: $LookupFailure / ffmpeg \| n9\.0 \| Failed: $LookupFailure \| auto 0 \| $checked \| check True"
+	$pattern = "yt-dlp \| 2026\.10\.21 \| Failed: $LookupFailure / ffmpeg \| n9\.0 \| Failed: $LookupFailure / deno \| v2\.5\.4 \| Failed: $LookupFailure \| auto 0 \| $checked \| check True"
 	$actual = Get-SettingsTools $dialog
 	Check-That '  Check for updates, GitHub unreachable' $actual ($actual -match "^$pattern$") $pattern
-	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure"
-	$kept = @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe' | ForEach-Object { (Get-Item (Join-Path $ToolsDir $_)).Length }) -join ' '
-	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" "$((Get-Item $FakeYtDlp).Length) 0 0 False"
+	Check-ToolsPart '  Tools icon | tooltip' $hwnd "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure / deno: $LookupFailure"
+	$kept = @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe' | ForEach-Object { (Get-Item (Join-Path $ToolsDir $_)).Length }) -join ' '
+	Check '  tools kept, no staging' "$kept $(Test-Path (Join-Path $ToolsDir '.staging'))" "$((Get-Item $FakeYtDlp).Length) 0 0 0 False"
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1004), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Start-Sleep -Milliseconds 200
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
@@ -63,7 +63,7 @@ function Check-SettingsTools($hwnd) {
 "--- Run 1: no tools, GitHub unreachable"
 $app = Start-App
 $h = $app.Hwnd
-Check-ToolsPart 'No tools, GitHub unreachable: Tools icon | tooltip' $h "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure"
+Check-ToolsPart 'No tools, GitHub unreachable: Tools icon | tooltip' $h "amber \| yt-dlp: $LookupFailure / ffmpeg: $LookupFailure / deno: $LookupFailure"
 Stop-App $app
 
 "--- Run 2: tools installed, not updated automatically"
@@ -71,7 +71,7 @@ Install-FakeTools
 Set-SavedAutoUpdate $false
 $app = Start-App
 $h = $app.Hwnd
-Check-ToolsPart 'Tools installed: Tools icon | tooltip' $h 'green \| yt-dlp 2026\.10\.21 / ffmpeg n9\.0'
+Check-ToolsPart 'Tools installed: Tools icon | tooltip' $h 'green \| yt-dlp 2026\.10\.21 / ffmpeg n9\.0 / deno v2\.5\.4'
 $toolbar = ([W]::Children((Get-ToolbarStrip $h), 'ToolbarWindow32'))[0]
 Check '  toolbar buttons: Sync all still waits for a playlist' ([W]::ToolbarButtons($toolbar)) 'Add playlist, Update all v (disabled), Cancel (disabled), -, Settings'
 Check-SettingsTools $h

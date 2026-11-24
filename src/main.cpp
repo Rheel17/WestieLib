@@ -19,6 +19,7 @@
 #include "core/sync/SyncEngine.h"
 #include "core/tools/ToolFolder.h"
 #include "core/tools/ToolManager.h"
+#include "core/tools/ToolRunner.h"
 #include "core/tools/YtDlp.h"
 #include "platform/win32/BCryptHasher.h"
 #include "platform/win32/ComApartment.h"
@@ -89,7 +90,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
                 {.files = files, .http = http, .hasher = hasher, .archives = archives}, service_url(L"WESTIELIB_GITHUB_API", "https://api.github.com"),
                 tool_folder, events, log
         );
-        westie::core::YtDlp yt_dlp(tool_folder, files, processes, log);
+        westie::core::ToolRunner tool_runner(tool_folder, files, processes, log);
+        westie::core::YtDlp yt_dlp(tool_runner);
         westie::core::SpotifyUrls spotify{
             .web = service_url(L"WESTIELIB_SPOTIFY_URL", "https://open.spotify.com"),
             .api = service_url(L"WESTIELIB_SPOTIFY_API", "https://api-partner.spotify.com"),

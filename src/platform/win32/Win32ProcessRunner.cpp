@@ -42,7 +42,9 @@ UniqueFile open_empty_input() {
 
 }
 
-ProcessResult Win32ProcessRunner::run(const std::filesystem::path& program, std::span<const std::string> arguments, const std::stop_token& stop) const {
+ProcessResult Win32ProcessRunner::run(
+        const std::filesystem::path& program, std::span<const std::string> arguments, const OutputLineHandler& on_output_line, const std::stop_token& stop
+) const {
     if (stop.stop_requested()) {
         throw Cancelled();
     }
@@ -93,13 +95,13 @@ ProcessResult Win32ProcessRunner::run(const std::filesystem::path& program, std:
         // Both pipes are read at once, or a child that fills one would wait for the other forever
         std::jthread errors_reader([&] {
             try {
-                result.errors = read_all(errors.read.get());
+                result.errors = read_all(errors.read.get(), {});
             } catch (...) {
                 errors_failure = std::current_exception();
             }
         });
         try {
-            result.output = read_all(output.read.get());
+            result.output = read_all(output.read.get(), on_output_line);
         } catch (...) {
             // The reader's thread ends only with the child
             TerminateJobObject(job.get(), TerminatedExitCode);

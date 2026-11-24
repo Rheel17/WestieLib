@@ -124,7 +124,7 @@ function Check-SettingsDialog($hwnd, [string]$folder) {
 			$version = @([W]::Children($dialog, 'Static') | ForEach-Object { [W]::TextOf($_) } | Where-Object { $_ -like 'WestieLib *' })
 			Check '  the version' ($version -join ', ') "WestieLib $((Get-Item $Exe).VersionInfo.ProductVersion)"
 			Check '  starts on Browse, the path not selected' "$([W]::TextOf([W]::FocusOf($dialog))) $([W]::SendMessageW($edit, 0xB0, [IntPtr]::Zero, [IntPtr]::Zero))" "&Browse$([char]0x2026) 0"
-			$pattern = "yt-dlp \|  \| Failed: $LookupFailure / ffmpeg \|  \| Failed: $LookupFailure \| auto 1 \| Never checked \| check True"
+			$pattern = "yt-dlp \|  \| Failed: $LookupFailure / ffmpeg \|  \| Failed: $LookupFailure / deno \|  \| Failed: $LookupFailure \| auto 1 \| Never checked \| check True"
 			$actual = Get-SettingsTools $dialog
 			Check-That '  tools, none installed' $actual ($actual -match "^$pattern$") $pattern
 			if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-settings.png") }

@@ -41,6 +41,9 @@ file names such as `Win32Error.cpp`.
   notes list breaking changes.
 - [miniz](https://github.com/richgel999/miniz) unpacks the ffmpeg zip. It comes the same way, as a static library
   (`miniz`). Its tags before 3.1 ask for a CMake older than 3.5, which CMake 4 refuses.
+- [TagLib](https://github.com/taglib/taglib) writes the tags of the downloaded files. It comes the same way, as a
+  static library (`tag`), with its `3rdparty/utfcpp` submodule and without zlib, which only compressed ID3v2 frames
+  need. `BUILD_SHARED_LIBS OFF` before it keeps it static.
 - `CMAKE_CXX_SCAN_FOR_MODULES OFF`: the project uses headers, not C++20 modules, because windows.h is macro-based.
 - `project(VERSION)` feeds `src/Version.h.in` → `<build>/generated/Version.h` (`WESTIELIB_VERSION_*` macros), which
   the resource script uses for `VERSIONINFO`.

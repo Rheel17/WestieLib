@@ -7,9 +7,9 @@
 
 namespace westie::core {
 
-enum class ToolPackage { YtDlp, Ffmpeg };
+enum class ToolPackage { YtDlp, Ffmpeg, Deno };
 
-constexpr std::array AllToolPackages = {ToolPackage::YtDlp, ToolPackage::Ffmpeg};
+constexpr std::array AllToolPackages = {ToolPackage::YtDlp, ToolPackage::Ffmpeg, ToolPackage::Deno};
 
 std::string_view tool_package_name(ToolPackage package) noexcept;
 std::optional<ToolPackage> tool_package_named(std::string_view name) noexcept;
