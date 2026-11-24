@@ -11,6 +11,7 @@ namespace westie::core {
 namespace {
 
 constexpr std::string_view YtDlpAsset = "yt-dlp.exe";
+constexpr std::string_view DenoAsset = "deno-x86_64-pc-windows-msvc.zip";
 const std::regex FfmpegBranchBuild(R"(ffmpeg-n(\d+)\.(\d+)-latest-win64-gpl-\1\.\2\.zip)");
 
 std::optional<ToolDownload> choose_yt_dlp(const Release& release) {
@@ -19,6 +20,14 @@ std::optional<ToolDownload> choose_yt_dlp(const Release& release) {
         return std::nullopt;
     }
     return ToolDownload{.release = release.tag, .asset = *asset};
+}
+
+std::optional<ToolDownload> choose_deno(const Release& release) {
+    auto asset = std::ranges::find(release.assets, DenoAsset, &ReleaseAsset::name);
+    if (asset == release.assets.end()) {
+        return std::nullopt;
+    }
+    return ToolDownload{.release = release.tag, .asset = *asset, .archive = true};
 }
 
 std::optional<ToolDownload> choose_ffmpeg(const Release& release) {
@@ -46,6 +55,7 @@ std::string_view tool_repository(ToolPackage package) noexcept {
     switch (package) {
     case ToolPackage::YtDlp:  return "yt-dlp/yt-dlp";
     case ToolPackage::Ffmpeg: return "BtbN/FFmpeg-Builds";
+    case ToolPackage::Deno:   return "denoland/deno";
     }
     return {};
 }
@@ -54,6 +64,7 @@ std::optional<ToolDownload> choose_download(ToolPackage package, const Release& 
     switch (package) {
     case ToolPackage::YtDlp:  return choose_yt_dlp(release);
     case ToolPackage::Ffmpeg: return choose_ffmpeg(release);
+    case ToolPackage::Deno:   return choose_deno(release);
     }
     return std::nullopt;
 }

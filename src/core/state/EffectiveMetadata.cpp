@@ -36,8 +36,14 @@ TrackMetadata effective_metadata(const State& state, const Track& track) {
         if (metadata.album.empty()) {
             metadata.album = source.album;
         }
+        if (!metadata.year) {
+            metadata.year = source.year;
+        }
         if (metadata.duration.count() <= 0) {
             metadata.duration = source.duration;
+        }
+        if (metadata.cover_url.empty()) {
+            metadata.cover_url = source.cover_url;
         }
     }
     return metadata;

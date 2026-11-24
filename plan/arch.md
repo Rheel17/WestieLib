@@ -90,11 +90,9 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
 | `delayBetweenTracksSeconds` | pause between track starts                                                    |
 | `autoUpdateTools`           | update installed tools at startup (see ToolManager)                           |
 
-So far the app reads and writes `version`, `libraryPath` and `autoUpdateTools`; the other fields arrive with their
-features. The file
-is pretty-printed UTF-8, indented by 4 spaces. Keys it doesn't know are skipped and missing ones keep their
-defaults, so files from other versions still load. Without a file the app runs on the defaults and writes nothing
-until a setting changes.
+The file is pretty-printed UTF-8, indented by 4 spaces. Keys it doesn't know are skipped and missing ones keep their
+defaults, so files from other versions still load; a `format` it doesn't know reads as `opus`, and `concurrency` is
+held to 1–4. Without a file the app runs on the defaults and writes nothing until a setting changes.
 
 ### state.json
 
@@ -351,8 +349,8 @@ The cover art comes from the first of:
 | Service          | Implementation                                                                       |
 |------------------|--------------------------------------------------------------------------------------|
 | `HttpClient`     | WinHTTP (`WinHttpClient`). `get` sends the request headers it is given and returns a body; `post` does the same with a request body; `download` streams into a file and reports the bytes received as they arrive. Automatic proxy, redirects followed, timeouts, and a `User-Agent: WestieLib/<version>` that GitHub's API requires. A non-2xx answer throws `HttpError`, which keeps the status and reads `HTTP <code> from <host>`, a connection problem `Couldn't reach <host>: <WinHTTP's message>`. A `std::stop_token` cancels: its callback closes the request handle, which ends a blocked call, and the call throws `Cancelled`. |
-| `ProcessRunner`  | `Win32ProcessRunner`. `run(program, arguments, stop)` starts the program with `CreateProcessW`, without a console window, and returns its exit code, stdout and stderr. Arguments and output are UTF-8; the arguments are quoted by the C runtime's rules. A child inherits only its own pipe ends and NUL as stdin (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so children started at the same time never hold each other's pipes open. It starts suspended, joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and only then runs. A `std::stop_token` cancels: its callback terminates the job, and the call throws `Cancelled`. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. So far it returns the whole output at the end; splitting it into lines as they arrive comes with the Downloader's progress. |
-| `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`), moves via `MoveFileExW` with `MOVEFILE_COPY_ALLOWED`, Recycle Bin deletes via `IFileOperation` with `FOFX_RECYCLEONDELETE`. `open_for_append` hands out an `AppendFile`, which appends through a handle opened with `FILE_APPEND_DATA` and shared for reading and writing, so an editor can open the file meanwhile. `list_files` and `remove_file` serve the log's clean-up. |
+| `ProcessRunner`  | `Win32ProcessRunner`. `run(program, arguments, stop)` starts the program with `CreateProcessW`, without a console window, and returns its exit code, stdout and stderr. Arguments and output are UTF-8; the arguments are quoted by the C runtime's rules. A child inherits only its own pipe ends and NUL as stdin (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so children started at the same time never hold each other's pipes open. It starts suspended, joins a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and only then runs. A `std::stop_token` cancels: its callback terminates the job, and the call throws `Cancelled`. Children get `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. It returns the whole output at the end, and with an `on_output_line` callback it also hands over each line of stdout as it arrives (without its `\r\n`), on the calling thread, which the Downloader's progress reads. |
+| `FileOps`        | Atomic replace: a flushed `.tmp` renamed over the file, or through `ReplaceFileW` when a backup is kept (`replace_file_keeping_backup`). `move_replacing` moves over an existing file (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`); `move_new` moves a file to a name that must be free, across volumes too (`MOVEFILE_COPY_ALLOWED`), and answers false when it is taken. Files are deleted outright (`remove_file`), never sent to the Recycle Bin. `exists` tells whether anything has that name. `open_for_append` hands out an `AppendFile`, which appends through a handle opened with `FILE_APPEND_DATA` and shared for reading and writing, so an editor can open the file meanwhile. `list_files` and `remove_file` serve the log's clean-up. |
 | `TimeZone`       | `Win32TimeZone`: a `system_clock` time as local time, to the millisecond (`SystemTimeToTzSpecificLocalTime`). The static MinGW build has no time zone database for `std::chrono::current_zone`. |
 | `Hasher`         | SHA-256 of a file via BCrypt (`BCryptHasher`), as lowercase hex.                     |
 | `ArchiveExtractor` | miniz (`MinizArchiveExtractor`). Extracts the named files from a zip into a folder. miniz opens files by narrow name, so it gets a `FILE*` from `_wfopen`, and writes go through `CreateFileW`. A stop request ends it with `Cancelled`. |
@@ -368,7 +366,9 @@ inside the platform services.
 `SettingsStore` (`src/core/settings/`) loads and saves `settings.json` as a `Settings`, through `FileOps`, and holds the
 defaults that `main.cpp` gives it. `main.cpp` loads it before any window shows. A file that doesn't read stops the
 app with a message that names the file, rather than writing the defaults over it. Each change is saved at once:
-`FileOps::replace_file` writes `settings.json.tmp`, flushes it, and renames it over `settings.json`.
+`FileOps::replace_file` writes `settings.json.tmp`, flushes it, and renames it over `settings.json`. The store also
+keeps the settings last loaded or saved behind a mutex (`current()`), so the SyncEngine's threads read what the UI
+saved last.
 
 `StateStore` (`src/core/state/`) owns `state.json` in memory behind a mutex. Every write
 goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which keeps the previous version as
@@ -384,9 +384,10 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   long as it needs, unchanged. `update` holds a second mutex for its whole run, so changes never interleave, and swaps
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
-  `fetchErrorAt`; sources with `title`, `artists`, `album` (left out when empty), `durationMs`, `explicit`, `match` and
-  `track`; and tracks with `sources`, `ytmOverride`, `status`, `failure`, `error` and `addedAt`. Empty fields are left
-  out, and a failure or doubt name from a later version reads as none. The other fields arrive with their features.
+  `fetchErrorAt`; sources with `title`, `artists`, `album`, `year`, `durationMs`, `explicit`, `coverUrl`, `match` and
+  `track`; and tracks with `sources`, `ytmId`, `ytmOverride`, `status`, `failure`, `error`, `file` and `addedAt`. Empty
+  fields are left out, and a failure or doubt name from a later version reads as none. `isrc` and `edits` arrive with
+  their features.
 - Earlier versions wrote `ytmId` and `ytmOverride` as `videoId` and `videoOverride`. Those keys still read, and the
   next save writes the new ones.
 
@@ -477,7 +478,8 @@ ToolManager installs and updates the external tools in `tools\` from their GitHu
 comes from BtbN, the upstream that repository forks. Its `latest` release is rebuilt daily too, which is why the
 branch, and not the digest, decides an update.
 
-So far the app downloads yt-dlp and ffmpeg; deno follows.
+`choose_download` (`ToolSource`) picks deno's zip by its exact name and names the release by its tag; only
+`deno.exe` comes out of it.
 
 Flow per tool:
 
@@ -524,7 +526,7 @@ tools it needs (ui.md, Vocabulary › Waiting for tools):
 | `YouTubeMusicSource` fetch             | yt-dlp         |
 | Matcher                                | –              |
 | `searchCandidates`                     | –              |
-| Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg |
+| Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg, deno |
 
 A step whose tool isn't available stays queued, and the track stays `pending` with a `waitingFor` list of tool names
 in its `TrackStatusChanged` event; it isn't a failure, and nothing is written to the state for it. When ToolManager
@@ -647,7 +649,7 @@ never refreshed.
 - Only items of type `Track` count; episodes and local files are skipped. Pages of 100 are read until `totalCount` or
   an empty page. After each page but the last, the fetch hands the tracks read so far to the SyncEngine, which shows
   them (see SyncEngine › So far).
-- So far a source keeps the title, artists, album and duration; the cover URL arrives with the Downloader.
+- A source keeps the title, artists, album, duration and the largest cover URL (`coverUrl`).
 - Errors:
   - the embed page's error page, or `playlistV2` of type `NotFound`: "The playlist doesn't exist or is private.";
   - an answer with `errors` (`PersistedQueryNotFound` when the hash is stale): "Spotify said: <message>";

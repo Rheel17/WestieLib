@@ -50,7 +50,9 @@ struct FailureName {
     std::string_view name{};
 };
 
-constexpr std::array FailureNames = {FailureName{TrackFailure::NoMatch, "noMatch"}, FailureName{TrackFailure::Search, "search"}};
+constexpr std::array FailureNames = {
+    FailureName{TrackFailure::NoMatch, "noMatch"}, FailureName{TrackFailure::Search, "search"}, FailureName{TrackFailure::Download, "download"}
+};
 
 struct DoubtName {
     MatchDoubt doubt = MatchDoubt::Title;
@@ -80,18 +82,22 @@ struct SourceJson {
     std::string title{};
     std::vector<std::string> artists{};
     std::optional<std::string> album{};
+    std::optional<int> year{};
     std::int64_t duration_ms = 0;
     std::optional<bool> explicit_content{};
+    std::optional<std::string> cover_url{};
     std::optional<MatchJson> match{};
     std::string track{};
 };
 
 struct TrackJson {
     std::vector<std::string> sources{};
+    std::optional<std::string> ytm_id{};
     std::optional<std::string> ytm_override{};
     std::string status{};
     std::optional<std::string> failure{};
     std::optional<std::string> error{};
+    std::optional<std::string> file{};
     std::string added_at{};
     // Read from files of earlier versions, never written
     std::optional<std::string> old_ytm_override{};
@@ -244,8 +250,8 @@ template<>
 struct glz::meta<westie::core::SourceJson> {
     using T = westie::core::SourceJson;
     constexpr static auto value = glz::object(
-            "title", &T::title, "artists", &T::artists, "album", &T::album, "durationMs", &T::duration_ms, "explicit", &T::explicit_content, "match",
-            &T::match, "track", &T::track
+            "title", &T::title, "artists", &T::artists, "album", &T::album, "year", &T::year, "durationMs", &T::duration_ms, "explicit",
+            &T::explicit_content, "coverUrl", &T::cover_url, "match", &T::match, "track", &T::track
     );
 };
 
@@ -253,8 +259,8 @@ template<>
 struct glz::meta<westie::core::TrackJson> {
     using T = westie::core::TrackJson;
     constexpr static auto value = glz::object(
-            "sources", &T::sources, "ytmOverride", &T::ytm_override, "status", &T::status, "failure", &T::failure, "error", &T::error, "addedAt",
-            &T::added_at, "videoOverride", &T::old_ytm_override
+            "sources", &T::sources, "ytmId", &T::ytm_id, "ytmOverride", &T::ytm_override, "status", &T::status, "failure", &T::failure, "error",
+            &T::error, "file", &T::file, "addedAt", &T::added_at, "videoOverride", &T::old_ytm_override
     );
 };
 
@@ -299,8 +305,10 @@ State StateStore::load() const {
             .title = std::move(source.title),
             .artists = std::move(source.artists),
             .album = std::move(source.album).value_or(""),
+            .year = source.year,
             .duration = std::chrono::milliseconds(source.duration_ms),
             .explicit_content = source.explicit_content,
+            .cover_url = std::move(source.cover_url).value_or(""),
             .match = source.match ? std::optional(match_of(std::move(*source.match))) : std::nullopt,
             .track = std::move(source.track),
         };
@@ -308,10 +316,12 @@ State StateStore::load() const {
     for (auto& [key, track] : json.tracks) {
         state.tracks[key] = {
             .sources = std::move(track.sources),
+            .ytm_id = std::move(track.ytm_id).value_or(""),
             .ytm_override = std::move(track.ytm_override).or_else([&] { return std::move(track.old_ytm_override); }).value_or(""),
             .status = status_named(track.status),
             .failure = failure_named(track.failure),
             .error = std::move(track.error).value_or(""),
+            .file = track.file ? path_from_utf8(*track.file) : std::filesystem::path(),
             .added_at = parse_iso_time(track.added_at).value_or(std::chrono::system_clock::time_point{}),
         };
     }
@@ -328,8 +338,10 @@ void StateStore::save(const State& state) {
             .title = source.title,
             .artists = source.artists,
             .album = optional_text(source.album),
+            .year = source.year,
             .duration_ms = source.duration.count(),
             .explicit_content = source.explicit_content,
+            .cover_url = optional_text(source.cover_url),
             .match = source.match ? std::optional(json_of(*source.match)) : std::nullopt,
             .track = source.track,
         };
@@ -337,10 +349,12 @@ void StateStore::save(const State& state) {
     for (const auto& [key, track] : state.tracks) {
         json.tracks[key] = {
             .sources = track.sources,
+            .ytm_id = optional_text(track.ytm_id),
             .ytm_override = optional_text(track.ytm_override),
             .status = std::string(status_name(track.status)),
             .failure = failure_name(track.failure),
             .error = optional_text(track.error),
+            .file = track.file.empty() ? std::nullopt : std::optional(to_utf8(track.file)),
             .added_at = format_iso_time(track.added_at),
         };
     }

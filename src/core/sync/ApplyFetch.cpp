@@ -22,6 +22,9 @@ void add_source(State& state, SourceTrack&& listed, std::chrono::system_clock::t
     }
     source.duration = listed.duration;
     source.explicit_content = listed.explicit_content;
+    if (listed.cover_url) {
+        source.cover_url = std::move(*listed.cover_url);
+    }
     if (state.tracks.contains(source.track)) {
         return;
     }

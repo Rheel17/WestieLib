@@ -31,9 +31,10 @@ const wchar_t* status_explanation(StatusTab status, core::TrackFailure failure) 
 
 const wchar_t* failure_reason(core::TrackFailure failure) {
     switch (failure) {
-    case core::TrackFailure::NoMatch: return L"No match on YouTube Music";
-    case core::TrackFailure::Search:  return L"Couldn't search YouTube Music";
-    default:                          return L"";
+    case core::TrackFailure::NoMatch:  return L"No match on YouTube Music";
+    case core::TrackFailure::Search:   return L"Couldn't search YouTube Music";
+    case core::TrackFailure::Download: return L"Couldn't download";
+    default:                           return L"";
     }
 }
 

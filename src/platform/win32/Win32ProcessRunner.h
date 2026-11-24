@@ -11,7 +11,9 @@ namespace westie::platform::win32 {
 
 class Win32ProcessRunner final : public ProcessRunner {
 public:
-    ProcessResult run(const std::filesystem::path& program, std::span<const std::string> arguments, const std::stop_token& stop) const override;
+    ProcessResult run(
+            const std::filesystem::path& program, std::span<const std::string> arguments, const OutputLineHandler& on_output_line, const std::stop_token& stop
+    ) const override;
 };
 
 }

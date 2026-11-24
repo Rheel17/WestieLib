@@ -91,7 +91,7 @@ failed shows in the status bar (see Status bar › Tools) and in Settings, not o
 | Fetch a Spotify playlist                  | –               |
 | Fetch a YouTube Music playlist            | yt-dlp          |
 | Match a Spotify track (search YouTube Music) | –            |
-| Download a track: audio, thumbnail cover  | yt-dlp, ffmpeg  |
+| Download a track: audio, thumbnail cover  | yt-dlp, ffmpeg, deno |
 | Choose a match: search                    | –               |
 
 A track that waits shows the hourglass in the Status column, with `Waiting for ffmpeg` (or `Waiting for yt-dlp and
@@ -875,7 +875,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - **Downloads**: `Parallel downloads` spin (1–4) and `Pause between tracks` spin (seconds).
   - **Tools**: a list of tool, release and status. Under it, an `Update tools automatically` check box (on by
     default), `Check for updates`, and "Last checked …".
-    - One row per download: `yt-dlp` and `ffmpeg` (ffmpeg brings ffprobe along). The release is empty for a tool
+    - One row per download: `yt-dlp`, `ffmpeg` (ffmpeg brings ffprobe along) and `deno`. The release is empty for a tool
       that isn't installed.
     - The status is an icon and a word, as in the Tools part: ✓ `Up to date` (checked since the app started) or
       `Installed`; ⟳ `Checking…`, `Downloading 45%` or `Installing…`; ⚠ `Not installed` or `Failed: <error>`.
