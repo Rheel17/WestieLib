@@ -60,6 +60,11 @@ void StatusFilter::reset() {
     show();
 }
 
+void StatusFilter::select(StatusTab tab) {
+    selected_ = tab;
+    show();
+}
+
 void StatusFilter::on_selection_change() {
     int index = tabs_.selected();
     if (index >= 0 && std::cmp_less(index, shown_.size())) {

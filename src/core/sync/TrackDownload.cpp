@@ -2,13 +2,9 @@
 
 #include <exception>
 #include <format>
-#include <set>
-#include <stdexcept>
 #include <utility>
 
-#include "core/json/Utf8Path.h"
 #include "core/library/LibraryFileName.h"
-#include "core/library/WindowsNames.h"
 #include "core/log/LogLevel.h"
 #include "core/log/LogSubject.h"
 #include "core/log/LogText.h"
@@ -17,39 +13,10 @@
 
 namespace westie::core {
 
-namespace {
-
-// Each try finds a name free; only names taken between the look and the move cost another
-constexpr int PlacementTries = 100;
-
-// Windows would create another folder than the one the settings name
-void check_library_folder(const std::filesystem::path& library) {
-    for (const std::filesystem::path& name : library.relative_path()) {
-        if (windows_name_problem(to_utf8(name)) != NameProblem::None) {
-            throw std::runtime_error(std::format("Windows can't use \"{}\" as a folder name in the library folder", to_utf8(name)));
-        }
-    }
-}
-
-std::set<std::string> taken_names(const State& state, const std::string& track_key, const std::vector<std::filesystem::path>& in_folder) {
-    std::set<std::string> taken;
-    for (const auto& [key, track] : state.tracks) {
-        if (key != track_key && !track.file.empty()) {
-            taken.insert(file_name_key(to_utf8(track.file)));
-        }
-    }
-    for (const std::filesystem::path& file : in_folder) {
-        taken.insert(file_name_key(to_utf8(file.filename())));
-    }
-    return taken;
-}
-
-}
-
 TrackDownload::TrackDownload(const Downloader& downloader, const CoverArt& cover_art, platform::FileOps& files, Log& log) :
         downloader_(downloader), cover_art_(cover_art), files_(files), log_(log) {}
 
-PlacedTrack TrackDownload::run(
+TaggedAudio TrackDownload::run(
         const State& state, const std::string& track_key, const std::string& ytm_id, const Settings& settings, const std::filesystem::path& work,
         const std::function<void(int percent)>& on_percent, const std::stop_token& stop
 ) const {
@@ -77,7 +44,7 @@ PlacedTrack TrackDownload::run(
                 .cover = settings.embed_cover ? cover(state, track_key, metadata, audio, work, stop) : std::string(),
             }
     );
-    return {.file = place(state, track_key, metadata, ytm_id, audio.audio, settings.library_path), .info = std::move(audio.info)};
+    return {.audio = audio.audio, .stem = library_file_stem(metadata, ytm_id), .info = std::move(audio.info)};
 }
 
 // A file without a cover is better than no file
@@ -93,27 +60,6 @@ std::string TrackDownload::cover(
         log_.write(LogLevel::Warning, std::format("Couldn't get the cover: {}", one_line(error.what())), track_subject(state, track_key));
         return {};
     }
-}
-
-std::filesystem::path TrackDownload::place(
-        const State& state, const std::string& track_key, const TrackMetadata& metadata, const std::string& ytm_id, const std::filesystem::path& audio,
-        const std::filesystem::path& library
-) const {
-    check_library_folder(library);
-    files_.create_folders(library);
-    std::set<std::string> taken = taken_names(state, track_key, files_.list_files(library));
-    std::string stem = library_file_stem(metadata, ytm_id);
-    std::string extension = to_utf8(audio.extension()).substr(1);
-    for (int tries = 0; tries < PlacementTries; ++tries) {
-        std::string name = free_file_name(stem, extension, taken);
-        std::filesystem::path file = path_from_utf8(name);
-        if (files_.move_new(audio, library / file)) {
-            return file;
-        }
-        // Another file took the name since the folder was looked at
-        taken.insert(file_name_key(name));
-    }
-    throw std::runtime_error(std::format("No free name for \"{}\" in the library folder", stem));
 }
 
 }

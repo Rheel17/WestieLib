@@ -136,6 +136,9 @@ function Get-StatusBar($hwnd) { ([W]::Children($hwnd, 'msctls_statusbar32'))[0] 
 
 function Get-Infobar($hwnd) { ([W]::Children($hwnd, 'WestieLib.Infobar'))[0] }
 
+# The infobar's action button that shows: Details or Review
+function Get-InfobarButton($hwnd) { @([W]::Children((Get-Infobar $hwnd), 'Button') | Where-Object { [W]::IsWindowVisible($_) })[0] }
+
 # The panels start under the toolbar, or under the infobar while it shows
 function Get-RowTop($hwnd) {
 	$infobar = Get-Infobar $hwnd

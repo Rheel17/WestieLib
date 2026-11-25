@@ -19,4 +19,11 @@ struct DownloadedAudio {
     VideoInfo info{};
 };
 
+// Tagged in the work folder, waiting to move into the library
+struct TaggedAudio {
+    std::filesystem::path audio{};
+    std::string stem{};
+    VideoInfo info{};
+};
+
 }

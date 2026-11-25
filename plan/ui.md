@@ -116,14 +116,14 @@ Each menu lists its items top to bottom; ─ is a separator. Shortcuts are right
 |-------|-------|
 | File  | Add playlist… (Ctrl+N), Remove playlist…, ─, Open library folder, ─, Exit (Ctrl+Q) |
 | Update | Update all (F5), Update selected playlist, ─, Cancel |
-| Track | Confirm match, Choose match…, Edit track… (Enter, double-click), ─, Retry, Keep, Move to Recycle Bin…, ─, Show in folder, Open on YouTube, Open source page |
+| Track | Confirm match, Choose match…, Edit track… (Enter, double-click), ─, Retry, Keep, Delete file…, ─, Show in folder, Open on YouTube, Open source page |
 | View  | Log (Ctrl+L), ─, Columns… |
 | Tools | Settings… (Ctrl+Alt+S), Check for updates, ─, Rebuild library from files…, Locate library folder…, ─, Open log folder |
 | Help  | About WestieLib |
 
 Access keys: the menu bar has **F**ile, **U**pdate, **T**rack, **V**iew, T**o**ols and **H**elp (Track and Tools can't
 share T). The items, in order: File **A**dd, **R**emove, **O**pen, E**x**it; Update **A**ll, **S**elected, **C**ancel;
-Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **M**ove, **S**how, **Y**ouTube, source **P**age;
+Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **D**elete, **S**how, **Y**ouTube, source **P**age;
 View **L**og, **C**olumns; Tools **S**ettings, **U**pdates, **R**ebuild, **F**older, **L**og folder; Help **A**bout.
 
 The menu bar is white and runs straight into the toolbar, without the gray line Windows draws under a menu bar. Its
@@ -184,9 +184,11 @@ Only one message shows at a time, in this priority order:
 ✕ hides the current message until its cause changes. A dismissed fetch failure still shows ⚠ on its playlist
 row.
 
-So far it shows only fetch failures, one at a time: the first playlist, in the order they were added, whose last fetch
-failed and wasn't dismissed. A later failure of a dismissed playlist shows again. `Details` shows the log pane, where
-the failure is an Error line.
+So far it shows removed tracks and fetch failures. Removed tracks: the count of Removed tracks in the library (`1 track
+is no longer in any playlist.` for one), as long as there are any; dismissed, it shows again once a track that wasn't
+Removed then becomes Removed. `Review…` selects All tracks and the Removed tab. Fetch failures, one at a time: the
+first playlist, in the order they were added, whose last fetch failed and wasn't dismissed. A later failure of a
+dismissed playlist shows again. `Details` shows the log pane, where the failure is an Error line.
 
 ```
 │ ⚠  Couldn't fetch "Slow & bluesy". It may be private or deleted.                         [Details]  ✕ │
@@ -469,12 +471,13 @@ tab, search or source starts it at the top.
     |----------------|-----------------------------------------|
     | Needs review   | `Choose match…`, `Edit track…`          |
     | Failed, no match | `Choose match…`, `Retry`              |
+    | Failed, other  | `Retry`, `Edit track…`                  |
+    | Downloaded, Waiting | `Edit track…`                      |
+    | Kept           | `Edit track…`, `Delete file…`           |
+    | Removed        | `Keep`, `Delete file…`                  |
 
     Confirming a match goes through Choose match too: its current match is in the list. The Track menu keeps
     `Confirm match` as a shortcut.
-    | Failed, other  | `Retry`, `Edit track…`                  |
-    | Downloaded, Waiting, Kept | `Edit track…`                |
-    | Removed        | `Keep`, `Move to Recycle Bin…`          |
 - **Source** (titled **Sources** for a merged track):
   - one line per source: logo, and the name as a link to the source's page;
   - the playlists, as links;
@@ -491,14 +494,15 @@ tab, search or source starts it at the top.
 - **File**: the file name and `Show in folder`.
 
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
-them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
+them, for example `Keep 4 tracks` and `Delete 4 files…`.
 
 So far the track card shows a downloading track as Waiting, without its percentage. It shows the cover the file
 holds, the year, and the file's name with `Show in folder`. It shows the
 status with its explanation, a failure's reason and output, and the Audio rows of the YouTube Music id that a
 YouTube Music source, the Matcher or an override chose. The actions so far are `Choose match…`, for Needs review and
-for Failed, no match, and `Retry` for Failed, after it. The ISRC and the other action buttons come with their
-features, and so do the selection card's bulk actions.
+for Failed, no match, `Retry` for Failed, after it, and `Keep` and `Delete file…` for Removed (`Delete file…` alone
+for Kept). The ISRC and `Edit track…` come with their features, and so do the selection card's bulk actions; until
+then the Track menu's Keep and Delete file act on every selected track they apply to.
 
 ```
 ┌ inspector ──────────────────────┐   ┌ inspector ──────────────────────┐
@@ -911,7 +915,10 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - Remove playlist: title `Remove playlist`, main instruction `Remove "<name>"?`, content "Its downloaded files stay in
     the library." Buttons `Remove` and `Cancel`, with Cancel the default. Tracks left in no playlist
     become Removed, and the infobar offers to review them afterwards.
-  - Move to Recycle Bin says how many files.
+  - Delete file: title `Delete file`, main instruction `Delete "<file name>"?`, or `Delete 4 files?` for several,
+    content "The file is deleted from the library folder, not moved to the Recycle Bin." ("The files are" for
+    several). Buttons `Delete` and `Cancel`, with Cancel the default. It counts the selected tracks that are Removed
+    or Kept, which are the ones it deletes; Keep, without a confirmation, makes the selected Removed ones Kept.
   - Rebuild says it replaces track entries.
 - **First run** has no playlists, so the main panel shows its welcome screen (see Main panel › First run). Tools install
   in the meantime, and the status bar shows their progress.

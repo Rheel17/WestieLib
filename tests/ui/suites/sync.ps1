@@ -361,7 +361,7 @@ Check '  Sync selected: one query, no yt-dlp | rows' "$((Get-SpotifyQueries) - $
 
 # Details shows the log; the infobar's close box dismisses the failure until the playlist fails again
 $infobar = Get-Infobar $h
-[void][W]::PostMessageW(([W]::Children($infobar, 'Button'))[0], 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+[void][W]::PostMessageW((Get-InfobarButton $h), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 Start-Sleep -Milliseconds 300
 Check 'Infobar Details: the log shows' (Get-LogVisibility $h) 'True True'
 Send-Command $h '&Log'

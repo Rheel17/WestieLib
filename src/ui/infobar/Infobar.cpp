@@ -1,6 +1,7 @@
 #include "ui/infobar/Infobar.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 #include "ResourceIds.h"
@@ -25,7 +26,7 @@ constexpr int ButtonPaddingDips = 4;
 constexpr int HairlinePixels = 1;
 constexpr COLORREF InfobarColor = RGB(0xFF, 0xF4, 0xCE);
 constexpr COLORREF RuleColor = RGB(0xEA, 0xDB, 0x9F);
-constexpr WORD DetailsCommand = 1;
+constexpr WORD ActionCommand = 1;
 
 framework::Rect centered(const framework::Rect& slot, int width, int height) {
     int left = slot.left + (slot.width() - width) / 2;
@@ -35,12 +36,13 @@ framework::Rect centered(const framework::Rect& slot, int width, int height) {
 
 }
 
-Infobar::Infobar(HWND parent, std::function<void()> on_details, std::function<void()> on_dismiss) :
+Infobar::Infobar(HWND parent, std::function<void()> on_action, std::function<void()> on_dismiss) :
         Window(window_class(), {.title = L"Infobar", .style = WS_CHILD | WS_CLIPCHILDREN, .parent = parent}),
-        on_details_(std::move(on_details)),
+        on_action_(std::move(on_action)),
         on_dismiss_(std::move(on_dismiss)),
         message_(hwnd(), L"", {.background = InfobarColor}),
-        details_(hwnd(), {.text = L"Details", .command = DetailsCommand, .compact = true}),
+        details_(hwnd(), {.text = L"Details", .command = ActionCommand, .compact = true}),
+        review_(hwnd(), {.text = L"Review…", .command = ActionCommand, .compact = true}),
         close_(hwnd(), InfobarColor, [this] { on_dismiss_(); }) {}
 
 int Infobar::height() const noexcept {
@@ -51,15 +53,20 @@ void Infobar::apply_dpi(framework::Dpi dpi, const framework::MessageFont& font) 
     message_.set_font(font.handle());
     line_height_ = font.line_height();
     details_.apply_dpi(dpi, font);
+    review_.apply_dpi(dpi, font);
     close_.apply_dpi(dpi);
     warn_.emplace(IDI_WARN, dpi.scale(IconDips));
     // Taller when the system font needs a taller button
-    height_ = std::max(dpi.scale(HeightDips), details_.size().height + 2 * dpi.scale(ButtonPaddingDips)) + HairlinePixels;
+    int button_height = std::max(details_.size().height, review_.size().height);
+    height_ = std::max(dpi.scale(HeightDips), button_height + 2 * dpi.scale(ButtonPaddingDips)) + HairlinePixels;
     layout();
 }
 
-void Infobar::set_message(std::wstring message) {
+void Infobar::set_message(std::wstring message, InfobarAction action) {
     message_.set_text(std::move(message));
+    if (action != std::exchange(action_, action)) {
+        layout();
+    }
 }
 
 LRESULT Infobar::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -93,13 +100,16 @@ void Infobar::layout() {
     area.take_right(dpi.scale(RightPaddingDips));
     framework::Rect close = centered(area.take_right(close_.size()), close_.size(), close_.size());
     area.take_right(dpi.scale(GapDips));
-    framework::Size button = details_.size();
-    framework::Rect details = centered(area.take_right(button.width), button.width, button.height);
+    const framework::Button& shown = action_ == InfobarAction::Review ? review_ : details_;
+    const framework::Button& hidden = action_ == InfobarAction::Review ? details_ : review_;
+    framework::Size button = shown.size();
+    framework::Rect action = centered(area.take_right(button.width), button.width, button.height);
     area.take_right(dpi.scale(GapDips));
 
     framework::DeferredPositions positions;
     positions.place(message_.hwnd(), centered(area, area.width(), line_height_));
-    positions.place(details_.hwnd(), details);
+    positions.place(shown.hwnd(), action);
+    positions.place(hidden.hwnd(), std::nullopt);
     positions.place(close_.hwnd(), close);
     positions.apply();
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
@@ -122,8 +132,8 @@ void Infobar::paint() const {
 }
 
 void Infobar::on_command(WPARAM wparam) const {
-    if (LOWORD(wparam) == DetailsCommand && HIWORD(wparam) == BN_CLICKED) {
-        on_details_();
+    if (LOWORD(wparam) == ActionCommand && HIWORD(wparam) == BN_CLICKED) {
+        on_action_();
     }
 }
 

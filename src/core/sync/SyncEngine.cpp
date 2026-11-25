@@ -63,7 +63,7 @@ std::size_t playlist_size(const State& state, const std::string& playlist) {
 
 SyncEngine::SyncEngine(
         const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-        YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log, Downloads downloads
+        YouTubeMusicSearch& youtube_music, Library& library, EventSink& events, Log& log, Downloads downloads
 ) :
         yt_dlp_(yt_dlp),
         tools_(tools),
@@ -71,7 +71,7 @@ SyncEngine::SyncEngine(
         spotify_(std::move(spotify)),
         normalizer_(normalizer),
         matcher_(youtube_music, normalizer, log),
-        state_(state),
+        library_(library),
         events_(events),
         log_(log),
         downloads_(std::move(downloads)) {}
@@ -92,7 +92,7 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
         return;
     }
     std::string what = counted(queued.playlists.size(), "playlist");
-    LogSubject subject = queued.playlists.size() == 1 ? playlist_subject(*state_.snapshot(), queued.playlists.front()) : LogSubject{};
+    LogSubject subject = queued.playlists.size() == 1 ? playlist_subject(*library_.snapshot(), queued.playlists.front()) : LogSubject{};
     log_.write(LogLevel::Info, running_ ? std::format("Added {} to the update", what) : std::format("Update started: {}", what), std::move(subject));
     // Under the lock, so the run can't report on these playlists before the UI knows they're queued
     events_.emit(std::move(queued));
@@ -108,7 +108,7 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
 void SyncEngine::retry(const std::vector<std::string>& tracks) {
     std::vector<std::string> retried;
     try {
-        state_.update([&](State& state) { retried = apply_retry(state, tracks); });
+        library_.update([&](State& state) { retried = apply_retry(state, tracks); });
     } catch (const std::exception& error) {
         log_.write(LogLevel::Error, std::format("Couldn't save the state: {}", error.what()));
         return;
@@ -116,7 +116,7 @@ void SyncEngine::retry(const std::vector<std::string>& tracks) {
     if (retried.empty()) {
         return;
     }
-    LogSubject subject = retried.size() == 1 ? track_subject(*state_.snapshot(), retried.front()) : LogSubject{};
+    LogSubject subject = retried.size() == 1 ? track_subject(*library_.snapshot(), retried.front()) : LogSubject{};
     log_.write(LogLevel::Info, std::format("Retrying {}", counted(retried.size(), "track")), std::move(subject));
 
     std::unique_lock lock(mutex_);
@@ -232,7 +232,7 @@ std::vector<QueuedTrack> SyncEngine::in_run(std::vector<QueuedTrack> tracks) {
 }
 
 void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::stop_token& stop) {
-    std::vector<QueuedTrack> ready = in_run(tracks_to_download(*state_.snapshot()));
+    std::vector<QueuedTrack> ready = in_run(tracks_to_download(*library_.snapshot()));
     if (ready.empty()) {
         return;
     }
@@ -243,7 +243,7 @@ void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::s
                     .tools = tools_,
                     .files = downloads_.files,
                     .settings = downloads_.settings,
-                    .state = state_,
+                    .library = library_,
                     .events = events_,
                     .log = log_,
                 },
@@ -309,18 +309,18 @@ void SyncEngine::fetch(const std::string& playlist, const std::stop_token& stop)
     // An exception that leaves a thread ends the process, so it becomes the playlist's error instead
     try {
         PlaylistContents contents = fetch_contents(*link, stop);
-        state_.update([&](State& state) { apply_fetch(state, playlist, std::move(contents), std::chrono::system_clock::now()); });
-        std::shared_ptr<const State> state = state_.snapshot();
+        library_.update([&](State& state) { apply_fetch(state, playlist, std::move(contents), std::chrono::system_clock::now()); });
+        std::shared_ptr<const State> state = library_.snapshot();
         log_.write(LogLevel::Info, std::format("Fetched {}", counted(playlist_size(*state, playlist), "track")), playlist_subject(*state, playlist));
         events_.emit(PlaylistFetched{.playlist = playlist});
     } catch (const platform::Cancelled&) {
         return;
     } catch (const std::exception& error) {
         PlaylistFetchFailed failed{.playlist = playlist, .error = error.what()};
-        LogSubject subject = playlist_subject(*state_.snapshot(), playlist);
+        LogSubject subject = playlist_subject(*library_.snapshot(), playlist);
         log_.write(LogLevel::Error, std::format("Couldn't fetch the playlist: {}", one_line(failed.error)), subject);
         try {
-            state_.update([&](State& state) { apply_fetch_failure(state, playlist, failed.error, std::chrono::system_clock::now()); });
+            library_.update([&](State& state) { apply_fetch_failure(state, playlist, failed.error, std::chrono::system_clock::now()); });
         } catch (const std::exception& save_error) {
             // A state that can't be saved now keeps the playlist's previous error; the event still tells the UI
             log_.write(LogLevel::Error, std::format("Couldn't save the state: {}", save_error.what()), std::move(subject));
@@ -330,7 +330,7 @@ void SyncEngine::fetch(const std::string& playlist, const std::stop_token& stop)
 }
 
 PlaylistContents SyncEngine::fetch_contents(const PlaylistLink& link, const std::stop_token& stop) {
-    log_.write(LogLevel::Debug, std::format("Fetching {}", link.url()), playlist_subject(*state_.snapshot(), link.key()));
+    log_.write(LogLevel::Debug, std::format("Fetching {}", link.url()), playlist_subject(*library_.snapshot(), link.key()));
     events_.emit(PlaylistFetching{.playlist = link.key()});
     switch (link.type) {
     case SourceType::YouTubeMusic: return fetch_when_installed(link, stop);
@@ -340,8 +340,8 @@ PlaylistContents SyncEngine::fetch_contents(const PlaylistLink& link, const std:
 }
 
 void SyncEngine::show_page(const PlaylistLink& link, const PlaylistContents& so_far) {
-    state_.update([&](State& state) { apply_fetch_page(state, link.key(), so_far, std::chrono::system_clock::now()); });
-    std::shared_ptr<const State> state = state_.snapshot();
+    library_.update([&](State& state) { apply_fetch_page(state, link.key(), so_far, std::chrono::system_clock::now()); });
+    std::shared_ptr<const State> state = library_.snapshot();
     log_.write(LogLevel::Debug, std::format("Fetched a page: {} so far", counted(playlist_size(*state, link.key()), "track")), playlist_subject(*state, link.key()));
     events_.emit(PlaylistPageFetched{.playlist = link.key()});
 }
@@ -354,7 +354,7 @@ PlaylistContents SyncEngine::fetch_when_installed(const PlaylistLink& link, cons
         } catch (const ToolMissing& missing) {
             log_.write(
                     LogLevel::Warning, std::format("Waiting for {} to install", tool_package_name(missing.package())),
-                    playlist_subject(*state_.snapshot(), link.key())
+                    playlist_subject(*library_.snapshot(), link.key())
             );
             events_.emit(PlaylistFetching{.playlist = link.key(), .waiting_for = {missing.package()}});
             if (!tools_.wait_for_install_after(missing.package(), installs, stop)) {
@@ -368,13 +368,13 @@ PlaylistContents SyncEngine::fetch_when_installed(const PlaylistLink& link, cons
 void SyncEngine::merge_library_matches() {
     // An exception that leaves a thread ends the process; the library is looked at again next sync
     try {
-        std::shared_ptr<const State> before = state_.snapshot();
+        std::shared_ptr<const State> before = library_.snapshot();
         std::vector<LibraryMatch> matches = library_matches(*before, normalizer_);
         if (matches.empty()) {
             return;
         }
         std::vector<std::optional<std::string>> survivors;
-        state_.update([&](State& state) {
+        library_.update([&](State& state) {
             survivors.clear();
             for (const LibraryMatch& match : matches) {
                 survivors.push_back(apply_match(state, match.track, match.match));
@@ -395,7 +395,7 @@ void SyncEngine::merge_library_matches() {
 
 void SyncEngine::queue_tracks(MatchQueue& queue) {
     TracksQueued queued;
-    for (QueuedTrack& track : in_run(tracks_to_match(*state_.snapshot()))) {
+    for (QueuedTrack& track : in_run(tracks_to_match(*library_.snapshot()))) {
         if (queue.queued.insert(track.track).second) {
             queue.waiting.push_back({.track = track.track});
             queued.tracks.push_back(std::move(track));
@@ -423,7 +423,7 @@ std::optional<SyncEngine::QueuedMatch> SyncEngine::take_track(MatchQueue& queue,
 }
 
 void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_token& stop) {
-    std::shared_ptr<const State> state = state_.snapshot();
+    std::shared_ptr<const State> state = library_.snapshot();
     auto found = state->tracks.find(queued.track);
     // Merged or removed with its playlist since it was queued; the event still ends it for the UI's counts
     if (found == state->tracks.end() || !needs_match(*state, found->second)) {
@@ -443,7 +443,7 @@ void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_to
             return;
         }
         std::optional<std::string> survivor;
-        state_.update([&](State& changed) { survivor = apply_match(changed, queued.track, *matched); });
+        library_.update([&](State& changed) { survivor = apply_match(changed, queued.track, *matched); });
         // About the matched track even when it merged: the UI moves its lines to the survivor with TracksMerged
         log_match(std::move(subject), *matched, "", survivor.has_value());
         if (survivor) {
@@ -466,7 +466,7 @@ void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_to
 }
 
 void SyncEngine::fail_match(const std::string& track, TrackFailure failure, std::string error, int tries) {
-    LogSubject subject = track_subject(*state_.snapshot(), track);
+    LogSubject subject = track_subject(*library_.snapshot(), track);
     std::string retried = tries > 1 ? std::format(" (tried {} times)", tries) : "";
     log_.write(
             LogLevel::Error,
@@ -475,7 +475,7 @@ void SyncEngine::fail_match(const std::string& track, TrackFailure failure, std:
     );
     TrackStatusChanged changed{.track = track, .status = TrackStatus::Failed, .failure = failure, .error = std::move(error)};
     try {
-        state_.update([&](State& state) { apply_match_failure(state, track, changed.failure, changed.error); });
+        library_.update([&](State& state) { apply_match_failure(state, track, changed.failure, changed.error); });
     } catch (const std::exception& save_error) {
         // A state that can't be saved keeps the track as it was; the event still tells the UI
         log_.write(LogLevel::Error, std::format("Couldn't save the state: {}", save_error.what()), std::move(subject));

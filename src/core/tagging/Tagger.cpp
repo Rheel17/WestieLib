@@ -58,6 +58,30 @@ void write_comment(TagLib::Ogg::XiphComment& comment, const TrackTags& tags) {
     add_text(comment, "WESTIELIB_YTMID", tags.ytm_id);
 }
 
+std::string field(const TagLib::Ogg::XiphComment& comment, std::string_view key) {
+    const TagLib::Ogg::FieldListMap& fields = comment.fieldListMap();
+    auto found = fields.find(text(key));
+    return found == fields.end() || found->second.isEmpty() ? std::string() : found->second.front().to8Bit(true);
+}
+
+// The file may know what the state never did: a Spotify track's album and year come from the video's info
+void update_comment(TagLib::Ogg::XiphComment& comment, TrackTags tags) {
+    if (tags.album.empty()) {
+        tags.album = field(comment, "ALBUM");
+    }
+    std::string date = tags.year ? std::string() : field(comment, "DATE");
+    write_comment(comment, tags);
+    add_text(comment, "DATE", date);
+}
+
+std::runtime_error unreadable(const std::filesystem::path& file) {
+    return std::runtime_error(std::format("Couldn't read the tags of {}", to_utf8(file.filename())));
+}
+
+std::runtime_error unsaved(const std::filesystem::path& file) {
+    return std::runtime_error(std::format("Couldn't write the tags of {}", to_utf8(file.filename())));
+}
+
 std::unique_ptr<TagLib::FLAC::Picture> front_cover(const std::string& jpeg) {
     auto picture = std::make_unique<TagLib::FLAC::Picture>();
     picture->setType(TagLib::FLAC::Picture::FrontCover);
@@ -69,7 +93,7 @@ std::unique_ptr<TagLib::FLAC::Picture> front_cover(const std::string& jpeg) {
 void write_opus(const std::filesystem::path& file, const TrackTags& tags) {
     TagLib::Ogg::Opus::File opus(file.c_str(), false);
     if (!opus.isValid() || opus.tag() == nullptr) {
-        throw std::runtime_error(std::format("Couldn't read the tags of {}", to_utf8(file.filename())));
+        throw unreadable(file);
     }
     TagLib::Ogg::XiphComment& comment = *opus.tag();
     write_comment(comment, tags);
@@ -79,7 +103,7 @@ void write_opus(const std::filesystem::path& file, const TrackTags& tags) {
         comment.addPicture(front_cover(tags.cover).release());
     }
     if (!opus.save()) {
-        throw std::runtime_error(std::format("Couldn't write the tags of {}", to_utf8(file.filename())));
+        throw unsaved(file);
     }
 }
 
@@ -87,7 +111,7 @@ void write_flac(const std::filesystem::path& file, const TrackTags& tags) {
     TagLib::FLAC::File flac(file.c_str(), false);
     TagLib::Ogg::XiphComment* comment = flac.isValid() ? flac.xiphComment(true) : nullptr;
     if (comment == nullptr) {
-        throw std::runtime_error(std::format("Couldn't read the tags of {}", to_utf8(file.filename())));
+        throw unreadable(file);
     }
     write_comment(*comment, tags);
     flac.removePictures();
@@ -96,7 +120,7 @@ void write_flac(const std::filesystem::path& file, const TrackTags& tags) {
         flac.addPicture(front_cover(tags.cover).release());
     }
     if (!flac.save()) {
-        throw std::runtime_error(std::format("Couldn't write the tags of {}", to_utf8(file.filename())));
+        throw unsaved(file);
     }
 }
 
@@ -122,6 +146,29 @@ void write_tags(const std::filesystem::path& file, const TrackTags& tags) {
         write_flac(file, tags);
     } else {
         write_opus(file, tags);
+    }
+}
+
+void update_tags(const std::filesystem::path& file, const TrackTags& tags) {
+    if (file.extension() == L".flac") {
+        TagLib::FLAC::File flac(file.c_str(), false);
+        TagLib::Ogg::XiphComment* comment = flac.isValid() ? flac.xiphComment(true) : nullptr;
+        if (comment == nullptr) {
+            throw unreadable(file);
+        }
+        update_comment(*comment, tags);
+        if (!flac.save()) {
+            throw unsaved(file);
+        }
+        return;
+    }
+    TagLib::Ogg::Opus::File opus(file.c_str(), false);
+    if (!opus.isValid() || opus.tag() == nullptr) {
+        throw unreadable(file);
+    }
+    update_comment(*opus.tag(), tags);
+    if (!opus.save()) {
+        throw unsaved(file);
     }
 }
 

@@ -1,7 +1,9 @@
 # Downloading: an update downloads the tracks that have a YouTube Music id and don't need review, with the fake yt-dlp
 # and ffmpeg. Each file lands in the library under its artists and title, tagged, with a cover from Spotify or the
 # cropped thumbnail; a failed download keeps yt-dlp's error and is tried again; the format and the cover follow the
-# settings, and a library folder Windows can't create fails the downloads. Dot-sourced by ui-checks.ps1.
+# settings, and a library folder Windows can't create fails the downloads. Files follow the state: a source joining a
+# track re-tags its file, a track that leaves every playlist is Removed, and Keep and Delete file decide on it.
+# Dot-sourced by ui-checks.ps1.
 
 # A state.json with these playlists, never synced, added a day apart in this order
 function Write-DownloadPlaylists([string[]]$keys) {
@@ -185,4 +187,91 @@ $h = $app.Hwnd
 Invoke-UpdateAll $h
 $failure = (Get-SavedState).tracks.'ytm:trackFLAC06'
 Check 'Update all: the download fails' "$($failure.status) [$($failure.error)]" 'failed [Windows can''t use "CON" as a folder name in the library folder]'
+Stop-App $app
+
+"--- Run 5: files follow the tracks"
+Set-SavedSetting libraryPath $LibraryDir
+Set-SavedSetting format opus
+Set-SavedSetting embedCover $true
+Remove-Item (Join-Path $LibraryDir '*') -Force
+$MergeSpotifyId = '3mermermermermermermer'
+$Web.SpotifyNames[$MergeSpotifyId] = 'Spotify Merges'
+$Web.SpotifyItems[$MergeSpotifyId] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Track('spMergeGood0000000001', 'Good One', @('Band'), 'Good Album', 200000),
+	[FakeWeb]::Track('spGoneSoon00000000001', 'Gone Soon', @('Cee'), 'Leaving', 180000)
+)
+$Web.YtmResults['Band Good One'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackGOOD01', 'Good One', @('Band'), 'Good Album', '3:20'))
+$Web.YtmResults['Cee Gone Soon'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('trackGONE09', 'Gone Soon', @('Cee'), 'Leaving', '3:00'))
+Write-DownloadPlaylists "spotify:$MergeSpotifyId"
+$app = Start-App
+$h = $app.Hwnd
+Invoke-UpdateAll $h
+Check 'Update all: both matched and downloaded' (Get-SavedDownloads) (
+	'spGoneSoon00000000001 downloaded [Cee - Gone Soon.opus] trackGONE09 / spMergeGood0000000001 downloaded [Band - Good One.opus] trackGOOD01')
+Stop-App $app
+
+# A YouTube Music playlist lists the id the Spotify track matched, so its source joins that track and the file's tags
+$state = [IO.File]::ReadAllText($StateFile)
+$entry = '"ytm:PLgood1": {"url": "https://music.youtube.com/playlist?list=PLgood1", "name": "Named PLgood1", "addedAt": "2026-01-05T12:00:00Z"}, '
+[IO.File]::WriteAllText($StateFile, ([regex]'"playlists"\s*:\s*\{').Replace($state, "`$0$entry", 1))
+$downloads = @(Get-DownloadRuns).Count
+$app = Start-App
+$h = $app.Hwnd
+Invoke-UpdateAll $h
+$good = (Get-SavedState).tracks.'spotify:spMergeGood0000000001'
+Check 'A YouTube Music playlist lists it: one track, both sources' "$($good.sources -join ' ') | $((Get-SavedState).tracks.PSObject.Properties.Name -contains 'ytm:trackGOOD01')" (
+	'spotify:spMergeGood0000000001 ytm:trackGOOD01 | False')
+Check '  no download, the same file' "$(@(Get-DownloadRuns | Select-Object -Skip $downloads).Count) | $(Get-LibraryFiles)" '0 | Band - Good One.opus / Cee - Gone Soon.opus'
+Check '  the file re-tagged with both' (Get-FileTags 'Band - Good One.opus' 'TITLE', 'WESTIELIB_SOURCE', 'WESTIELIB_YTMID') (
+	'TITLE=Good One / WESTIELIB_SOURCE=spotify:spMergeGood0000000001 / WESTIELIB_SOURCE=ytm:trackGOOD01 / WESTIELIB_YTMID=trackGOOD01')
+Check '  its cover kept' ((Get-FileTags 'Band - Good One.opus' 'METADATA_BLOCK_PICTURE') -ne '') 'True'
+
+# Whether the infobar shows, and its message
+function Get-NoticeText($hwnd) {
+	$infobar = Get-Infobar $hwnd
+	"$([W]::IsWindowVisible($infobar)) $([W]::TextOf(([W]::Children($infobar, 'WestieLib.Label'))[0]))"
+}
+
+$Web.SpotifyItems[$MergeSpotifyId].RemoveAt(1)
+Invoke-UpdateAll $h
+Check 'Gone Soon leaves the playlist: Removed, the file stays' "$((Get-SavedState).tracks.'spotify:spGoneSoon00000000001'.status) | $(Get-LibraryFiles)" (
+	'orphaned | Band - Good One.opus / Cee - Gone Soon.opus')
+Check '  the infobar' (Get-NoticeText $h) 'True 1 track is no longer in any playlist.'
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-removed.png") }
+[void][W]::PostMessageW((Get-InfobarButton $h), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Start-Sleep -Milliseconds 300
+$rows = @((Get-TrackRows $h) -split ' / ')
+Check '  Review: the Removed tab, only that track' "$($rows.Count) $($rows[0] -like '*Gone Soon*')" '1 True'
+
+Select-TrackRow $h 0
+$card = Wait-TrackCard $h 'spotify:spGoneSoon00000000001'
+Update-MenuStates $h
+$grayed = [W]::ItemsWithState([W]::GetMenu($h), 0x1)
+Check 'Gone Soon selected: Keep and Delete file on its card | in the menu' (
+	"$($card -like "* / Removed / No longer in any playlist. The file is still in the library. / Keep / Delete file$Ellipsis / Source / *") | $($grayed -notlike '*&Keep*') $($grayed -notlike '*&Delete file*')") 'True | True True'
+Send-Command $h '&Keep'
+Start-Sleep -Milliseconds 300
+Check 'Track > Keep: Kept, the file stays, the infobar goes' "$((Get-SavedState).tracks.'spotify:spGoneSoon00000000001'.status) | $(Get-LibraryFiles) | $(Get-NoticeText $h)" (
+	'kept | Band - Good One.opus / Cee - Gone Soon.opus | False 1 track is no longer in any playlist.')
+Check '  log' ((Get-LogText) -match 'INFO    Kept the file \[Gone Soon; track spotify:spGoneSoon00000000001\]') 'True'
+
+Click-Tab $h 0
+Start-Sleep -Milliseconds 200
+$rows = @((Get-TrackRows $h) -split ' / ')
+Select-TrackRow $h ([array]::FindIndex($rows, [Predicate[string]]{ param($row) $row -like '*Gone Soon*' }))
+$card = Wait-TrackCard $h 'spotify:spGoneSoon00000000001'
+Check 'Kept selected: Delete file on its card' ($card -like "* / Kept / No longer in any playlist, but kept. / Delete file$Ellipsis / Source / *") 'True'
+Send-Command $h '&Delete file...'
+$dialog = Wait-OwnedWindow $h
+Check '  Track > Delete file: the confirmation' ([W]::TextOf($dialog)) 'Delete file'
+if ($Screenshot) { Save-Screenshot $dialog ("$($Screenshot -replace '\.png$', '')-delete-file.png") }
+# TDM_CLICK_BUTTON with IDOK, the Delete button
+[void][W]::PostMessageW($dialog, 0x466, [IntPtr]1, [IntPtr]::Zero)
+Wait-Closed $dialog
+Start-Sleep -Milliseconds 300
+$saved = Get-SavedState
+Check '  Delete: the track and its source gone, and the file' (
+	"$($saved.tracks.PSObject.Properties.Name -contains 'spotify:spGoneSoon00000000001') $($saved.sources.PSObject.Properties.Name -contains 'spotify:spGoneSoon00000000001') | $(Get-LibraryFiles)") (
+	'False False | Band - Good One.opus')
+Check '  log' ((Get-LogText) -match 'INFO    Deleted "Cee - Gone Soon\.opus" \[Gone Soon; track spotify:spGoneSoon00000000001\]') 'True'
 Stop-App $app

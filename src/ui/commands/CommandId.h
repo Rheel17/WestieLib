@@ -17,7 +17,7 @@ enum class CommandId : WORD {
     EditTrack,
     Retry,
     Keep,
-    MoveToRecycleBin,
+    DeleteFiles,
     ShowInFolder,
     OpenOnYouTube,
     OpenSourcePage,

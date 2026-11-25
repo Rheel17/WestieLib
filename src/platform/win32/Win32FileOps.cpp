@@ -106,7 +106,7 @@ void Win32FileOps::remove_tree(const std::filesystem::path& path) {
 }
 
 void Win32FileOps::move_replacing(const std::filesystem::path& from, const std::filesystem::path& to) {
-    check(MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
+    check(MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH), "MoveFileExW");
 }
 
 bool Win32FileOps::move_new(const std::filesystem::path& from, const std::filesystem::path& to) {

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <initializer_list>
 
 #include <windows.h>
 
@@ -13,6 +14,7 @@
 #include "ui/framework/LinkLabel.h"
 #include "ui/framework/Panel.h"
 #include "ui/inspector/AudioRows.h"
+#include "ui/inspector/CardLayout.h"
 #include "ui/inspector/CoverArt.h"
 #include "ui/inspector/IconText.h"
 #include "ui/inspector/InspectorEvents.h"
@@ -36,6 +38,8 @@ protected:
 
 private:
     int arrange(int width, framework::DeferredPositions* positions) const;
+    void arrange_actions(CardLayout& layout) const;
+    void show_actions(CardLayout& layout, std::initializer_list<const framework::Button*> shown) const;
     void layout();
     void on_command(WPARAM wparam) const;
     void open_source(std::size_t index) const;
@@ -55,6 +59,8 @@ private:
     OutputBox output_;
     framework::Button choose_;
     framework::Button retry_;
+    framework::Button keep_;
+    framework::Button delete_;
     SectionTitle source_section_;
     framework::Label first_source_key_;
     SourceLink first_source_;

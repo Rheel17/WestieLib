@@ -9,12 +9,12 @@
 
 namespace westie::core {
 
-bool remove_playlist(StateStore& store, Log& log, const std::string& key) {
-    std::shared_ptr<const State> before = store.snapshot();
+bool remove_playlist(Library& library, Log& log, const std::string& key) {
+    std::shared_ptr<const State> before = library.snapshot();
     if (!before->playlists.contains(key)) {
         return false;
     }
-    store.update([&](State& state) {
+    library.update([&](State& state) {
         state.playlists.erase(key);
         prune_tracks(state);
     });

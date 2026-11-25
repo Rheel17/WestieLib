@@ -48,6 +48,8 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         output_(hwnd()),
         choose_(hwnd(), {.text = L"Choose match…", .command = std::to_underlying(CommandId::ChooseMatch)}),
         retry_(hwnd(), {.text = L"Retry", .command = std::to_underlying(CommandId::Retry)}),
+        keep_(hwnd(), {.text = L"Keep", .command = std::to_underlying(CommandId::Keep)}),
+        delete_(hwnd(), {.text = L"Delete file…", .command = std::to_underlying(CommandId::DeleteFiles)}),
         source_section_(hwnd(), L"Source"),
         first_source_key_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         first_source_(hwnd(), [this] { open_source(0); }),
@@ -83,9 +85,9 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
         label->set_font(fonts.regular().handle());
     }
     output_.set_font(fonts.code().handle());
-    choose_.apply_dpi(dpi, fonts.regular());
-    retry_.apply_dpi(dpi, fonts.regular());
-    show_in_folder_.apply_dpi(dpi, fonts.regular());
+    for (framework::Button* button : {&choose_, &retry_, &keep_, &delete_, &show_in_folder_}) {
+        button->apply_dpi(dpi, fonts.regular());
+    }
     audio_.apply_dpi(fonts);
     first_source_.apply_dpi(dpi, fonts.regular());
     second_source_.apply_dpi(dpi, fonts.regular());
@@ -167,21 +169,8 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
     } else {
         layout.hide(output_.hwnd());
     }
-    // Such a track's entries are all Spotify tracks, so Choose match applies whenever the button shows, and it's never
-    // disabled: a themed button fades in from the state it was last drawn in
-    bool failed = track_.failure != core::TrackFailure::None;
-    if (review) {
-        layout.buttons({&choose_});
-        layout.hide(retry_.hwnd());
-    } else if (track_.failure == core::TrackFailure::NoMatch) {
-        layout.buttons({&choose_, &retry_});
-    } else if (failed) {
-        layout.buttons({&retry_});
-        layout.hide(choose_.hwnd());
-    } else {
-        layout.hide(choose_.hwnd());
-        layout.hide(retry_.hwnd());
-    }
+    arrange_actions(layout);
+
 
     layout.section(source_section_.hwnd());
     layout.row_if(!track_.sources.empty(), first_source_key_.hwnd(), first_source_.hwnd());
@@ -205,6 +194,35 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
         layout.buttons({&show_in_folder_}, dpi.scale(ShowInFolderGapDips));
     }
     return layout.height();
+}
+
+// Such a track's entries are all Spotify tracks, so Choose match applies whenever the button shows, and the buttons are
+// never disabled: a themed button fades in from the state it was last drawn in
+void TrackCard::arrange_actions(CardLayout& layout) const {
+    if (track_.row.status == StatusTab::NeedsReview) {
+        show_actions(layout, {&choose_});
+    } else if (track_.failure == core::TrackFailure::NoMatch) {
+        show_actions(layout, {&choose_, &retry_});
+    } else if (track_.failure != core::TrackFailure::None) {
+        show_actions(layout, {&retry_});
+    } else if (track_.row.counts_as == StatusTab::Removed) {
+        show_actions(layout, {&keep_, &delete_});
+    } else if (track_.row.counts_as == StatusTab::Kept) {
+        show_actions(layout, {&delete_});
+    } else {
+        show_actions(layout, {});
+    }
+}
+
+void TrackCard::show_actions(CardLayout& layout, std::initializer_list<const framework::Button*> shown) const {
+    if (shown.size() > 0) {
+        layout.buttons(shown);
+    }
+    for (const framework::Button* button : {&choose_, &retry_, &keep_, &delete_}) {
+        if (!std::ranges::contains(shown, button)) {
+            layout.hide(button->hwnd());
+        }
+    }
 }
 
 void TrackCard::layout() {

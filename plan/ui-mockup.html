@@ -787,8 +787,9 @@ function trackInspector(s, t, cfg) {
 	if (review) acts.push(btn('Confirm match'), btn('Choose match…'));
 	if (t.noMatch) acts.push(btn('Choose match…'), btn('Retry'));
 	else if (t.status === 'failed') acts.push(btn('Retry'));
-	if (t.status === 'orphaned') acts.push(btn('Keep'), btn('Move to Recycle Bin…'));
+	if (t.status === 'orphaned') acts.push(btn('Keep'), btn('Delete file…'));
 	if (!t.noMatch && t.status !== 'orphaned' && t.status !== 'downloading') acts.push(btn('Edit track…'));
+	if (t.status === 'kept') acts.push(btn('Delete file…'));
 	if (acts.length) st += `<div class="acts">${acts.join('')}</div>`;
 	h += section('Status', st);
 
@@ -838,7 +839,7 @@ function multiInspector(ts) {
 	let h = `<div class="mh">${ts.length} tracks selected</div>`;
 	h += section('Status', kv(lines) + (c.removed === ts.length ? `<div class="expl" style="margin-top:6px">No longer in any playlist. Their files are still in the library.</div>` : ''));
 	h += section('Tracks', `<ul class="mlist">${ts.map(t => `<li>${ic(stIcon(t))}<span>${esc(t.title)} <span class="gray">by ${esc(t.artists.join(', '))}</span></span></li>`).join('')}</ul>`);
-	if (c.removed === ts.length) h += `<div class="acts">${btn(`Keep ${ts.length} tracks`)}${btn(`Move ${ts.length} files to Recycle Bin…`)}</div>`;
+	if (c.removed === ts.length) h += `<div class="acts">${btn(`Keep ${ts.length} tracks`)}${btn(`Delete ${ts.length} files…`)}</div>`;
 	return h;
 }
 
@@ -1172,13 +1173,13 @@ const SCREENS = [
 	{
 		id: 'removals', title: 'Removed from playlists', state: variant(variantRemovals),
 		cfg: { scope: 'all', tab: 'removed', sort: 'title', sel: ['Crazy in Love', 'Dangerous Woman', 'Drunk in Love', 'Hotline Bling'],
-			infobar: { msg: '5 tracks are no longer in any playlist. Keep their files, or move them to the Recycle Bin.', btns: ['Review…'] } },
+			infobar: { msg: '5 tracks are no longer in any playlist.', btns: ['Review…'] } },
 		cap: 'After an update, five tracks have left every playlist. Review… in the infobar opens this view. Four rows are selected.',
 		notes: [
 			'This comes from the core’s <code>RemovalsPending</code>. The infobar stays until every removed track has been decided.',
 			'The Removed and Kept tabs appear because their counts aren’t zero.',
 			'With several rows selected, the inspector shows bulk actions that call <code>resolveRemovals</code>.',
-			'Move to Recycle Bin asks for confirmation first. Keep moves the tracks to Kept.',
+			'Delete file asks for confirmation first, and deletes the files outright. Keep moves the tracks to Kept.',
 		],
 	},
 	{

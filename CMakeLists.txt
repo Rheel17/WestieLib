@@ -54,6 +54,8 @@ set(TAGLIB_INCLUDE_DIRS
 # they use, which the unit checks build as well
 set(MATCHING_SOURCES
 	src/core/download/DownloadProgress.cpp
+	src/core/library/ApplyRemovals.cpp
+	src/core/library/FileChanges.cpp
 	src/core/library/LibraryFileName.cpp
 	src/core/library/WindowsNames.cpp
 	src/core/log/LogText.cpp
@@ -69,7 +71,10 @@ set(MATCHING_SOURCES
 	src/core/matching/SongFacts.cpp
 	src/core/matching/TitleParts.cpp
 	src/core/sources/SourceType.cpp
+	src/core/state/EffectiveMetadata.cpp
 	src/core/state/MatchReview.cpp
+	src/core/state/MergeTracks.cpp
+	src/core/state/PruneTracks.cpp
 	src/core/state/TrackYtmIds.cpp
 	src/core/sync/PlaylistOrder.cpp
 	src/core/sync/TracksToDownload.cpp
@@ -90,6 +95,8 @@ add_executable(WestieLib WIN32
 	src/core/github/GitHubReleases.cpp
 	src/core/json/IsoTime.cpp
 	src/core/json/Utf8Path.cpp
+	src/core/library/Library.cpp
+	src/core/library/ResolveRemovals.cpp
 	src/core/log/Log.cpp
 	src/core/log/LogSubject.cpp
 	src/core/matching/CandidateSearch.cpp
@@ -114,10 +121,7 @@ add_executable(WestieLib WIN32
 	src/core/sources/YouTubeMusicPlaylist.cpp
 	src/core/sources/YouTubeMusicPlaylistName.cpp
 	src/core/sources/YtDlpError.cpp
-	src/core/state/EffectiveMetadata.cpp
 	src/core/state/ListedSources.cpp
-	src/core/state/MergeTracks.cpp
-	src/core/state/PruneTracks.cpp
 	src/core/state/SplitSource.cpp
 	src/core/state/StateStore.cpp
 	src/core/sync/ApplyDownload.cpp
@@ -181,6 +185,7 @@ add_executable(WestieLib WIN32
 	src/ui/dialogs/MatchChoice.cpp
 	src/ui/dialogs/PlayButton.cpp
 	src/ui/dialogs/PlaylistLinkCheck.cpp
+	src/ui/dialogs/DeleteFilesDialog.cpp
 	src/ui/dialogs/RemovePlaylistDialog.cpp
 	src/ui/dialogs/RowPlayButtons.cpp
 	src/ui/dialogs/SettingsDialog.cpp
@@ -232,6 +237,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/WordBreaks.cpp
 	src/ui/infobar/FetchFailureNotice.cpp
 	src/ui/infobar/Infobar.cpp
+	src/ui/infobar/RemovalsNotice.cpp
 	src/ui/inspector/AudioRows.cpp
 	src/ui/inspector/CardLayout.cpp
 	src/ui/inspector/ConfidenceValue.cpp
@@ -316,6 +322,7 @@ add_executable(WestieLibTests
 	tests/unit/Checks.cpp
 	tests/unit/JudgementChecks.cpp
 	tests/unit/DownloadQueueChecks.cpp
+	tests/unit/FileRuleChecks.cpp
 	tests/unit/LibraryChecks.cpp
 	tests/unit/LogChecks.cpp
 	tests/unit/MatchWordsChecks.cpp

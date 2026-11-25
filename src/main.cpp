@@ -11,6 +11,7 @@
 #include "core/log/Log.h"
 #include "core/download/CoverArt.h"
 #include "core/download/Downloader.h"
+#include "core/library/Library.h"
 #include "core/matching/CandidateSearch.h"
 #include "core/matching/YouTubeMusicSearch.h"
 #include "core/playlists/PlaylistLookup.h"
@@ -89,6 +90,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         // So is the log, which they write to
         westie::platform::win32::Win32TimeZone time_zone;
         westie::core::Log log(files, data / L"logs", time_zone, events);
+        westie::core::Library library(state, files, settings_store, log);
         westie::core::ToolFolder tool_folder(data / L"tools");
         westie::core::ToolManager tools(
                 {.files = files, .http = http, .hasher = hasher, .archives = archives}, service_url(L"WESTIELIB_GITHUB_API", "https://api.github.com"),
@@ -108,14 +110,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int show_command) {
         westie::core::CoverArt cover_art(http, ffmpeg, files);
         westie::core::TrackDownload track_download(downloader, cover_art, files, log);
         westie::core::SyncEngine sync(
-                yt_dlp, tool_folder, http, normalizer, spotify, youtube_music, state, events, log,
+                yt_dlp, tool_folder, http, normalizer, spotify, youtube_music, library, events, log,
                 {.download = track_download, .files = files, .settings = settings_store, .work_folder = data / L"work"}
         );
         westie::core::CandidateSearch candidate_search(youtube_music, normalizer, state, events, log);
 
         westie::ui::framework::init_common_controls();
         westie::ui::framework::GdiPlusSession gdi_plus;
-        westie::ui::MainWindow window(settings_store, settings, state, events, tools, lookup, sync, candidate_search, normalizer, log);
+        westie::ui::MainWindow window(settings_store, settings, library, events, tools, lookup, sync, candidate_search, normalizer, log);
         westie::ui::framework::AcceleratorTable accelerators = westie::ui::build_main_accelerators();
         // Started before the window shows, so its first paint already knows of the run
         tools.run(settings.auto_update_tools);

@@ -16,6 +16,8 @@ struct TrackTags {
     std::string ytm_id{};
     // A JPEG, or empty for no cover
     std::string cover{};
+
+    bool operator==(const TrackTags&) const = default;
 };
 
 }

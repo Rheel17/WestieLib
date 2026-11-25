@@ -16,9 +16,9 @@
 #include <vector>
 
 #include "core/events/EventSink.h"
+#include "core/library/Library.h"
 #include "core/log/Log.h"
 #include "core/settings/SettingsStore.h"
-#include "core/state/StateStore.h"
 #include "core/sync/TrackDownload.h"
 #include "core/sync/TracksQueued.h"
 #include "core/tools/ToolFolder.h"
@@ -32,7 +32,7 @@ struct DownloadServices {
     ToolFolder& tools;
     platform::FileOps& files;
     const SettingsStore& settings;
-    StateStore& state;
+    Library& library;
     EventSink& events;
     Log& log;
 };

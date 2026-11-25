@@ -111,7 +111,7 @@ std::optional<DownloadPool::Taken> DownloadPool::take() {
     while (!closing_ && !stop_.stop_requested()) {
         std::uint64_t seen = changes_;
         if (!waiting_for_tools_ && !queue_.empty()) {
-            std::shared_ptr<const State> state = services_.state.snapshot();
+            std::shared_ptr<const State> state = services_.library.snapshot();
             // A track whose id another worker is downloading waits for it, and the ones after it go first
             auto next = std::ranges::find_if(queue_, [&](const std::string& track) { return !busy_ids_.contains(ytm_id_of(*state, track).value_or("")); });
             if (next != queue_.end()) {
@@ -136,7 +136,7 @@ std::optional<DownloadPool::Taken> DownloadPool::take() {
 }
 
 void DownloadPool::download(const Taken& taken) {
-    std::shared_ptr<const State> state = services_.state.snapshot();
+    std::shared_ptr<const State> state = services_.library.snapshot();
     auto track = state->tracks.find(taken.track);
     // Merged, gone with its playlist, or changed since it was queued; the event still ends it for the UI's counts
     if (track == state->tracks.end() || !needs_download(*state, track->second) || ytm_id_of(*state, taken.track) != taken.ytm_id) {
@@ -166,36 +166,26 @@ void DownloadPool::download(const Taken& taken) {
 }
 
 void DownloadPool::place(const Taken& taken, const std::filesystem::path& work) {
-    std::shared_ptr<const State> state = services_.state.snapshot();
+    std::shared_ptr<const State> state = services_.library.snapshot();
     Settings settings = services_.settings.current();
-    PlacedTrack placed = services_.download.run(
+    TaggedAudio audio = services_.download.run(
             *state, taken.track, taken.ytm_id, settings, work,
             [&](int percent) { services_.events.emit(TrackProgress{.track = taken.track, .percent = percent}); }, stop_
     );
-
-    bool kept = false;
-    try {
-        services_.state.update([&](State& changed) { kept = apply_download(changed, taken.track, taken.ytm_id, placed.file, placed.info); });
-    } catch (...) {
-        // A state that can't be saved doesn't know of the file, so the next try would add another
-        services_.files.remove_file(settings.library_path / placed.file);
-        throw;
-    }
-    LogSubject subject = track_subject(*services_.state.snapshot(), taken.track);
-    if (!kept) {
-        services_.files.remove_file(settings.library_path / placed.file);
+    std::optional<std::filesystem::path> file = services_.library.place(taken.track, taken.ytm_id, audio);
+    if (!file) {
         services_.events.emit(TrackStatusChanged{.track = taken.track});
         return;
     }
-    services_.log.write(LogLevel::Info, std::format("Downloaded as \"{}\"", to_utf8(placed.file)), std::move(subject));
+    services_.log.write(LogLevel::Info, std::format("Downloaded as \"{}\"", to_utf8(*file)), track_subject(*services_.library.snapshot(), taken.track));
     services_.events.emit(TrackStatusChanged{.track = taken.track, .status = TrackStatus::Downloaded});
 }
 
 void DownloadPool::fail(const std::string& track, const std::string& error) {
-    LogSubject subject = track_subject(*services_.state.snapshot(), track);
+    LogSubject subject = track_subject(*services_.library.snapshot(), track);
     services_.log.write(LogLevel::Error, std::format("Couldn't download: {}", one_line(error)), subject);
     try {
-        services_.state.update([&](State& state) { apply_download_failure(state, track, error); });
+        services_.library.update([&](State& state) { apply_download_failure(state, track, error); });
     } catch (const std::exception& save_error) {
         // A state that can't be saved keeps the track as it was; the event still tells the UI
         services_.log.write(LogLevel::Error, std::format("Couldn't save the state: {}", save_error.what()), std::move(subject));
@@ -281,7 +271,7 @@ void DownloadPool::remove_work_folder(const std::filesystem::path& work, const s
     try {
         services_.files.remove_tree(work);
     } catch (const std::exception& error) {
-        services_.log.write(LogLevel::Debug, std::format("Couldn't remove the work folder: {}", error.what()), track_subject(*services_.state.snapshot(), track));
+        services_.log.write(LogLevel::Debug, std::format("Couldn't remove the work folder: {}", error.what()), track_subject(*services_.library.snapshot(), track));
     }
 }
 

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "core/events/EventSink.h"
+#include "core/library/Library.h"
 #include "core/log/Log.h"
 #include "core/log/LogSubject.h"
 #include "core/matching/Matcher.h"
@@ -23,7 +24,6 @@
 #include "core/sources/PlaylistContents.h"
 #include "core/sources/SpotifyUrls.h"
 #include "core/state/Match.h"
-#include "core/state/StateStore.h"
 #include "core/state/Track.h"
 #include "core/sync/DownloadPool.h"
 #include "core/sync/TrackDownload.h"
@@ -47,7 +47,7 @@ class SyncEngine {
 public:
     SyncEngine(
             const YtDlp& yt_dlp, ToolFolder& tools, platform::HttpClient& http, const platform::TextNormalizer& normalizer, SpotifyUrls spotify,
-            YouTubeMusicSearch& youtube_music, StateStore& state, EventSink& events, Log& log, Downloads downloads
+            YouTubeMusicSearch& youtube_music, Library& library, EventSink& events, Log& log, Downloads downloads
     );
 
     void sync(const std::vector<std::string>& playlists);
@@ -95,7 +95,7 @@ private:
     SpotifyUrls spotify_;
     const platform::TextNormalizer& normalizer_;
     Matcher matcher_;
-    StateStore& state_;
+    Library& library_;
     EventSink& events_;
     Log& log_;
     Downloads downloads_;

@@ -58,12 +58,13 @@ constexpr std::array Columns = {
     ColumnSpec{.column = TrackColumn::File, .title = L"File", .width_dips = 200, .shown = false},
 };
 
-// The statuses with an icon so far; the others come with their features
 constexpr std::array StatusIcons = {
     StatusIconSpec{StatusTab::Synced, IDI_SYNCED},
     StatusIconSpec{StatusTab::Waiting, IDI_WAITING},
     StatusIconSpec{StatusTab::NeedsReview, IDI_WARN},
     StatusIconSpec{StatusTab::Failed, IDI_FAILED},
+    StatusIconSpec{StatusTab::Removed, IDI_REMOVED},
+    StatusIconSpec{StatusTab::Kept, IDI_KEPT},
     StatusIconSpec{std::nullopt, IDI_DUPLICATE},
 };
 

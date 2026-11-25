@@ -22,6 +22,7 @@ public:
     void set_counts(const StatusCounts& counts);
     void show_duplicates(bool shown);
     void reset();
+    void select(StatusTab tab);
     void on_selection_change();
 
 private:

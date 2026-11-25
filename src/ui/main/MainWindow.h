@@ -1,12 +1,14 @@
 #pragma once
 
 #include <filesystem>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include <windows.h>
 
+#include "core/library/Library.h"
 #include "core/log/Log.h"
 #include "core/log/LogLine.h"
 #include "core/matching/CandidateSearch.h"
@@ -17,7 +19,6 @@
 #include "core/settings/Settings.h"
 #include "core/settings/SettingsStore.h"
 #include "core/state/State.h"
-#include "core/state/StateStore.h"
 #include "core/sync/PlaylistFetchFailed.h"
 #include "core/sync/PlaylistFetched.h"
 #include "core/sync/PlaylistFetching.h"
@@ -50,6 +51,7 @@
 #include "ui/framework/WindowIcon.h"
 #include "ui/infobar/FetchFailureNotice.h"
 #include "ui/infobar/Infobar.h"
+#include "ui/infobar/RemovalsNotice.h"
 #include "ui/inspector/InspectorPanel.h"
 #include "ui/log/LogPanel.h"
 #include "ui/main/MainLayout.h"
@@ -70,7 +72,7 @@ public:
     MainWindow(
             core::SettingsStore& settings_store,
             core::Settings settings,
-            core::StateStore& state,
+            core::Library& library,
             CoreEventQueue& events,
             core::ToolManager& tools,
             core::PlaylistLookup& lookup,
@@ -119,11 +121,17 @@ private:
     void copy_playlist_link() const;
     void toggle_log();
     void show_log();
-    void dismiss_fetch_failure();
+    bool shows_notice() const;
+    void on_notice_action();
+    void dismiss_notice();
+    void review_removed();
     void show_settings();
     void show_tools();
     void on_core_events();
+    std::vector<TrackRow> selected_tracks_in(std::initializer_list<StatusTab> tabs) const;
     void retry_selected();
+    void keep_selected();
+    void delete_selected();
     void show_selected_in_folder() const;
     void apply_event(const core::ToolsRunChanged& event);
     void apply_event(const core::ToolStatus& status);
@@ -160,7 +168,7 @@ private:
 
     core::SettingsStore& settings_store_;
     core::Settings settings_;
-    core::StateStore& state_;
+    core::Library& library_;
     CoreEventQueue& events_;
     core::ToolManager& tools_;
     core::PlaylistLookup& lookup_;
@@ -188,6 +196,7 @@ private:
     PanelState panels_;
     framework::FocusMemory focus_;
     TrackCounts track_counts_;
+    RemovalsNotice removals_;
     FetchFailureNotice fetch_failure_;
     // A playlist's key, or nothing while All tracks is selected
     std::optional<std::string> selected_playlist_;

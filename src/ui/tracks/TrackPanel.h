@@ -32,6 +32,7 @@ public:
     std::map<TrackColumn, int> column_widths() const;
     void set_column_widths(const std::map<TrackColumn, int>& width_dips);
     void focus_search();
+    void show_status_tab(StatusTab tab);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

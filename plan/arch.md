@@ -276,9 +276,11 @@ its match may be wrong, so it neither merges into a track with its id nor takes 
 confirms it, which then merges it. Meanwhile two tracks can share an id. A merge goes like this:
 - The track that had the id first survives. The other track's sources move into it, and its entry is
   deleted.
-- If the deleted track had a file, that file goes to the Recycle Bin.
+- The survivor keeps one file. It takes the deleted track's file, with its `ytmId`, status and failure, when it has
+  none of its own, or when only the deleted track's file was made from the id they share. The file it doesn't keep is
+  deleted (Library › Files follow the state); nothing goes to the Recycle Bin.
 - The surviving track keeps its own `edits`, and takes the other track's edits for fields it hasn't edited.
-- When the merge changes the effective metadata or cover, the file is re-tagged and renamed.
+- When the merge changes the tags the file should have, the file is re-tagged, and renamed when its name changes.
 - The engine emits `TracksMerged`.
 
 Sources stay attached to their track until the track is removed, with one exception: choosing another result for one
@@ -302,14 +304,20 @@ take a row out of a playlist: when it lists several sources of one track, the la
 Tracks, sources and entries). `track_entries` (`src/ui/tracks/TrackEntries`) lists every entry in the left panel's
 order, which picks the source All tracks shows a track by.
 
-So far a merge (`merge_tracks`, `src/core/state/MergeTracks`) only moves the sources: files don't take part in it
-yet.
+`merge_tracks` (`src/core/state/MergeTracks`) does it in the state. A taken-over `orphaned` or `kept` status becomes
+`downloaded` when the survivor is in a playlist. The file work follows from the state the merge leaves (Library ›
+Files follow the state), so a state that can't be saved leaves both files.
+
+An override with another id on a track that has a file makes it `pending`, and it downloads again. Its old file stays
+until the new one is placed, which then replaces it. An override back to the id the file was made from makes it
+`downloaded` again.
 
 **Tracks that leave every playlist.** After a fetch and after `removePlaylist`, a track none of whose sources is in a
 playlist anymore is looked at again (`prune_tracks`, `src/core/state/`):
-- A track without a file (`pending`, `failed`) is deleted with its sources: there is nothing in the library to decide
-  on.
-- A track with a file becomes `orphaned` (see SyncEngine › Orphans).
+- A track without a `file` is deleted with its sources: there is nothing in the library to decide on.
+- A track with a `file` becomes `orphaned` (see SyncEngine › Orphans), also one waiting to download again.
+
+A listed track that is `orphaned` or `kept` becomes `downloaded` again.
 
 **Effective metadata.** Tags and file names use, per field, the first of:
 1. `edits`;
@@ -816,7 +824,7 @@ playlist owner's choice wins over a search result. A Review leaves the track to 
 It looks at the whole library, not only at the playlists the sync fetched, so the order in which playlists are added
 or synced doesn't matter: a Spotify track the search matched earlier joins a YouTube Music playlist's entry on the
 first sync after one lists the song, and a Spotify track that comes after the entry merges before it is searched for.
-A downloaded track merges by the Merging rules; so far files don't take part in merges.
+A downloaded track merges by the Merging rules, files and all.
 
 A stored match keeps the confidence and doubts it got; a later change to the rules applies to new matches only. Until
 release, playlists are added again to match their tracks anew.
@@ -919,7 +927,8 @@ effective metadata, so `edits` win over source values:
 
 `WESTIELIB_SOURCE` and `WESTIELIB_YTMID` make every file self-identifying, which powers state rebuilds.
 
-The Tagger also re-tags finished library files in place, after `editTrack` and after a merge. `read_cover` reads the
+The Tagger also re-tags finished library files in place (`update_tags`), after `editTrack` and after a merge; that
+keeps the pictures, and the album and date the new tags leave empty. `read_cover` reads the
 front cover back out of a file, for the track card; it is empty when the file has none or doesn't read.
 
 `Tagger` (`src/core/tagging/`) replaces the file's own Vorbis comments and pictures with these, so the tags yt-dlp's
@@ -942,8 +951,21 @@ The Library places finished files and handles the library folder as a whole.
 - **Placement.** The library folder is created when it is missing. The tagged file moves from `work\` into the library
   with `FileOps::move_new`, so the library only ever contains complete files, and a name another file took meanwhile
   moves on to the next number.
-- **Rename.** When `editTrack` or a merge changes the effective artists or title, the file is renamed with the
-  same rules.
+- **Files follow the state.** `Library` (`src/core/library/Library`) makes every change that can merge, drop or
+  re-tag a track: it saves the change through `StateStore::update`, and then brings the files in line with it. One
+  lock covers both, so the file work of two changes never interleaves, and a download's new `file` is stored under it
+  too. `file_changes` (`src/core/library/FileChanges`, pure) compares the state before and after the change:
+  - A `file` some track had before and none has after is deleted, unless a track has it again by then.
+  - A file a track has before and after (the same track, or the survivor of a merge) is re-tagged when the tags it
+    should have (`track_tags`: the effective metadata, the source keys and `ytmId`) differ. A file that is new
+    after the change was just tagged by its download.
+  - When the change gives such a file another stem (`library_file_stem`), it is renamed by the name rules, and its
+    `file` follows in a second save.
+
+  Re-tagging (`update_tags`, Tagger) keeps the file's cover, and the album and year when the state doesn't know them:
+  a Spotify track's come from the info JSON. A file that can't be deleted, re-tagged or renamed is a Warning line, and
+  the state stays as it was saved. So the rules hold for merges, overrides, fetches that change a source's values,
+  removals, and later for `editTrack`.
 - **Removal.** Files are deleted through `FileOps`, not sent to the Recycle Bin.
 - **Relocation.** `relocateLibrary(newPath)` updates `libraryPath`; all `file` entries are relative, so they stay valid.
 - **Rebuild.** `rebuildState()` scans the library folder for `.opus` and `.flac` files. From each one it reads
@@ -963,8 +985,8 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
    - On failure, the playlist gets `fetchError` / `fetchErrorAt` and keeps its previous source list, plus the pages
      a Spotify fetch read before it failed, so none of its tracks become orphans. The engine emits
      `PlaylistFetchFailed`, and the run continues with the other playlists.
-2. **Orphans.** `downloaded` tracks with no source in any playlist become `orphaned`. The engine emits one
-   `RemovalsPending` event with all of them.
+2. **Orphans.** `downloaded` tracks with no source in any playlist become `orphaned`. The UI finds them in the
+   state, so it also shows the ones an earlier run or `removePlaylist` left, and no event is needed.
 3. **Queue.** All `pending` and `failed` tracks are queued in playlist order. Workers start tracks
    `delayBetweenTracksSeconds` apart.
 4. **Per track (worker).**
@@ -987,9 +1009,11 @@ active, they join its queue. Otherwise they start a run of their own.
   it widens it to every track that waits, as an update does.
 - During a run, the tracks join its queues even when the run has already tried them.
 
-**Removal decisions** arrive through `resolveRemovals` at any time during or after a run.
-- `remove` sends the file to the Recycle Bin and deletes the track and its sources.
-- `keep` sets the status to `kept`.
+**Removal decisions** arrive through `resolveRemovals` at any time during or after a run (`resolve_removals`,
+`src/core/library/ResolveRemovals`, through `Library`, in one save).
+- `remove` deletes the track and its sources, and so its file. It applies to `orphaned` and `kept` tracks.
+- `keep` sets an `orphaned` track's status to `kept`.
+- A track in a playlist again, or gone, is left alone. The log gets `Kept the file` or `Deleted "<file>"` per track.
 
 A `kept` or `orphaned` track that one of its sources brings back into a playlist returns to `downloaded`.
 
@@ -997,7 +1021,7 @@ A `kept` or `orphaned` track that one of its sources brings back into a playlist
 and their work folders are cleaned.
 
 **So far** (`src/core/sync/`), a run fetches, YouTube Music and Spotify playlists alike, then matches, then
-downloads. Files don't take part in merges and orphans yet, and there is no `resolveRemovals`.
+downloads. Its changes to tracks go through `Library`, so files follow merges and fetches.
 - `sync(keys)` queues the playlists that aren't queued yet and emits `SyncQueued`. Without a run it starts one on a
   worker thread (`std::jthread`); during a run they join its queue. The queue is behind a mutex, so a run that finds
   it empty and ends can't miss a `sync` that comes at the same moment.
@@ -1049,8 +1073,9 @@ downloads. Files don't take part in merges and orphans yet, and there is no `res
     `TrackStatusChanged`. It emits `TrackDownloading`, clears `work\<track key>\` (`:` becomes `_`), and runs the
     Downloader, the cover, the Tagger and the placement, with the settings of that moment. Then `apply_download`
     (`ApplyDownload.cpp`) stores `downloaded`, `ytmId` and `file`, clears the failure, and fills the YouTube Music
-    sources' album and year from the info JSON. A track that left the state meanwhile (its playlist was removed) has
-    its new file deleted. The work folder is removed, and the run emits `TrackStatusChanged` and logs `Downloaded as
+    sources' album and year from the info JSON, through `Library`, which deletes a file the new one replaces. A new
+    file whose name is that old file's moves over it (`FileOps::move_replacing`), so a download again keeps the name.
+    A track that left the state meanwhile (its playlist was removed) has its new file deleted. The work folder is removed, and the run emits `TrackStatusChanged` and logs `Downloaded as
     "<file>"`.
   - A failed download, tag or placement stores `failed` with `download` and the error, logs `Couldn't download:
     <error>`, and emits `TrackStatusChanged`; the next sync tries again.
@@ -1112,7 +1137,6 @@ cancelled`.
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |
 | `CandidateSearchResults`           | request number, candidates, error               |
-| `RemovalsPending`              | list of orphaned track keys                     |
 | `ToolsRunChanged`              | whether a ToolManager run is going              |
 | `ToolStatus`                   | tool, state, installed release, percent, error  |
 | `ToolsChecked`                 | when the releases were last looked up           |

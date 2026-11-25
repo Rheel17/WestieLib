@@ -13,11 +13,11 @@
 
 namespace westie::core {
 
-std::optional<std::string> set_ytm_override(StateStore& store, Log& log, const std::string& source_key, const std::string& ytm_id) {
+std::optional<std::string> set_ytm_override(Library& library, Log& log, const std::string& source_key, const std::string& ytm_id) {
     std::optional<std::string> survivor;
     std::optional<LogSubject> subject;
     std::string text;
-    store.update([&](State& state) {
+    library.update([&](State& state) {
         subject.reset();
         auto source = state.sources.find(source_key);
         if (source == state.sources.end() || !state.tracks.contains(source->second.track)) {
@@ -43,8 +43,9 @@ std::optional<std::string> set_ytm_override(StateStore& store, Log& log, const s
         std::string key = source->second.track;
         Track& track = state.tracks.at(key);
         track.ytm_override = ytm_id;
-        if (track.status == TrackStatus::Failed) {
-            track.status = TrackStatus::Pending;
+        // A file of another id downloads again, and replaces the old one once it's in
+        if (track.status == TrackStatus::Pending || track.status == TrackStatus::Downloaded || track.status == TrackStatus::Failed) {
+            track.status = !track.file.empty() && track.ytm_id == ytm_id ? TrackStatus::Downloaded : TrackStatus::Pending;
         }
         track.failure = TrackFailure::None;
         track.error.clear();

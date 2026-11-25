@@ -194,6 +194,14 @@ void TrackPanel::update_clear() {
     filter_.set_clear_enabled(!filter_.is_default() || status_.selected() != StatusTab::All);
 }
 
+// Every track in the tab shows, so the search and the source don't hide any
+void TrackPanel::show_status_tab(StatusTab tab) {
+    filter_.clear();
+    StatusTab before = status_.selected();
+    status_.select(tab);
+    show_tab_change(before);
+}
+
 void TrackPanel::clear_status() {
     StatusTab before = status_.selected();
     status_.reset();

@@ -18,9 +18,9 @@ bool CommandState::enabled(CommandId command) const {
     // During an update too: the tracks join its queues
     case CommandId::Retry:                  return failed_selected;
     case CommandId::ShowInFolder:           return file_selected;
+    case CommandId::Keep:                   return removed_selected;
+    case CommandId::DeleteFiles:            return deletable_selected;
     case CommandId::EditTrack:
-    case CommandId::Keep:
-    case CommandId::MoveToRecycleBin:
     case CommandId::OpenOnYouTube:
     case CommandId::OpenSourcePage:         return track_selected;
     default:                                return true;

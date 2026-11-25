@@ -35,7 +35,10 @@ void split_source(State& state, const std::string& source_key) {
             moved->second.track = others_key;
         }
     }
+    // The file stays with the sources whose id it was made from
     track->second.sources = {source_key};
+    track->second.file.clear();
+    track->second.ytm_id.clear();
     state.tracks[others_key] = std::move(rest);
 }
 

@@ -41,7 +41,7 @@ constexpr std::array TrackItems = {
     framework::MenuSeparator,
     command_item(CommandId::Retry, L"&Retry"),
     command_item(CommandId::Keep, L"&Keep"),
-    command_item(CommandId::MoveToRecycleBin, L"&Move to Recycle Bin…"),
+    command_item(CommandId::DeleteFiles, L"&Delete file…"),
     framework::MenuSeparator,
     command_item(CommandId::ShowInFolder, L"&Show in folder"),
     command_item(CommandId::OpenOnYouTube, L"Open on &YouTube"),

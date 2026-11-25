@@ -117,6 +117,10 @@ public static class FakeYtDlp {
 		if (id.StartsWith("PLretry")) {
 			yield return Entry("trackRETRY7", "\"Again\"", "\"Retrier\"", "140");
 		}
+		// The same song as a Spotify track matched to it
+		if (id.StartsWith("PLgood")) {
+			yield return Entry("trackGOOD01", "\"Good One\"", "\"Band - Topic\"", "200");
+		}
 		if (id.StartsWith("PLhold")) {
 			yield return Entry("trackHOLD08", "\"Held\"", "\"Slowpoke\"", "130");
 		}

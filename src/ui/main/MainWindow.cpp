@@ -1,14 +1,18 @@
 #include "ui/main/MainWindow.h"
 
+#include <algorithm>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "ResourceIds.h"
+#include "core/library/ResolveRemovals.h"
 #include "core/matching/ConfirmMatch.h"
 #include "core/matching/YtmOverride.h"
 #include "core/sources/SourceType.h"
@@ -23,6 +27,7 @@
 #include "ui/dialogs/AboutDialog.h"
 #include "ui/dialogs/AddPlaylistDialog.h"
 #include "ui/dialogs/ChooseMatchDialog.h"
+#include "ui/dialogs/DeleteFilesDialog.h"
 #include "ui/dialogs/MatchChoice.h"
 #include "ui/dialogs/RemovePlaylistDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
@@ -51,7 +56,7 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 MainWindow::MainWindow(
         core::SettingsStore& settings_store,
         core::Settings settings,
-        core::StateStore& state,
+        core::Library& library,
         CoreEventQueue& events,
         core::ToolManager& tools,
         core::PlaylistLookup& lookup,
@@ -63,7 +68,7 @@ MainWindow::MainWindow(
         Window(window_class(), {.title = L"WestieLib", .style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN}),
         settings_store_(settings_store),
         settings_(std::move(settings)),
-        state_(state),
+        library_(library),
         events_(events),
         tools_(tools),
         lookup_(lookup),
@@ -77,7 +82,7 @@ MainWindow::MainWindow(
         fonts_(framework::Dpi::of(hwnd())),
         toolbar_(hwnd(), [this](CommandId command) { run_command(command); }),
         infobar_(
-                hwnd(), [this] { show_log(); }, [this] { dismiss_fetch_failure(); }
+                hwnd(), [this] { on_notice_action(); }, [this] { dismiss_notice(); }
         ),
         playlists_(
                 hwnd(),
@@ -207,11 +212,11 @@ void MainWindow::change_library_folder(const std::filesystem::path& folder) {
 }
 
 bool MainWindow::has_playlists() const {
-    return !state_.snapshot()->playlists.empty();
+    return !library_.snapshot()->playlists.empty();
 }
 
 std::optional<std::string> MainWindow::added_playlist_name(const core::PlaylistLink& link) const {
-    std::shared_ptr<const core::State> state = state_.snapshot();
+    std::shared_ptr<const core::State> state = library_.snapshot();
     auto playlist = state->playlists.find(link.key());
     if (playlist == state->playlists.end()) {
         return std::nullopt;
@@ -223,7 +228,7 @@ void MainWindow::add_playlist() {
     add_playlist_dialog_.emplace([this](const core::PlaylistLink& link) { return added_playlist_name(link); }, lookup_, tool_board_);
     std::optional<AddPlaylistRequest> request = add_playlist_dialog_->choose(hwnd());
     add_playlist_dialog_.reset();
-    if (!request || !core::add_playlist(state_, logger_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
+    if (!request || !core::add_playlist(library_, logger_, request->link, std::move(request->name), std::chrono::system_clock::now())) {
         return;
     }
     selected_playlist_ = request->link.key();
@@ -241,7 +246,7 @@ void MainWindow::select_playlist(std::optional<std::string> key) {
 }
 
 void MainWindow::show_scope() {
-    std::shared_ptr<const core::State> state = state_.snapshot();
+    std::shared_ptr<const core::State> state = library_.snapshot();
     std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(*state, *selected_playlist_) : std::nullopt;
     show_track_counts(*state);
     tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_, normalizer_), track_counts_.total);
@@ -250,13 +255,13 @@ void MainWindow::show_scope() {
 
 void MainWindow::show_inspector() {
     std::vector<TrackRow> selected = tracks_.selected_rows();
-    log_.set_selection(selected_for_log(*state_.snapshot(), selected_playlist_, selected));
+    log_.set_selection(selected_for_log(*library_.snapshot(), selected_playlist_, selected));
     if (!has_playlists()) {
         inspector_.show_first_run();
         return;
     }
     if (selected.size() == 1) {
-        if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), normalizer_, selected.front(), settings_.library_path)) {
+        if (std::optional<TrackDetails> track = track_details(*library_.snapshot(), normalizer_, selected.front(), settings_.library_path)) {
             inspector_.show_track(*track);
             return;
         }
@@ -273,11 +278,12 @@ void MainWindow::show_inspector() {
 }
 
 void MainWindow::show_playlists() {
-    std::shared_ptr<const core::State> state = state_.snapshot();
+    std::shared_ptr<const core::State> state = library_.snapshot();
     if (selected_playlist_ && !state->playlists.contains(*selected_playlist_)) {
         selected_playlist_.reset();
     }
     std::vector<PlaylistRow> rows = playlist_rows(*state);
+    removals_.update(*state);
     mark_runs(rows, sync_board_);
     show_run(rows);
     playlists_.set_playlists(std::move(rows));
@@ -301,8 +307,10 @@ void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
     status_bar_.set_run(sync_board_, last_sync);
 
     fetch_failure_.update(rows);
-    if (const std::optional<std::wstring>& message = fetch_failure_.message()) {
-        infobar_.set_message(*message);
+    if (const std::optional<std::wstring>& message = removals_.message()) {
+        infobar_.set_message(*message, InfobarAction::Review);
+    } else if (const std::optional<std::wstring>& failure = fetch_failure_.message()) {
+        infobar_.set_message(*failure, InfobarAction::Details);
     }
 }
 
@@ -319,7 +327,7 @@ void MainWindow::save_state() const {
 MainLayout MainWindow::current_layout() const {
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
-    BarHeights bars{.toolbar = toolbar_.height(), .infobar = fetch_failure_.message() ? infobar_.height() : 0, .status_bar = status_bar_.height()};
+    BarHeights bars{.toolbar = toolbar_.height(), .infobar = shows_notice() ? infobar_.height() : 0, .status_bar = status_bar_.height()};
     return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), bars, panels_);
 }
 
@@ -353,6 +361,9 @@ CommandState MainWindow::command_state() const {
         .review_selected = selected.size() == 1 && selected.front().status == StatusTab::NeedsReview,
         .spotify_entry_selected = selected.size() == 1 && selected.front().source == core::SourceType::Spotify,
         .failed_selected = std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Failed; }),
+        .removed_selected = std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Removed; }),
+        .deletable_selected =
+                std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Removed || row.counts_as == StatusTab::Kept; }),
         .file_selected = selected.size() == 1 && !selected.front().file.empty(),
         .log_visible = panels_.log_visible,
     };
@@ -389,6 +400,8 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::ConfirmMatch:           confirm_match(); return;
     case CommandId::ChooseMatch:            choose_match(); return;
     case CommandId::Retry:                  retry_selected(); return;
+    case CommandId::Keep:                   keep_selected(); return;
+    case CommandId::DeleteFiles:            delete_selected(); return;
     case CommandId::ShowInFolder:           show_selected_in_folder(); return;
     default:                                return;
     }
@@ -402,14 +415,14 @@ void MainWindow::sync_playlist(const std::string& key) {
 
 void MainWindow::sync_all() {
     std::vector<std::string> keys;
-    for (const PlaylistRow& row : playlist_rows(*state_.snapshot())) {
+    for (const PlaylistRow& row : playlist_rows(*library_.snapshot())) {
         keys.push_back(row.key);
     }
     sync_.sync(keys);
 }
 
 std::optional<PlaylistRow> MainWindow::selected_row() const {
-    return selected_playlist_ ? playlist_row(*state_.snapshot(), *selected_playlist_) : std::nullopt;
+    return selected_playlist_ ? playlist_row(*library_.snapshot(), *selected_playlist_) : std::nullopt;
 }
 
 void MainWindow::show_playlist_menu(POINT screen) {
@@ -423,7 +436,7 @@ void MainWindow::remove_playlist() {
     if (!playlist || !confirm_remove_playlist(hwnd(), playlist->name)) {
         return;
     }
-    core::remove_playlist(state_, logger_, playlist->key);
+    core::remove_playlist(library_, logger_, playlist->key);
     selected_playlist_.reset();
     show_playlists();
 }
@@ -433,7 +446,7 @@ void MainWindow::confirm_match() {
     if (selected.size() != 1) {
         return;
     }
-    core::confirm_match(state_, logger_, selected.front().track);
+    core::confirm_match(library_, logger_, selected.front().track);
     show_playlists();
 }
 
@@ -442,7 +455,7 @@ void MainWindow::choose_match() {
     if (selected.size() != 1) {
         return;
     }
-    std::optional<MatchChoice> choice = match_choice(*state_.snapshot(), selected.front().key);
+    std::optional<MatchChoice> choice = match_choice(*library_.snapshot(), selected.front().key);
     if (!choice) {
         return;
     }
@@ -450,7 +463,7 @@ void MainWindow::choose_match() {
     choose_match_dialog_.emplace(
             std::move(*choice),
             candidate_search_,
-            [this](const std::string& ytm_id) { return library_result_title(*state_.snapshot(), ytm_id); },
+            [this](const std::string& ytm_id) { return library_result_title(*library_.snapshot(), ytm_id); },
             choose_match_dips_
     );
     std::optional<std::string> ytm_id = choose_match_dialog_->choose(hwnd());
@@ -459,18 +472,45 @@ void MainWindow::choose_match() {
     if (!ytm_id) {
         return;
     }
-    core::set_ytm_override(state_, logger_, source, *ytm_id);
+    core::set_ytm_override(library_, logger_, source, *ytm_id);
     show_playlists();
 }
 
-void MainWindow::retry_selected() {
-    std::vector<std::string> tracks;
-    for (const TrackRow& row : tracks_.selected_rows()) {
-        if (row.counts_as == StatusTab::Failed && !std::ranges::contains(tracks, row.track)) {
-            tracks.push_back(row.track);
+// Each track once, though a playlist may list it more than once
+std::vector<TrackRow> MainWindow::selected_tracks_in(std::initializer_list<StatusTab> tabs) const {
+    std::vector<TrackRow> tracks;
+    for (TrackRow& row : tracks_.selected_rows()) {
+        if (std::ranges::contains(tabs, row.counts_as) && !std::ranges::contains(tracks, row.track, &TrackRow::track)) {
+            tracks.push_back(std::move(row));
         }
     }
-    sync_.retry(tracks);
+    return tracks;
+}
+
+void MainWindow::retry_selected() {
+    sync_.retry(selected_tracks_in({StatusTab::Failed}) | std::views::transform(&TrackRow::track) | std::ranges::to<std::vector>());
+    show_playlists();
+}
+
+void MainWindow::keep_selected() {
+    std::map<std::string, core::RemovalDecision> decisions;
+    for (const TrackRow& row : selected_tracks_in({StatusTab::Removed})) {
+        decisions.emplace(row.track, core::RemovalDecision::Keep);
+    }
+    core::resolve_removals(library_, logger_, decisions);
+    show_playlists();
+}
+
+void MainWindow::delete_selected() {
+    std::vector<TrackRow> tracks = selected_tracks_in({StatusTab::Removed, StatusTab::Kept});
+    if (tracks.empty() || !confirm_delete_files(hwnd(), tracks | std::views::transform(&TrackRow::file) | std::ranges::to<std::vector>())) {
+        return;
+    }
+    std::map<std::string, core::RemovalDecision> decisions;
+    for (const TrackRow& row : tracks) {
+        decisions.emplace(row.track, core::RemovalDecision::Remove);
+    }
+    core::resolve_removals(library_, logger_, decisions);
     show_playlists();
 }
 
@@ -519,9 +559,31 @@ void MainWindow::show_log() {
     }
 }
 
-void MainWindow::dismiss_fetch_failure() {
-    fetch_failure_.dismiss();
+bool MainWindow::shows_notice() const {
+    return removals_.message() || fetch_failure_.message();
+}
+
+// The removed tracks show first, as in show_run
+void MainWindow::on_notice_action() {
+    if (removals_.message()) {
+        review_removed();
+    } else {
+        show_log();
+    }
+}
+
+void MainWindow::dismiss_notice() {
+    if (removals_.message()) {
+        removals_.dismiss();
+    } else {
+        fetch_failure_.dismiss();
+    }
     show_playlists();
+}
+
+void MainWindow::review_removed() {
+    select_playlist(std::nullopt);
+    tracks_.show_status_tab(StatusTab::Removed);
 }
 
 void MainWindow::show_settings() {
