@@ -16,9 +16,9 @@ constexpr std::array<std::string_view, 4> QuietArguments = {"-hide_banner", "-lo
 
 Ffmpeg::Ffmpeg(const ToolRunner& runner) : runner_(runner) {}
 
-platform::ProcessResult Ffmpeg::run(std::vector<std::string> arguments, const std::stop_token& stop) const {
+platform::ProcessResult Ffmpeg::run(std::vector<std::string> arguments, const LogSubject& subject, const std::stop_token& stop) const {
     arguments.insert(arguments.begin(), QuietArguments.begin(), QuietArguments.end());
-    return runner_.run(ToolPackage::Ffmpeg, arguments, {}, stop);
+    return runner_.run(ToolPackage::Ffmpeg, arguments, subject, {}, stop);
 }
 
 }

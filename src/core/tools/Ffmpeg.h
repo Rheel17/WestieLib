@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "core/log/LogSubject.h"
 #include "core/tools/ToolRunner.h"
 #include "platform/ProcessRunner.h"
 
@@ -13,7 +14,7 @@ class Ffmpeg {
 public:
     explicit Ffmpeg(const ToolRunner& runner);
 
-    platform::ProcessResult run(std::vector<std::string> arguments, const std::stop_token& stop) const;
+    platform::ProcessResult run(std::vector<std::string> arguments, const LogSubject& subject, const std::stop_token& stop) const;
 
 private:
     const ToolRunner& runner_;

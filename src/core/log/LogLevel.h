@@ -2,6 +2,6 @@
 
 namespace westie::core {
 
-enum class LogLevel { Debug, Info, Warning, Error };
+enum class LogLevel { Trace, Debug, Info, Warning, Error };
 
 }

@@ -109,8 +109,8 @@ Check '  and checks View > Log' ([W]::ItemsWithState($menu, 0x8)) '&Log'
 $toolbar = Get-LogToolbar $h
 $labels = @([W]::Children($toolbar, 'WestieLib.Label') | ForEach-Object { [W]::TextOf($_) }) -join ' '
 Check 'Log toolbar: labels | levels | scopes | button' "$labels | $([W]::ComboItems((Get-LogLevelBox $h))) | $([W]::TabTexts((Get-LogScopeTabs $h))) | $([W]::TextOf(([W]::Children($toolbar, 'Button'))[0]))" (
-	'Log Level | Debug and up | Info and up | Warnings and up | Errors only | All | Selected playlist | Selected track | Open log folder')
-Check '  Info and up, All' (Get-LogView $h) '1 0'
+	'Log Level | Trace and up | Debug and up | Info and up | Warnings and up | Errors only | All | Selected playlist | Selected track | Open log folder')
+Check '  Info and up, All' (Get-LogView $h) '2 0'
 $close = ([W]::Children($toolbar, 'WestieLib.CloseButton'))[0]
 $title = [W]::RectIn(([W]::Children($toolbar, 'WestieLib.Label'))[0], $toolbar)
 $box = [W]::RectIn($close, $toolbar)
@@ -121,9 +121,9 @@ $list = Get-LogList $h
 $columns = [W]::ListViewColumns($list)
 Check '  columns, Message to the edge' ($columns -replace ' \d+$', '') "Time $(S 150) | Level $(S 70) | Playlist / Track $(S 160) | Message"
 Check '  Message takes the rest' ([int]($columns -replace '^.* ', '')) ((Get-ClientWidth $list) - (S 150) - (S 70) - (S 160))
-Choose-LogLevel $h 3
+Choose-LogLevel $h 4
 Click-LogScope $h 2
-Check 'Errors only, Selected track' (Get-LogView $h) '3 2'
+Check 'Errors only, Selected track' (Get-LogView $h) '4 2'
 Check '  no track selected: the list says so' "[$(Get-LogRows $h)] $([W]::TextOf($list))" '[] Select a track to see its lines.'
 Send-Click $close (S 12) (S 12)
 Start-Sleep -Milliseconds 200
@@ -156,7 +156,7 @@ $saved = Get-ItemProperty $KeyPath
 Check '  saved bounds' "$($saved.Left),$($saved.Top),$($saved.Right),$($saved.Bottom)" "100,100,$(100 + (S 1200)),$(100 + (S 750))"
 Check '  saved maximized, widths (DIPs)' "$($saved.Maximized) $($saved.PlaylistsWidthDips) $($saved.InspectorWidthDips)" '0 250 500'
 Check '  saved log visible, height (DIPs)' "$($saved.LogVisible) $($saved.LogHeightDips)" '1 200'
-Check '  saved log level, scope' "$($saved.LogLevel) $($saved.LogScope)" '3 2'
+Check '  saved log level, scope' "$($saved.LogLevel) $($saved.LogScope)" '4 2'
 
 "--- Run 2: restore a normal window"
 # With tools, so the screenshot shows the window as it usually looks
@@ -169,8 +169,8 @@ Check 'Restored bounds' (Get-Bounds $h) "100,100 $(S 1200)x$(S 750)"
 Check-Widths 'Restored widths' $h @((S 250), ($cw - (S 250) - (S 500) - 2 * $g), (S 500))
 Check-Bars '  toolbar strip | status bar' $h
 Check-Log 'Restored log' $h (S 200)
-Check '  its level and scope' (Get-LogView $h) '3 2'
-Choose-LogLevel $h 1
+Check '  its level and scope' (Get-LogView $h) '4 2'
+Choose-LogLevel $h 2
 Click-LogScope $h 0
 Start-Sleep -Milliseconds 200
 Check '  back to All: no empty text' "[$([W]::TextOf((Get-LogList $h)))]" '[]'

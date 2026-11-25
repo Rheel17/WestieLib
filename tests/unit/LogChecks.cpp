@@ -56,25 +56,35 @@ void check_file_lines() {
     );
 }
 
+std::string joined(const std::vector<std::string>& lines) {
+    std::string text;
+    for (const std::string& line : lines) {
+        text += text.empty() ? "" : " | ";
+        text += line;
+    }
+    return text;
+}
+
+void check_lines(const std::vector<std::string>& actual, const std::vector<std::string>& expected, std::source_location where = std::source_location::current()) {
+    check(actual == expected, std::format("\"{}\", expected \"{}\"", joined(actual), joined(expected)), where);
+}
+
 void check_tool_runs() {
     LocalTime time = local_time(2026, 11, 12, 15, 12, 3, 871);
     std::vector<std::string> arguments = {"--ignore-config", "--dump-single-json", "a b", ""};
     check_text(core::command_line("yt-dlp", arguments), "yt-dlp --ignore-config --dump-single-json \"a b\" \"\"");
-    check_text(
-            core::log_tool_run(time, "yt-dlp", arguments, {.exit_code = 0, .output = "{\"id\": 1}", .errors = "WARNING: slow\n"}),
-            "2026-11-12 15:12:03.871 TOOL    yt-dlp --ignore-config --dump-single-json \"a b\" \"\"\n"
-            "    exit code 0\n"
-            "    stderr:\n"
-            "        WARNING: slow\n"
-            "    stdout: 9 bytes\n"
+    check_lines(
+            core::tool_output_lines("yt-dlp", {.exit_code = 0, .output = "{\"id\": 1}", .errors = "WARNING: slow\r\n\nWARNING: slower\n"}),
+            {"yt-dlp: WARNING: slow", "yt-dlp: WARNING: slower"}
+    );
+    check_lines(core::tool_output_lines("yt-dlp", {.exit_code = 0, .output = "{\"id\": 1}", .errors = ""}), {});
+    check_lines(
+            core::tool_output_lines("ffmpeg", {.exit_code = 1, .output = "partial\nanswer", .errors = "Error opening input"}),
+            {"ffmpeg exited with code 1", "ffmpeg: Error opening input", "ffmpeg: partial", "ffmpeg: answer"}
     );
     check_text(
-            core::log_tool_run(time, "yt-dlp", {}, {.exit_code = 1, .output = "partial\nanswer", .errors = ""}),
-            "2026-11-12 15:12:03.871 TOOL    yt-dlp\n"
-            "    exit code 1\n"
-            "    stdout:\n"
-            "        partial\n"
-            "        answer\n"
+            core::log_file_line({.time = time, .level = core::LogLevel::Trace, .text = "ffmpeg -y", .subject = {.track = "ytm:abc", .name = "Song"}}),
+            "2026-11-12 15:12:03.871 TRACE   ffmpeg -y [Song; track ytm:abc]\n"
     );
 }
 

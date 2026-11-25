@@ -670,8 +670,7 @@ a card that only changes (an update reports progress) keeps its place.
 
 - Hidden on the first start; after that, it comes back as it was when the window closed. View › Log or Ctrl+L
   toggles it. It spans the full window width, between the panels and the status bar, and has its own splitter.
-- It lists the lines of this run's log file (see `arch.md`, Log), the last 20,000 at most, minus the tool output,
-  which goes only to the file.
+- It lists the lines of this run's log file (see `arch.md`, Log), the last 20,000 at most.
 
 ```
 │ Log   Level [Info and up ▾]   All │ Selected playlist │ Selected track             [Open log folder]  ✕ │
@@ -687,12 +686,13 @@ semibold, 12 px, `Level`, 6 px, a drop-down list, 12 px, the scope's flat button
 `Open log folder` (a compact button, like the infobar's `Details`), 6 px, and ✕ in a 24 px box, 4 px from the right
 edge.
 
-- **Level** picks the least severe level shown; every more severe level shows too. The list holds `Debug and up`,
-  `Info and up`, `Warnings and up` and `Errors only`, and starts at `Info and up`.
+- **Level** picks the least severe level shown; every more severe level shows too. The list holds `Trace and up`,
+  `Debug and up`, `Info and up`, `Warnings and up` and `Errors only`, and starts at `Info and up`.
 
   | Level   | Lines                                                                                       |
   |---------|---------------------------------------------------------------------------------------------|
-  | Debug   | details for finding a fault: each yt-dlp run and its exit code, each search as it starts and ends, with its result count, and its best result |
+  | Trace   | each run of a tool: its command line as it starts; as it ends, its exit code when that isn't 0, then each line it wrote to stderr (and to stdout when it failed) |
+  | Debug   | details for finding a fault: each whole percentage of a download's progress that yt-dlp reports, each search as it starts and ends, with its result count, and its best result |
   | Info    | what the app did: an update started and finished, a playlist synced, a track matched, a tool installed, a playlist added. Lines state what happened, never what to do |
   | Warning | something the user may want to look at: a match that needs review, a fetch that waits for a tool, a search YouTube Music refused |
   | Error   | something that failed: a fetch, a match, a tool install, saving the state                    |
@@ -712,8 +712,12 @@ edge.
 the rest of the width. Rows are 20 px tall.
 
 - Time is the local date and time to the millisecond: `2026-11-12 15:12:03.871`.
-- Level reads `Debug`, `Info`, `Warning` or `Error`. Warning rows are amber (`#9D5D00`) and Error rows red
-  (`#C42B1C`), in every column; Debug and Info rows are black.
+- Level reads `Trace`, `Debug`, `Info`, `Warning` or `Error`. Warning rows are amber (`#9D5D00`) and Error rows red
+  (`#C42B1C`), in every column; the other rows are black.
+- A message fills its column however long it is, and one too long for it ends in an ellipsis at the column's right
+  edge. Hovering such a message shows all of it in a tooltip, wrapped at the column's width. (The list view itself
+  cuts a cell's text at 259 characters, wherever that falls, so the app draws the Message cells itself, in their own
+custom draw step, and the list draws only the rows' backgrounds under them.)
 - Playlist / Track is the track's title when the line is about a track, else the playlist's name when it's about a
   playlist, else `—`. It is the name when the line was written, so it stays after the playlist is removed.
 - New lines scroll the list to the bottom when it showed the last line; once the user has scrolled up, it stays.

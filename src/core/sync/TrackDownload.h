@@ -9,6 +9,7 @@
 #include "core/download/DownloadedAudio.h"
 #include "core/download/Downloader.h"
 #include "core/log/Log.h"
+#include "core/log/LogSubject.h"
 #include "core/settings/Settings.h"
 #include "core/state/EffectiveMetadata.h"
 #include "core/state/State.h"
@@ -28,8 +29,7 @@ public:
 
 private:
     std::string cover(
-            const State& state, const std::string& track_key, const TrackMetadata& metadata, const DownloadedAudio& audio, const std::filesystem::path& work,
-            const std::stop_token& stop
+            const TrackMetadata& metadata, const DownloadedAudio& audio, const std::filesystem::path& work, const LogSubject& subject, const std::stop_token& stop
     ) const;
 
     const Downloader& downloader_;

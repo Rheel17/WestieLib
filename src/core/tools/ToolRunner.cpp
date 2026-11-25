@@ -1,8 +1,8 @@
 #include "core/tools/ToolRunner.h"
 
 #include <filesystem>
-#include <format>
 #include <shared_mutex>
+#include <string_view>
 
 #include "core/log/LogLevel.h"
 #include "core/log/LogText.h"
@@ -14,13 +14,14 @@ ToolRunner::ToolRunner(ToolFolder& folder, const platform::FileOps& files, const
         folder_(folder), files_(files), runner_(runner), log_(log) {}
 
 platform::ProcessResult ToolRunner::run(
-        ToolPackage package, const std::vector<std::string>& arguments, const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
+        ToolPackage package, const std::vector<std::string>& arguments, const LogSubject& subject, const platform::OutputLineHandler& on_output_line,
+        const std::stop_token& stop
 ) const {
-    return run(package, {}, arguments, on_output_line, stop);
+    return run(package, {}, arguments, subject, on_output_line, stop);
 }
 
 platform::ProcessResult ToolRunner::run(
-        ToolPackage package, std::span<const ToolPackage> also_uses, const std::vector<std::string>& arguments,
+        ToolPackage package, std::span<const ToolPackage> also_uses, const std::vector<std::string>& arguments, const LogSubject& subject,
         const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
 ) const {
     // Held while it runs, so an update waits to replace them
@@ -38,10 +39,11 @@ platform::ProcessResult ToolRunner::run(
         }
     }
 
-    platform::ProcessResult result = runner_.run(folder_.program(package), arguments, on_output_line, stop);
     std::string_view name = tool_package_name(package);
-    log_.write_tool_run(name, arguments, result);
-    log_.write(LogLevel::Debug, std::format("{}: exit code {}", command_line(name, arguments), result.exit_code));
+    // Before it runs, so the lines that come meanwhile show how long it takes
+    log_.write(LogLevel::Trace, command_line(name, arguments), subject);
+    platform::ProcessResult result = runner_.run(folder_.program(package), arguments, on_output_line, stop);
+    log_.write_tool_output(name, result, subject);
     return result;
 }
 

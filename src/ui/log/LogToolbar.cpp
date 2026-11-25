@@ -31,7 +31,7 @@ constexpr int HairlinePixels = 1;
 constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
 
 // In the order of the levels, each showing itself and the more severe ones
-constexpr std::array LevelTexts = {L"Debug and up", L"Info and up", L"Warnings and up", L"Errors only"};
+constexpr std::array LevelTexts = {L"Trace and up", L"Debug and up", L"Info and up", L"Warnings and up", L"Errors only"};
 // In the order of the scopes
 constexpr std::array ScopeTexts = {L"All", L"Selected playlist", L"Selected track"};
 

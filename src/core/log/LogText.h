@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "core/log/LogLevel.h"
 #include "core/log/LogLine.h"
@@ -18,9 +19,6 @@ std::filesystem::path log_file_name(std::chrono::local_time<std::chrono::millise
 std::string log_file_line(const LogLine& line);
 std::string command_line(std::string_view tool, std::span<const std::string> arguments);
 std::string one_line(std::string_view text);
-std::string log_tool_run(
-        std::chrono::local_time<std::chrono::milliseconds> time, std::string_view tool, std::span<const std::string> arguments,
-        const platform::ProcessResult& result
-);
+std::vector<std::string> tool_output_lines(std::string_view tool, const platform::ProcessResult& result);
 
 }

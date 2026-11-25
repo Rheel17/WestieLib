@@ -350,7 +350,7 @@ PlaylistContents SyncEngine::fetch_when_installed(const PlaylistLink& link, cons
     while (true) {
         std::uint64_t installs = tools_.installs(ToolPackage::YtDlp);
         try {
-            return fetch_youtube_music_playlist(yt_dlp_, link, stop);
+            return fetch_youtube_music_playlist(yt_dlp_, link, playlist_subject(*library_.snapshot(), link.key()), stop);
         } catch (const ToolMissing& missing) {
             log_.write(
                     LogLevel::Warning, std::format("Waiting for {} to install", tool_package_name(missing.package())),

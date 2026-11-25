@@ -4,7 +4,6 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
-#include <span>
 #include <string>
 #include <string_view>
 
@@ -24,9 +23,10 @@ public:
 
     const std::filesystem::path& folder() const noexcept;
     void write(LogLevel level, std::string text, LogSubject subject = {});
-    void write_tool_run(std::string_view tool, std::span<const std::string> arguments, const platform::ProcessResult& result);
+    void write_tool_output(std::string_view tool, const platform::ProcessResult& result, const LogSubject& subject);
 
 private:
+    void write_locked(LogLevel level, std::string text, LogSubject subject);
     void open(platform::FileOps& files);
     std::chrono::local_time<std::chrono::milliseconds> now() const;
     void append(std::string_view text);

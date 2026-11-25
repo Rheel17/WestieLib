@@ -94,8 +94,8 @@ namespace westie::core {
 Downloader::Downloader(const YtDlp& yt_dlp, const ToolFolder& tools, const platform::FileOps& files) : yt_dlp_(yt_dlp), tools_(tools), files_(files) {}
 
 DownloadedAudio Downloader::download(
-        const std::string& ytm_id, AudioFormat format, const std::filesystem::path& work, const std::function<void(int percent)>& on_percent,
-        const std::stop_token& stop
+        const std::string& ytm_id, AudioFormat format, const std::filesystem::path& work, const LogSubject& subject,
+        const std::function<void(int percent)>& on_percent, const std::stop_token& stop
 ) const {
     std::string_view extension = extension_of(format);
     std::vector<std::string> arguments = {
@@ -123,7 +123,7 @@ DownloadedAudio Downloader::download(
 
     std::optional<int> shown;
     platform::ProcessResult result = yt_dlp_.run(
-            std::move(arguments), AlsoUses,
+            std::move(arguments), AlsoUses, subject,
             [&](std::string_view line) {
                 // A line comes with every update; the UI needs only whole percents
                 if (std::optional<int> percent = download_percent(line); percent && percent != shown) {

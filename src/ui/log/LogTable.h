@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <windows.h>
 #include <commctrl.h>
 
@@ -23,7 +25,9 @@ public:
 
 private:
     void show_cell(LVITEMW& item) const;
+    std::wstring message_tip(int item, int column_index) const;
     LRESULT on_custom_draw(NMLVCUSTOMDRAW& draw) const;
+    void draw_message(HDC dc, int item, int column_index) const;
     void on_empty_markup(NMLVEMPTYMARKUP& markup) const;
     const wchar_t* empty_text() const;
 

@@ -468,7 +468,7 @@ function Set-SavedAutoUpdate([bool]$on) { Set-SavedSetting autoUpdateTools $on }
 function Set-SavedWindow([hashtable]$values) {
 	$state = [ordered]@{
 		Left = 100; Top = 100; Right = 1380; Bottom = 900; Maximized = 0; PlaylistsWidthDips = 250; InspectorWidthDips = 290; LogHeightDips = 168; LogVisible = 0
-		LogLevel = 1; LogScope = 0; ChooseMatchWidthDips = 900; ChooseMatchHeightDips = 600
+		LogLevel = 2; LogScope = 0; ChooseMatchWidthDips = 900; ChooseMatchHeightDips = 600
 	}
 	foreach ($column in $ColumnWidthDips.Keys) { $state["$($column)ColumnWidthDips"] = $ColumnWidthDips[$column] }
 	foreach ($name in $values.Keys) { $state[$name] = $values[$name] }

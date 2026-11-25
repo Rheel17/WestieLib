@@ -416,9 +416,9 @@ every component that logs.
   whole and in the same order in the file and the events, as the sync, tool, look-up and search workers and the UI
   thread all write. Under it, `write` takes only the event queue's lock and calls back into no component, so a caller
   may hold its own lock (the SyncEngine writes under its queue's).
-- Levels, from least to most severe: `Debug` (what helps find a fault: yt-dlp runs and their exit codes, searches and
-  their result counts), `Info` (what the app did), `Warning` (what the user may want to look at) and `Error` (what
-  failed).
+- Levels, from least to most severe: `Trace` (the tool runs), `Debug` (what helps find a fault: a download's progress,
+  searches and their result counts), `Info` (what the app did), `Warning` (what the user may want to look at) and
+  `Error` (what failed). The window state saves the pane's level as 0 to 4, from Trace to Error.
 - A subject names what a line is about: a playlist key, a track key, or both, and the name to show for it (the
   track's title, else the playlist's name). The name goes with the line, so it outlives a removed playlist.
 - A file line is UTF-8 and reads `<time> <LEVEL> <text>`, with ` [<name>; playlist <key>; track <key>]` after it when
@@ -426,10 +426,13 @@ every component that logs.
   `2026-11-12 22:34:12.087 ERROR   Couldn't fetch the playlist: HTTP 404 from api-partner.spotify.com [Slow & bluesy;
   playlist spotify:5aX8kq1sTn2Yz9wxxxxxxx]`. A text's further lines follow, indented by 4 spaces, so every line of
   the file starts with a time or with spaces.
-- `write_tool_run` writes a tool run to the file only: a `TOOL` line with the command line, then indented by 4 spaces
-  the exit code, and `stderr:` with its lines indented by 8. Stdout follows the same way when the tool failed; after a
-  success only its size is written, as yt-dlp's JSON answers run to megabytes. A Debug line gives the command line and
-  the exit code in the pane.
+- A tool run writes Trace lines with the subject its caller gives (the track it downloads, the playlist it fetches).
+  The command line comes as the tool starts, so the lines between it and the tool's end show how long it took. When
+  the tool ends, `write_tool_output` writes `yt-dlp exited with code 1` if the exit code isn't 0, then a line
+  `yt-dlp: <line>` for each line the tool wrote to stderr. When it failed, its stdout lines follow the same way; a
+  success's stdout is what the app reads, as yt-dlp's JSON answers, which run to megabytes, so it isn't written.
+- A download writes `Downloaded 0%`, `Downloaded 37%`, … at Debug for each whole percentage yt-dlp reports, which
+  come in uneven steps.
 - So far it logs the sync (started, each fetch, the end), the tools (installed, updated, failed), the playlist
   look-up, the Choose a match dialog's searches (started and finished at Debug, as below; a failure as a warning), and
   the commands that change the

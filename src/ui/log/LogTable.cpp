@@ -17,6 +17,8 @@ namespace {
 
 constexpr int RowHeightDips = 20;
 constexpr int MessageMinDips = 100;
+// What a cell leaves around its text, on both sides together
+constexpr int CellPaddingDips = 12;
 constexpr wchar_t NoTrackSelected[] = L"Select a track to see its lines.";
 // LVM_RESETEMPTYTEXT, which MinGW's commctrl.h leaves out
 constexpr UINT ResetEmptyTextMessage = LVM_FIRST + 84;
@@ -62,6 +64,7 @@ LogTable::LogTable(HWND parent, const LogLines& lines) : lines_(lines), list_(pa
     for (const ColumnSpec& spec : Columns) {
         list_.insert_column(list_.column_count(), {.title = spec.title, .width = dpi.scale(spec.width_dips), .subitem = std::to_underlying(spec.column)});
     }
+    list_.set_cell_tip([this](int item, int column_index) { return message_tip(item, column_index); });
 }
 
 HWND LogTable::hwnd() const noexcept {
@@ -120,6 +123,7 @@ void LogTable::fit_message_column() {
     if (width != list_.column_width(*message)) {
         list_.set_column_width(*message, width);
     }
+    list_.set_cell_tip_width(width);
 }
 
 LRESULT LogTable::on_notify(NMHDR& header) {
@@ -145,16 +149,53 @@ void LogTable::show_cell(LVITEMW& item) const {
     item.pszText[length] = L'\0';
 }
 
+// Only a message the column cuts off, such as a tool's command line
+std::wstring LogTable::message_tip(int item, int column_index) const {
+    if (list_.column_subitem(column_index) != std::to_underlying(LogColumn::Message) || item < 0 || std::cmp_greater_equal(item, lines_.shown_count())) {
+        return {};
+    }
+    const std::wstring& text = lines_.shown(item).text;
+    int room = list_.column_width(column_index) - framework::Dpi::of(list_.hwnd()).scale(CellPaddingDips);
+    return list_.text_width(text) > room ? text : std::wstring();
+}
+
 LRESULT LogTable::on_custom_draw(NMLVCUSTOMDRAW& draw) const {
+    auto item = static_cast<int>(draw.nmcd.dwItemSpec);
+    bool known = item >= 0 && std::cmp_less(item, lines_.shown_count());
     switch (draw.nmcd.dwDrawStage) {
     case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
+    // The colors hold for one cell at a time
     case CDDS_ITEMPREPAINT:
-        if (std::cmp_less(draw.nmcd.dwItemSpec, lines_.shown_count())) {
-            draw.clrText = level_color(lines_.shown(draw.nmcd.dwItemSpec).level);
+    case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
+        if (!known) {
+            return CDRF_DODEFAULT;
+        }
+        draw.clrText = level_color(lines_.shown(item).level);
+        if (draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
+            return CDRF_NEWFONT | CDRF_NOTIFYSUBITEMDRAW;
+        }
+        // The list has drawn the row's background already; only the text is left to draw
+        if (list_.column_subitem(draw.iSubItem) == std::to_underlying(LogColumn::Message)) {
+            draw_message(draw.nmcd.hdc, item, draw.iSubItem);
+            return CDRF_SKIPDEFAULT;
         }
         return CDRF_NEWFONT;
     default: return CDRF_DODEFAULT;
     }
+}
+
+// The list cuts a cell's text at 259 characters, which leaves much of a wide column empty
+void LogTable::draw_message(HDC dc, int item, int column_index) const {
+    const LogRow& row = lines_.shown(item);
+    RECT cell = list_.cell_rect(item, column_index);
+    int padding = framework::Dpi::of(list_.hwnd()).scale(CellPaddingDips) / 2;
+    cell.left += padding;
+    cell.right -= padding;
+    HGDIOBJ font = SelectObject(dc, reinterpret_cast<HFONT>(SendMessageW(list_.hwnd(), WM_GETFONT, 0, 0)));
+    SetTextColor(dc, level_color(row.level));
+    SetBkMode(dc, TRANSPARENT);
+    DrawTextW(dc, row.text.c_str(), static_cast<int>(row.text.size()), &cell, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
+    SelectObject(dc, font);
 }
 
 void LogTable::on_empty_markup(NMLVEMPTYMARKUP& markup) const {

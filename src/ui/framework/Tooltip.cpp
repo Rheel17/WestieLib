@@ -38,6 +38,11 @@ void Tooltip::set_tool(UINT_PTR id, const Rect& bounds, const std::wstring& text
     }
 }
 
+// A longer line wraps at its spaces
+void Tooltip::set_max_width(int width) {
+    SendMessageW(hwnd(), TTM_SETMAXTIPWIDTH, 0, width);
+}
+
 void Tooltip::remove_tool(UINT_PTR id) {
     if (tools_.erase(id) == 0) {
         return;

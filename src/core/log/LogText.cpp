@@ -8,10 +8,10 @@ namespace westie::core {
 namespace {
 
 constexpr std::string_view Indent = "    ";
-constexpr std::string_view OutputIndent = "        ";
 
 std::string_view file_level_name(LogLevel level) noexcept {
     switch (level) {
+    case LogLevel::Trace:   return "TRACE";
     case LogLevel::Debug:   return "DEBUG";
     case LogLevel::Info:    return "INFO";
     case LogLevel::Warning: return "WARNING";
@@ -83,6 +83,7 @@ std::string quoted_argument(std::string_view argument) {
 
 std::string_view log_level_name(LogLevel level) noexcept {
     switch (level) {
+    case LogLevel::Trace:   return "Trace";
     case LogLevel::Debug:   return "Debug";
     case LogLevel::Info:    return "Info";
     case LogLevel::Warning: return "Warning";
@@ -130,23 +131,24 @@ std::string one_line(std::string_view text) {
     return line;
 }
 
-std::string log_tool_run(
-        std::chrono::local_time<std::chrono::milliseconds> time, std::string_view tool, std::span<const std::string> arguments,
-        const platform::ProcessResult& result
-) {
-    std::string text = std::format("{} {:<7} {}\n{}exit code {}\n", format_log_time(time), "TOOL", command_line(tool, arguments), Indent, result.exit_code);
-    if (!result.errors.empty()) {
-        text += std::format("{}stderr:\n", Indent);
-        append_indented(text, result.errors, OutputIndent);
+std::vector<std::string> tool_output_lines(std::string_view tool, const platform::ProcessResult& result) {
+    std::vector<std::string> lines;
+    if (result.exit_code != 0) {
+        lines.push_back(std::format("{} exited with code {}", tool, result.exit_code));
     }
+    auto add_output = [&](std::string_view output) {
+        for (std::string_view line : lines_of(output)) {
+            if (!line.empty()) {
+                lines.push_back(std::format("{}: {}", tool, line));
+            }
+        }
+    };
+    add_output(result.errors);
     // A successful run's output is what the app reads, as yt-dlp's JSON answers, which run to megabytes
-    if (result.exit_code == 0 && !result.output.empty()) {
-        text += std::format("{}stdout: {} bytes\n", Indent, result.output.size());
-    } else if (!result.output.empty()) {
-        text += std::format("{}stdout:\n", Indent);
-        append_indented(text, result.output, OutputIndent);
+    if (result.exit_code != 0) {
+        add_output(result.output);
     }
-    return text;
+    return lines;
 }
 
 }

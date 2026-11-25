@@ -137,14 +137,20 @@ function Get-LogLines { @(Get-Content (Get-LogFiles)[-1].FullName -Encoding UTF8
 # Its lines of the levels $levels names (INFO|ERROR, say)
 function Get-LogLevelLines([string]$levels) { @(Get-LogLines | Where-Object { $_ -match "^T ($levels) " }) -join ' / ' }
 
-# A tool run in it, from the line naming $pattern to the end of its indented lines
+# A yt-dlp run in it: the Trace line of its command naming $pattern, written as it starts, then the lines of its output
+# with the same subject, written as it ends; other lines may come between them
 function Get-LogToolRun([string]$pattern) {
 	$lines = Get-LogLines
-	$start = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($line) $line -match "^T TOOL +.*$pattern" })
+	$start = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($line) $line -match "^T TRACE +yt-dlp --.*$pattern" })
 	if ($start -lt 0) { return '' }
-	$end = $start + 1
-	while ($end -lt $lines.Count -and $lines[$end].StartsWith(' ')) { $end++ }
-	$lines[$start..($end - 1)] -join ' / '
+	$subject = $lines[$start] -replace '^.*( \[[^\]]*\])$', '$1'
+	$run = @($lines[$start])
+	foreach ($line in $lines[($start + 1)..($lines.Count - 1)]) {
+		if (-not $line.EndsWith($subject)) { continue }
+		if ($line -match '^T TRACE   yt-dlp --') { break }
+		if ($line -match '^T TRACE   yt-dlp( exited|: )') { $run += $line }
+	}
+	$run -join ' / '
 }
 
 function Get-TrackSummary($hwnd) { "$([W]::TabTexts((Get-StatusTabs $hwnd))) | $([W]::TextOf((Get-ResultLine $hwnd)))" }
@@ -255,19 +261,21 @@ Check '  what the sync did' (Get-LogLevelLines 'INFO|WARNING|ERROR') (
 	"$DownloadedLines / " +
 	"T ERROR   Couldn't download: $DownloadError [Only Here; track ytm:trackDDDDD6] / " +
 	'T INFO    Update finished')
-Check '  a failed yt-dlp run: its command, exit code and stderr' (Get-LogToolRun 'PLbroken1$') (
-	'T TOOL    yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLbroken1 / ' +
-	'    exit code 1 / ' +
-	'    stderr: / ' +
-	'        WARNING: [youtube:tab] YouTube Music is not directly supported / ' +
-	"        ERROR: [youtube:tab] PLbroken1: $BrokenError")
-Check '  a successful one: only the size of its output' ((Get-LogToolRun 'PLtracks1$') -replace '\d+ bytes', 'N bytes') (
-	'T TOOL    yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLtracks1 / ' +
-	'    exit code 0 / ' +
-	'    stdout: N bytes')
-Check '  the three fetches at Debug too, and the seven downloads' (
-	"$(@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp --ignore-config --flat-playlist *: exit code *' }).Count) " +
-	"$(@(Get-LogLines | Where-Object { $_ -like 'T DEBUG   yt-dlp --ignore-config -f *: exit code *' }).Count)") '3 7'
+$BrokenSubject = '[Named PLbroken1; playlist ytm:PLbroken1]'
+Check '  a failed yt-dlp run at Trace: its command, its exit code, a line for each of stderr''s, with its playlist' (Get-LogToolRun 'list=PLbroken1 ') (
+	"T TRACE   yt-dlp --ignore-config --flat-playlist --dump-single-json https://music.youtube.com/playlist?list=PLbroken1 $BrokenSubject / " +
+	"T TRACE   yt-dlp exited with code 1 $BrokenSubject / " +
+	"T TRACE   yt-dlp: WARNING: [youtube:tab] YouTube Music is not directly supported $BrokenSubject / " +
+	"T TRACE   yt-dlp: ERROR: [youtube:tab] PLbroken1: $BrokenError $BrokenSubject")
+Check '  a successful one: one line, without exit code or output' (
+	(Get-LogToolRun 'list=PLtracks1 ') -match '^T TRACE   yt-dlp --ignore-config --flat-playlist --dump-single-json https://music\.youtube\.com/playlist\?list=PLtracks1 \[[^/]*; playlist ytm:PLtracks1\]$') 'True'
+Check '  the three fetches, the seven downloads, each with its track, the cover crops of the four YouTube Music ones that download' (
+	"$(@(Get-LogLines | Where-Object { $_ -like 'T TRACE   yt-dlp --ignore-config --flat-playlist *' }).Count) " +
+	"$(@(Get-LogLines | Where-Object { $_ -match '^T TRACE   yt-dlp --ignore-config -f .* \[[^;]*; track \S+\]$' }).Count) " +
+	"$(@(Get-LogLines | Where-Object { $_ -match '^T TRACE   ffmpeg .* \[[^;]*; track ytm:\w+\]$' }).Count)") '3 7 4'
+Check '  a download''s progress at Debug, each percentage yt-dlp reports' (@(Get-LogLines | Where-Object { $_ -match '^T DEBUG   Downloaded \d+% .*trackAAAAA1' }) -join ' / ') (
+	'T DEBUG   Downloaded 0% [Way Down We Go; track ytm:trackAAAAA1] / T DEBUG   Downloaded 50% [Way Down We Go; track ytm:trackAAAAA1] / ' +
+	'T DEBUG   Downloaded 100% [Way Down We Go; track ytm:trackAAAAA1]')
 Check '  each search at Debug: it starts, it ends, its best result' (@(Get-LogLines | Where-Object { $_ -match '^T DEBUG   (Searching|Searched|Best result)' }) -join ' / ') (
 	'T DEBUG   Searching YouTube Music for "Ana Ben Late Night Swing" [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
 	'T DEBUG   Searched "Ana Ben Late Night Swing": 1 result [Late Night Swing; track spotify:spTrackLateNight000001] / ' +
@@ -290,11 +298,15 @@ Check 'Log pane: the lines from Info up' (Get-LogRows $h) (
 Check '  the times, to the millisecond' (@(0..14 | Where-Object { ([W]::ListViewRow($logList, $_) -split ' \| ')[0] -match '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$' }).Count) 15
 Check '  the errors in red, no warning' "$([W]::RedInk($h, $logList)) $([W]::AmberInk($h, $logList))" 'True False'
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-log.png") }
-Choose-LogLevel $h 3
+Choose-LogLevel $h 4
 Check 'Errors only' (Get-LogRows $h) "$ErrorRow / $DownloadErrorRow"
 Choose-LogLevel $h 0
-Check 'Debug and up: the yt-dlp runs too' (@((Get-LogRows $h) -split ' / ' | Where-Object { $_ -like 'T | Debug | *yt-dlp --ignore-config --flat-playlist*' }).Count) 3
-Choose-LogLevel $h 1
+Check 'Trace and up: the yt-dlp runs too, with their playlists' (
+	@((Get-LogRows $h) -split ' / ' | Where-Object { $_ -match '^T \| Trace \| [^|]+ \| yt-dlp --ignore-config --flat-playlist' }).Count) 3
+# The long command lines fill the Message column to its edge, and the last row shows selected under its message
+[void][W]::SendMessageW($logList, 0x100, [IntPtr]0x23, [IntPtr]::Zero)
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-log-trace.png") }
+Choose-LogLevel $h 2
 Click-LogScope $h 1
 Check 'Selected playlist, with All tracks: every line' (@((Get-LogRows $h) -split ' / ').Count) 15
 Click-PlaylistRow $h 1
@@ -1078,7 +1090,7 @@ Check '  refused four times: failed' (Get-SavedFailures) 'spRefusedAlways0000002
 $RefusedOnce = 'Once; track spotify:spRefusedOnce000000001'
 $RefusedAlways = 'Always; track spotify:spRefusedAlways0000002'
 $Refusal = 'HTTP 403 from 127.0.0.1'
-Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefused(Once|Always)' -and $_ -notmatch ' Downloaded as ' }) -join ' / ') (
+Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefused(Once|Always)' -and $_ -notmatch '^T TRACE | Downloaded (as |\d+%)' }) -join ' / ') (
 	"T DEBUG   Searching YouTube Music for `"Rae Once`" [$RefusedOnce] / T WARNING YouTube Music refused the search for `"Rae Once`": $Refusal [$RefusedOnce] / " +
 	"T DEBUG   Searching YouTube Music for `"Rae Always`" [$RefusedAlways] / T WARNING YouTube Music refused the search for `"Rae Always`": $Refusal [$RefusedAlways] / " +
 	"T DEBUG   Searching YouTube Music for `"Rae Once`" [$RefusedOnce] / T DEBUG   Searched `"Rae Once`": 1 result [$RefusedOnce] / " +
@@ -1087,7 +1099,7 @@ Check '  log: each refusal a warning, the outcome once' (@(Get-LogLines | Where-
 	"T ERROR   Couldn't search YouTube Music: $Refusal (tried 4 times) [$RefusedAlways]")
 $RefusedSlow = 'Slow; track spotify:spRefusedSlow000000006'
 # Before ten answers, the search waits 4 s
-Check '  log: a late answer given up on as a refusal' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefusedSlow' -and $_ -notmatch ' Downloaded as ' }) -join ' / ') (
+Check '  log: a late answer given up on as a refusal' (@(Get-LogLines | Where-Object { $_ -match '^T \w+ +.*track spotify:spRefusedSlow' -and $_ -notmatch '^T TRACE | Downloaded (as |\d+%)' }) -join ' / ') (
 	"T DEBUG   Searching YouTube Music for `"Rae Slow`" [$RefusedSlow] / " +
 	"T WARNING YouTube Music refused the search for `"Rae Slow`": No answer from 127.0.0.1 within 4000 ms [$RefusedSlow] / " +
 	"T DEBUG   Searching YouTube Music for `"Rae Slow`" [$RefusedSlow] / T DEBUG   Searched `"Rae Slow`": 1 result [$RefusedSlow] / " +

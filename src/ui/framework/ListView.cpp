@@ -146,6 +146,15 @@ void ListView::set_cell_tip(std::function<std::wstring(int item, int column_inde
     forget_cell_tip();
 }
 
+void ListView::set_cell_tip_width(int width) {
+    tooltip_.set_max_width(width);
+}
+
+// In the list's font, without the room a cell leaves around its text
+int ListView::text_width(const std::wstring& text) const {
+    return static_cast<int>(SendMessageW(hwnd(), LVM_GETSTRINGWIDTHW, 0, reinterpret_cast<LPARAM>(text.c_str())));
+}
+
 void ListView::scroll_to_top() {
     if (SendMessageW(hwnd(), LVM_GETITEMCOUNT, 0, 0) > 0) {
         SendMessageW(hwnd(), LVM_ENSUREVISIBLE, 0, FALSE);

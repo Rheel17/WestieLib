@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "core/log/LogSubject.h"
 #include "core/tools/ToolPackage.h"
 #include "core/tools/ToolRunner.h"
 #include "platform/ProcessRunner.h"
@@ -15,10 +16,10 @@ class YtDlp {
 public:
     explicit YtDlp(const ToolRunner& runner);
 
-    platform::ProcessResult run(std::vector<std::string> arguments, const std::stop_token& stop) const;
+    platform::ProcessResult run(std::vector<std::string> arguments, const LogSubject& subject, const std::stop_token& stop) const;
     platform::ProcessResult run(
-            std::vector<std::string> arguments, std::span<const ToolPackage> also_uses, const platform::OutputLineHandler& on_output_line,
-            const std::stop_token& stop
+            std::vector<std::string> arguments, std::span<const ToolPackage> also_uses, const LogSubject& subject,
+            const platform::OutputLineHandler& on_output_line, const std::stop_token& stop
     ) const;
 
 private:

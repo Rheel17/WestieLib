@@ -21,8 +21,13 @@ TaggedAudio TrackDownload::run(
         const std::function<void(int percent)>& on_percent, const std::stop_token& stop
 ) const {
     const Track& track = state.tracks.at(track_key);
+    LogSubject subject = track_subject(state, track_key);
     files_.create_folders(work);
-    DownloadedAudio audio = downloader_.download(ytm_id, settings.format, work, on_percent, stop);
+    auto show_percent = [&](int percent) {
+        on_percent(percent);
+        log_.write(LogLevel::Debug, std::format("Downloaded {}%", percent), subject);
+    };
+    DownloadedAudio audio = downloader_.download(ytm_id, settings.format, work, subject, show_percent, stop);
 
     // The video's info fills in what the sources don't know yet, as it will once it is stored
     TrackMetadata metadata = effective_metadata(state, track);
@@ -41,7 +46,7 @@ TaggedAudio TrackDownload::run(
                 .year = metadata.year,
                 .sources = track.sources,
                 .ytm_id = ytm_id,
-                .cover = settings.embed_cover ? cover(state, track_key, metadata, audio, work, stop) : std::string(),
+                .cover = settings.embed_cover ? cover(metadata, audio, work, subject, stop) : std::string(),
             }
     );
     return {.audio = audio.audio, .stem = library_file_stem(metadata, ytm_id), .info = std::move(audio.info)};
@@ -49,15 +54,14 @@ TaggedAudio TrackDownload::run(
 
 // A file without a cover is better than no file
 std::string TrackDownload::cover(
-        const State& state, const std::string& track_key, const TrackMetadata& metadata, const DownloadedAudio& audio, const std::filesystem::path& work,
-        const std::stop_token& stop
+        const TrackMetadata& metadata, const DownloadedAudio& audio, const std::filesystem::path& work, const LogSubject& subject, const std::stop_token& stop
 ) const {
     try {
-        return cover_art_.fetch(metadata.cover_url, audio.thumbnail, work, stop);
+        return cover_art_.fetch(metadata.cover_url, audio.thumbnail, work, subject, stop);
     } catch (const platform::Cancelled&) {
         throw;
     } catch (const std::exception& error) {
-        log_.write(LogLevel::Warning, std::format("Couldn't get the cover: {}", one_line(error.what())), track_subject(state, track_key));
+        log_.write(LogLevel::Warning, std::format("Couldn't get the cover: {}", one_line(error.what())), subject);
         return {};
     }
 }

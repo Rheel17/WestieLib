@@ -64,6 +64,8 @@ public:
     std::optional<int> focused_item() const;
     void select_items(std::span<const int> items, std::optional<int> focused);
     void set_cell_tip(std::function<std::wstring(int item, int column_index)> cell_tip);
+    void set_cell_tip_width(int width);
+    int text_width(const std::wstring& text) const;
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;

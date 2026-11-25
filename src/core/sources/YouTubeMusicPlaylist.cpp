@@ -54,8 +54,8 @@ std::vector<std::string> artists_of(std::optional<std::string> channel) {
 
 }
 
-PlaylistContents fetch_youtube_music_playlist(const YtDlp& yt_dlp, const PlaylistLink& link, const std::stop_token& stop) {
-    platform::ProcessResult result = yt_dlp.run({"--flat-playlist", "--dump-single-json", link.url()}, stop);
+PlaylistContents fetch_youtube_music_playlist(const YtDlp& yt_dlp, const PlaylistLink& link, const LogSubject& subject, const std::stop_token& stop) {
+    platform::ProcessResult result = yt_dlp.run({"--flat-playlist", "--dump-single-json", link.url()}, subject, stop);
     if (result.exit_code != 0) {
         std::string_view error = yt_dlp_error_message(result.errors, link.id);
         if (says_playlist_unavailable(error)) {

@@ -37,15 +37,22 @@ const std::filesystem::path& Log::folder() const noexcept {
 
 void Log::write(LogLevel level, std::string text, LogSubject subject) {
     std::scoped_lock lock(mutex_);
+    write_locked(level, std::move(text), std::move(subject));
+}
+
+// One lock for the output's lines, so another worker's lines don't come between them
+void Log::write_tool_output(std::string_view tool, const platform::ProcessResult& result, const LogSubject& subject) {
+    std::scoped_lock lock(mutex_);
+    for (std::string& text : tool_output_lines(tool, result)) {
+        write_locked(LogLevel::Trace, std::move(text), subject);
+    }
+}
+
+void Log::write_locked(LogLevel level, std::string text, LogSubject subject) {
     LogLine line{.time = now(), .level = level, .text = std::move(text), .subject = std::move(subject)};
     std::string file_line = log_file_line(line);
     events_.emit(std::move(line));
     append(file_line);
-}
-
-void Log::write_tool_run(std::string_view tool, std::span<const std::string> arguments, const platform::ProcessResult& result) {
-    std::scoped_lock lock(mutex_);
-    append(log_tool_run(now(), tool, arguments, result));
 }
 
 void Log::open(platform::FileOps& files) {
