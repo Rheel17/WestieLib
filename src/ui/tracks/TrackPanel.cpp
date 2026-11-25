@@ -80,6 +80,10 @@ void TrackPanel::show_tracks(const std::optional<PlaylistRow>& playlist, std::ve
     }
 }
 
+void TrackPanel::show_activities(TrackActivities activities) {
+    table_.set_activities(std::move(activities));
+}
+
 std::vector<TrackRow> TrackPanel::selected_rows() const {
     return table_.selected_rows();
 }

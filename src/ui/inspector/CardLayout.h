@@ -27,6 +27,7 @@ public:
     void row_if(bool shown, HWND key, HWND value);
     void hide(HWND window);
     void buttons(std::initializer_list<const framework::Button*> buttons);
+    void buttons(std::initializer_list<const framework::Button*> buttons, int gap);
 
 private:
     framework::Rect line(int gap, int indent, int height);

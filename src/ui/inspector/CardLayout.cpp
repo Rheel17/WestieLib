@@ -72,7 +72,11 @@ void CardLayout::hide(HWND window) {
 }
 
 void CardLayout::buttons(std::initializer_list<const framework::Button*> buttons) {
-    int top = bottom_ + dpi_.scale(ButtonsGapDips);
+    this->buttons(buttons, dpi_.scale(ButtonsGapDips));
+}
+
+void CardLayout::buttons(std::initializer_list<const framework::Button*> buttons, int gap) {
+    int top = bottom_ + gap;
     int left = 0;
     for (const framework::Button* button : buttons) {
         framework::Size size = button->size();

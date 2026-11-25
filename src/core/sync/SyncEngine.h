@@ -51,6 +51,7 @@ public:
     );
 
     void sync(const std::vector<std::string>& playlists);
+    void retry(const std::vector<std::string>& tracks);
     void cancel() noexcept;
 
 private:
@@ -70,6 +71,10 @@ private:
     void work(const std::stop_token& stop);
     std::optional<std::string> take_next(const std::stop_token& stop);
     std::optional<QueuedMatch> take_track(MatchQueue& queue, const std::stop_token& stop);
+    void join_cancelled_run(std::unique_lock<std::mutex>& lock);
+    void start_run(std::unique_lock<std::mutex>& lock);
+    bool take_retried(MatchQueue& queue, std::optional<DownloadPool>& pool);
+    std::vector<QueuedTrack> in_run(std::vector<QueuedTrack> tracks);
     void queue_downloads(std::optional<DownloadPool>& pool, const std::stop_token& stop);
     bool wait_for_downloads(DownloadPool& pool, const std::stop_token& stop);
     void clear_work_folder();
@@ -101,6 +106,10 @@ private:
     std::deque<std::string> queue_;
     std::optional<std::string> current_;
     bool running_ = false;
+    // A run that retry started handles only these tracks, until a sync widens it
+    std::optional<std::set<std::string>> only_;
+    // Tracks retried during the run, which join its queues
+    std::vector<std::string> retried_;
     // Last, so the thread is joined before the members it uses go
     std::jthread worker_;
 };

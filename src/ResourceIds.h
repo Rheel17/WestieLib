@@ -39,6 +39,13 @@
 #define IDC_AUTO_UPDATE_TOOLS     1004
 #define IDC_CHECK_FOR_UPDATES     1005
 #define IDC_LAST_CHECKED          1006
+#define IDC_FORMAT_OPUS           1007
+#define IDC_FORMAT_FLAC           1008
+#define IDC_EMBED_COVER           1009
+#define IDC_CONCURRENCY           1010
+#define IDC_CONCURRENCY_SPIN      1011
+#define IDC_DELAY                 1012
+#define IDC_DELAY_SPIN            1013
 
 #define IDD_ADD_PLAYLIST          101
 #define IDC_PLAYLIST_LINK         1100

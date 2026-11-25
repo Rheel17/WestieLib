@@ -9,6 +9,8 @@ enum class AudioFormat { Opus, Flac };
 
 constexpr int MinConcurrency = 1;
 constexpr int MaxConcurrency = 4;
+// What the Settings dialog offers for the pause between tracks
+constexpr int MaxDelaySeconds = 60;
 
 struct Settings {
     std::filesystem::path library_path{};

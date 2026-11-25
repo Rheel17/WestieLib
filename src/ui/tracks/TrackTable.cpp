@@ -15,6 +15,7 @@
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/DurationText.h"
+#include "ui/sync/WaitingText.h"
 #include "ui/tracks/RowStatusText.h"
 
 namespace westie::ui {
@@ -96,6 +97,7 @@ std::wstring cell_text(const TrackRow& row, TrackColumn column) {
     case TrackColumn::Album:     return row.album;
     case TrackColumn::Playlists: return row.playlists;
     case TrackColumn::Time:      return duration_text(row.duration);
+    case TrackColumn::File:      return row.file;
     default:                     return {};
     }
 }
@@ -131,6 +133,8 @@ void TrackTable::apply_dpi(framework::Dpi dpi, const framework::MessageFont& fon
     for (const StatusIconSpec& spec : StatusIcons) {
         status_icons_.push_back({.status = spec.status, .icon = framework::IconResource(spec.resource_id, dpi.scale(StatusIconDips))});
     }
+    rings_.emplace(dpi.scale(StatusIconDips));
+    tool_wait_icon_.emplace(IDI_TOOL_WAIT, dpi.scale(StatusIconDips));
 }
 
 void TrackTable::show_scope(bool playlist) {
@@ -171,6 +175,15 @@ void TrackTable::set_rows(std::vector<TrackRow> rows) {
     list_.set_item_count(static_cast<int>(rows_.size()));
     restore(selected);
     // A virtual list doesn't know its texts changed
+    platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
+// Only the Status cells change, so the rows and the selection stay as they are
+void TrackTable::set_activities(TrackActivities activities) {
+    if (activities == activities_) {
+        return;
+    }
+    activities_ = std::move(activities);
     platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
@@ -286,7 +299,15 @@ std::wstring TrackTable::cell_tip(int item, int column_index) const {
     if (item < 0 || std::cmp_greater_equal(item, rows_.size()) || list_.column_subitem(column_index) != std::to_underlying(TrackColumn::Status)) {
         return {};
     }
-    return row_status_tip(rows_[item]);
+    const TrackRow& row = rows_[item];
+    auto activity = activities_.find(row.track);
+    if (row.duplicate_of || activity == activities_.end()) {
+        return row_status_tip(row);
+    }
+    if (activity->second.percent) {
+        return std::format(L"Downloading {}%", *activity->second.percent);
+    }
+    return waiting_for_text(activity->second.waiting_for);
 }
 
 LRESULT TrackTable::on_custom_draw(const NMLVCUSTOMDRAW& draw) const {
@@ -303,16 +324,28 @@ void TrackTable::draw_status(HDC dc, int item) const {
     if (!column || item < 0 || std::cmp_greater_equal(item, rows_.size())) {
         return;
     }
-    const TrackRow& row = rows_[item];
-    std::optional<StatusTab> status = row.duplicate_of ? std::nullopt : std::optional(row.status);
-    auto found = std::ranges::find(status_icons_, status, &StatusIcon::status);
-    if (found == status_icons_.end()) {
+    const framework::IconResource* icon = status_icon(rows_[item]);
+    if (icon == nullptr) {
         return;
     }
     RECT cell = list_.cell_rect(item, *column);
     framework::Dpi dpi = framework::Dpi::of(list_.hwnd());
-    const framework::IconResource& icon = found->icon;
-    icon.draw(dc, cell.left + dpi.scale(StatusIconLeftDips), cell.top + (cell.bottom - cell.top - icon.size()) / 2);
+    icon->draw(dc, cell.left + dpi.scale(StatusIconLeftDips), cell.top + (cell.bottom - cell.top - icon->size()) / 2);
+}
+
+// A download going on, or one that waits for tools, shows over the track's status, but not over a duplicate
+const framework::IconResource* TrackTable::status_icon(const TrackRow& row) const {
+    if (auto activity = activities_.find(row.track); !row.duplicate_of && activity != activities_.end()) {
+        if (activity->second.percent && rings_) {
+            return &rings_->for_percent(*activity->second.percent);
+        }
+        if (!activity->second.waiting_for.empty() && tool_wait_icon_) {
+            return &*tool_wait_icon_;
+        }
+    }
+    std::optional<StatusTab> status = row.duplicate_of ? std::nullopt : std::optional(row.status);
+    auto found = std::ranges::find(status_icons_, status, &StatusIcon::status);
+    return found == status_icons_.end() ? nullptr : &found->icon;
 }
 
 }

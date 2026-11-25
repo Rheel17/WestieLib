@@ -17,7 +17,7 @@ constexpr std::string_view WordSeparators = " \t";
 
 }
 
-std::string search_text(const platform::TextNormalizer& normalizer, const core::TrackMetadata& metadata) {
+std::string search_text(const platform::TextNormalizer& normalizer, const core::TrackMetadata& metadata, std::string_view file) {
     std::string text = metadata.title;
     for (const std::string& artist : metadata.artists) {
         text += FieldSeparator;
@@ -25,6 +25,8 @@ std::string search_text(const platform::TextNormalizer& normalizer, const core::
     }
     text += FieldSeparator;
     text += metadata.album;
+    text += FieldSeparator;
+    text += file;
     return normalizer.normalize(text);
 }
 

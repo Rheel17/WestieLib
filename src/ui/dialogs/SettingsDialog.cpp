@@ -1,9 +1,12 @@
 #include "ui/dialogs/SettingsDialog.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <string>
 #include <utility>
+
+#include <commctrl.h>
 
 #include "ResourceIds.h"
 #include "Version.h"
@@ -41,6 +44,13 @@ INT_PTR SettingsDialog::handle_message(UINT message, WPARAM wparam, LPARAM lpara
 
 void SettingsDialog::on_init_dialog() {
     show_library_folder();
+    platform::win32::check(
+            CheckRadioButton(hwnd(), IDC_FORMAT_OPUS, IDC_FORMAT_FLAC, settings_.format == core::AudioFormat::Flac ? IDC_FORMAT_FLAC : IDC_FORMAT_OPUS),
+            "CheckRadioButton"
+    );
+    CheckDlgButton(hwnd(), IDC_EMBED_COVER, settings_.embed_cover ? BST_CHECKED : BST_UNCHECKED);
+    set_spin(IDC_CONCURRENCY_SPIN, core::MinConcurrency, core::MaxConcurrency, settings_.concurrency);
+    set_spin(IDC_DELAY_SPIN, 0, core::MaxDelaySeconds, static_cast<int>(settings_.delay_between_tracks.count()));
     tool_list_.emplace(GetDlgItem(hwnd(), IDC_TOOLS));
     CheckDlgButton(hwnd(), IDC_AUTO_UPDATE_TOOLS, settings_.auto_update_tools ? BST_CHECKED : BST_UNCHECKED);
     show_tool_list();
@@ -92,7 +102,24 @@ void SettingsDialog::show_tool_list() {
     EnableWindow(check_button, can_check_for_updates_);
 }
 
+void SettingsDialog::set_spin(int spin, int minimum, int maximum, int value) const {
+    HWND control = GetDlgItem(hwnd(), spin);
+    SendMessageW(control, UDM_SETRANGE32, minimum, maximum);
+    SendMessageW(control, UDM_SETPOS32, 0, std::clamp(value, minimum, maximum));
+}
+
+// What the edit says, within the spin's range; a field left empty reads as the range's start
+int SettingsDialog::spin_value(int edit, int minimum, int maximum) const {
+    BOOL read = FALSE;
+    UINT value = GetDlgItemInt(hwnd(), edit, &read, FALSE);
+    return read ? std::clamp(static_cast<int>(std::min<UINT>(value, static_cast<UINT>(maximum))), minimum, maximum) : minimum;
+}
+
 void SettingsDialog::accept() {
+    settings_.format = IsDlgButtonChecked(hwnd(), IDC_FORMAT_FLAC) == BST_CHECKED ? core::AudioFormat::Flac : core::AudioFormat::Opus;
+    settings_.embed_cover = IsDlgButtonChecked(hwnd(), IDC_EMBED_COVER) == BST_CHECKED;
+    settings_.concurrency = spin_value(IDC_CONCURRENCY, core::MinConcurrency, core::MaxConcurrency);
+    settings_.delay_between_tracks = std::chrono::seconds(spin_value(IDC_DELAY, 0, core::MaxDelaySeconds));
     settings_.auto_update_tools = IsDlgButtonChecked(hwnd(), IDC_AUTO_UPDATE_TOOLS) == BST_CHECKED;
     end(IDOK);
 }

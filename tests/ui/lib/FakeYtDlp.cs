@@ -51,6 +51,15 @@ public static class FakeYtDlp {
 		}
 	}
 
+	// A progress line as the real one prints it: the template's "download:" only says which progress it is for, so it
+	// doesn't show; without a template, its own line
+	static string Progress(string[] args, string percent) {
+		string template = ArgumentAfter(args, "--progress-template");
+		if (template == "") return "[download] " + percent + " of    3.42MiB at  1.20MiB/s ETA 00:02\n";
+		if (template.StartsWith("download:")) template = template.Substring("download:".Length);
+		return template.Replace("%(progress._percent_str)s", percent) + "\n";
+	}
+
 	static string ArgumentAfter(string[] args, string name) {
 		int index = Array.IndexOf(args, name);
 		return index >= 0 && index + 1 < args.Length ? args[index + 1] : "";
@@ -69,9 +78,9 @@ public static class FakeYtDlp {
 		string here = AppDomain.CurrentDomain.BaseDirectory;
 		string fixtures = Path.Combine(here, "fake-fixtures");
 		Stream output = Console.OpenStandardOutput();
-		Write(output, "[youtube] Extracting URL: " + url + "\ndownload:  0.0%\ndownload: 50.0%\n");
+		Write(output, "[youtube] Extracting URL: " + url + "\n" + Progress(args, "  0.0%") + Progress(args, " 50.0%"));
 		while (File.Exists(Path.Combine(here, "hold-" + id))) Thread.Sleep(100);
-		Write(output, "download:100.0%\n[ExtractAudio] Destination: " + Path.Combine(folder, id + "." + format) + "\n");
+		Write(output, Progress(args, "100.0%") + "[ExtractAudio] Destination: " + Path.Combine(folder, id + "." + format) + "\n");
 		File.Copy(Path.Combine(fixtures, "silence." + format), Path.Combine(folder, id + "." + format), true);
 		File.Copy(Path.Combine(fixtures, "thumbnail.jpg"), Path.Combine(folder, id + ".jpg"), true);
 		// Only trackGOOD01 has an album and a year, as many videos have neither
@@ -104,6 +113,12 @@ public static class FakeYtDlp {
 		}
 		if (id.StartsWith("PLflac")) {
 			yield return Entry("trackFLAC06", "\"Lossless\"", "\"Flac\"", "120");
+		}
+		if (id.StartsWith("PLretry")) {
+			yield return Entry("trackRETRY7", "\"Again\"", "\"Retrier\"", "140");
+		}
+		if (id.StartsWith("PLhold")) {
+			yield return Entry("trackHOLD08", "\"Held\"", "\"Slowpoke\"", "130");
 		}
 		if (id.StartsWith("PLslow")) {
 			yield return Entry("trackSLOWW7", "\"Slow One\"", "\"Turtle\"", "300");

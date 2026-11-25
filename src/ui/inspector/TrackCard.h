@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <filesystem>
 
 #include <windows.h>
 
@@ -39,6 +40,7 @@ private:
     void on_command(WPARAM wparam) const;
     void open_source(std::size_t index) const;
     void select_playlist(std::size_t index) const;
+    void show_cover(const std::filesystem::path& file);
 
     InspectorEvents events_;
     CoverArt cover_;
@@ -52,6 +54,7 @@ private:
     framework::Label reason_;
     OutputBox output_;
     framework::Button choose_;
+    framework::Button retry_;
     SectionTitle source_section_;
     framework::Label first_source_key_;
     SourceLink first_source_;
@@ -65,7 +68,12 @@ private:
     AudioRows audio_;
     SectionTitle file_section_;
     framework::Label file_;
+    framework::Label file_name_key_;
+    framework::Label file_name_;
+    framework::Button show_in_folder_;
     TrackDetails track_;
+    // Whether the cover of track_'s file shows, so the first one is read even without a file
+    bool shown_cover_ = false;
     int line_height_ = 0;
     int title_line_height_ = 0;
 };

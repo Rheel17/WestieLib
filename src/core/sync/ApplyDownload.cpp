@@ -1,5 +1,6 @@
 #include "core/sync/ApplyDownload.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "core/sources/SourceType.h"
@@ -41,6 +42,22 @@ void apply_download_failure(State& state, const std::string& track_key, std::str
     track->second.status = TrackStatus::Failed;
     track->second.failure = TrackFailure::Download;
     track->second.error = std::move(error);
+}
+
+// The failed ones among them wait again, and are the ones it returns
+std::vector<std::string> apply_retry(State& state, const std::vector<std::string>& track_keys) {
+    std::vector<std::string> retried;
+    for (const std::string& key : track_keys) {
+        auto track = state.tracks.find(key);
+        if (track == state.tracks.end() || track->second.status != TrackStatus::Failed || std::ranges::contains(retried, key)) {
+            continue;
+        }
+        track->second.status = TrackStatus::Pending;
+        track->second.failure = TrackFailure::None;
+        track->second.error.clear();
+        retried.push_back(key);
+    }
+    return retried;
 }
 
 }

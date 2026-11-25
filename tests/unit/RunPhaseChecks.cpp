@@ -19,7 +19,7 @@ void check_text(std::wstring_view actual, std::wstring_view expected, std::sourc
     check(actual == expected, std::format("\"{}\", expected \"{}\"", platform::win32::to_utf8(actual), platform::win32::to_utf8(expected)), where);
 }
 
-std::string progress_text(const std::optional<ui::MatchProgress>& progress) {
+std::string progress_text(const std::optional<ui::StageProgress>& progress) {
     return progress ? std::format("{} of {}", progress->ended, progress->queued) : "none";
 }
 
@@ -73,8 +73,35 @@ void check_board() {
     board.finish_track("t9");
     CHECK(board.finished() == 3);
 
+    // Downloads follow the matches: their own counts, the tracks downloading now counting too
+    board.apply(core::DownloadsQueued{.tracks = {{.track = "t1", .playlists = {"spotify:B"}}, {.track = "t2", .playlists = {"spotify:B", "spotify:C"}}}});
+    CHECK(board.downloading() && !board.matching() && board.finished() == 0 && board.under_way() == 0 && board.total() == 2);
+    CHECK(board.download_progress("spotify:B") && board.download_progress("spotify:B")->queued == 2 && board.downloading_in("spotify:B") == 0);
+    board.apply(core::TrackDownloading{.track = "t1"});
+    board.apply(core::TrackDownloading{.track = "t2"});
+    board.apply(core::TrackProgress{.track = "t2", .percent = 62});
+    CHECK(board.under_way() == 2 && board.downloading_in("spotify:B") == 2 && board.downloading_in("spotify:C") == 1);
+    ui::TrackActivities activities = board.activities();
+    CHECK(activities.size() == 2 && activities["t1"].percent == 0 && activities["t2"].percent == 62);
+    board.finish_track("t1");
+    CHECK(board.finished() == 1 && board.under_way() == 1 && !board.activities().contains("t1"));
+    CHECK(board.download_progress("spotify:B") && board.download_progress("spotify:B")->ended == 1);
+
+    // Waiting for tools: the run, and the downloads that haven't started
+    board.apply(core::DownloadsQueued{.tracks = {{.track = "t4", .playlists = {"spotify:C"}}}});
+    board.apply(core::DownloadsWaiting{.waiting_for = {core::ToolPackage::Ffmpeg}});
+    CHECK(board.waiting_for().size() == 1 && board.activities()["t4"].waiting_for.size() == 1 && board.activities()["t2"].waiting_for.empty());
+    board.apply(core::DownloadsWaiting{});
+    CHECK(board.waiting_for().empty() && !board.activities().contains("t4"));
+    // A playlist queued meanwhile is synced first
+    board.apply(core::SyncQueued{.playlists = {"ytm:D"}});
+    board.apply(core::PlaylistFetching{.playlist = "ytm:D"});
+    CHECK(!board.downloading() && board.current() == "ytm:D");
+    board.finish_playlist("ytm:D");
+    CHECK(board.downloading() && board.total() == 3);
+
     board.finish();
-    CHECK(!board.running() && !board.matching() && board.total() == 0);
+    CHECK(!board.running() && !board.matching() && !board.downloading() && board.total() == 0);
     check_progress(board, "spotify:C", "none");
 }
 
@@ -98,6 +125,15 @@ void check_lines() {
     check_text(line.text, L"Waiting for yt-dlp");
     CHECK(line.mark == ui::SyncMark::WaitingForTools && line.control == ui::SyncControl::Queued);
     check_text(ui::last_sync_line({.run = ui::PlaylistRun::Queued}, now).text, L"Queued");
+
+    row = {.run = ui::PlaylistRun::Downloading, .downloaded = 5, .to_download = 22, .downloading_now = 2};
+    line = ui::last_sync_line(row, now);
+    check_text(line.text, L"Downloading 7 of 22");
+    CHECK(line.control == ui::SyncControl::Spinning && line.mark == ui::SyncMark::None);
+    row.waiting_for = {core::ToolPackage::Ffmpeg, core::ToolPackage::Deno};
+    line = ui::last_sync_line(row, now);
+    check_text(line.text, L"Waiting for ffmpeg and deno");
+    CHECK(line.mark == ui::SyncMark::WaitingForTools && line.control == ui::SyncControl::Queued);
 
     line = ui::last_sync_line({}, now);
     check_text(line.text, L"Never updated");

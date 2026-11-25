@@ -7,6 +7,7 @@
 #include <string_view>
 #include <utility>
 
+#include "core/json/Utf8Path.h"
 #include "core/state/EffectiveMetadata.h"
 #include "platform/win32/Utf16.h"
 #include "ui/playlists/PlaylistRow.h"
@@ -133,7 +134,9 @@ std::vector<TrackRow> track_rows(const core::State& state, const std::optional<s
         row.artists = join_utf8(metadata.artists);
         row.album = platform::win32::to_utf16(metadata.album);
         row.duration = metadata.duration;
-        row.search_text = search_text(normalizer, metadata);
+        row.file = track->second.file.wstring();
+        // Without its extension, which every file has, so a search for "o" doesn't find them all through ".opus"
+        row.search_text = search_text(normalizer, metadata, core::to_utf8(track->second.file.stem()));
         row.playlists = join(names[track->first]);
         if (auto [original, first] = originals.try_emplace(track->first, listing.position); playlist && !first) {
             row.duplicate_of = RowOriginal{.position = original->second};

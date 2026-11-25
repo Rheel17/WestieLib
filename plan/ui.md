@@ -146,7 +146,9 @@ The toolbar has `+ Add playlist`, `⟳ Update all ▾`, `■ Cancel` and `⚙ Se
   - `Remove playlist…` and `Update selected playlist` need a selected playlist, and `Update selected playlist` also
     needs no update running.
   - Track items need a selected track. `Confirm match` needs exactly one selected row, and that it needs review.
-    `Choose match…` needs exactly one selected row whose entry is a Spotify track.
+    `Choose match…` needs exactly one selected row whose entry is a Spotify track. `Retry` needs a selected row whose
+    track failed, and retries every such track the selection holds; it is enabled during an update too, whose queues
+    the tracks join. `Show in folder` needs exactly one selected row whose track has a file.
   - So far the other Track items stay disabled; each is enabled with its feature.
   - `Check for updates` is disabled while tools are checked, installed or updated, and while an update runs.
   - Everything else is always enabled.
@@ -244,7 +246,8 @@ With no playlists, the list reads `No playlists yet.` in gray.
   | syncing     | its data is read                                            | `Syncing…`            | ⟳, spinning           |
   |             | its sync waits for a tool                                   | ⧗ `Waiting for yt-dlp` | ⟳, still and faded   |
   | matching    | Spotify only: the run's match queue holds tracks of it       | `Matching 12 of 340`  | ⟳, spinning while the track the update last started matching is one of its tracks, so it keeps turning between two of them; still and faded otherwise |
-  | downloading | (with the Downloader) its tracks download                   | `Downloading 6 of 22` | ⟳, spinning           |
+  | downloading | its tracks download                                         | `Downloading 6 of 22` | ⟳, spinning           |
+  |             | its downloads wait for a tool                               | ⧗ `Waiting for ffmpeg` | ⟳, still and faded   |
 
   The spinning ⟳ is blue and turns clockwise at about one turn per 1.2 s. A playlist whose phases are over shows its
   done line (above) while the update goes on with others.
@@ -255,14 +258,16 @@ With no playlists, the list reads `No playlists yet.` in gray.
     SyncEngine).
   - An update matches only after every playlist in it has synced, so a synced Spotify playlist reads
     `Matching 0 of 340` with the still ⟳ until then.
+  - The downloading counts work the same way: the playlist's tracks the update queued to download, and how many of them
+    have ended (downloaded, failed, merged or skipped), plus those downloading right now. A track two playlists list
+    counts in both. The ⟳ spins for as long as the phase lasts, also in the pause between two tracks.
 
 The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
 with `0/0`, and `○ Never updated ↻`.
 
 **So far** an update syncs playlists, YouTube Music and Spotify alike, matches the Spotify tracks, and downloads
 the tracks that have a YouTube Music id and don't need review. A track shows as Waiting until its download ends, then
-as Downloaded, or as Failed when its match or download fails. The rows don't show the downloading phase yet, and the
-table shows no progress ring. Meanwhile:
+as Downloaded, or as Failed when its match or download fails. Meanwhile:
 
 - a YouTube Music playlist whose sync waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of
   a queued one. A Spotify sync needs no tool, so it never waits;
@@ -368,7 +373,7 @@ The library folder:
 - **Search**: an edit with the cue banner "Search title, artist, album". It matches title, artists, album and
   file name, case- and accent-insensitive through `TextNormalizer`. The text splits into words at spaces, and a row
   shows when each word appears somewhere in those fields, in any order: `ana late` finds Late Night Swing by Ana, Ben.
-  So far the search matches the other three, not yet the file name. Esc empties the field. Ctrl+F (not in a menu)
+  Esc empties the field. Ctrl+F (not in a menu)
   puts the focus in it and selects its text. A 16 px magnifier sits inside the field, 5 px from its left edge, and the
   text starts 5 px after it.
 - **Source**: the label `Source`, its text level with the search field's, then a drop-down list with All, YouTube
@@ -411,7 +416,7 @@ when you click their header. Right-click the header to show, hide or reorder col
 | Column    | Default | Content |
 |-----------|---------|---------|
 | #         | playlist scope only | the entry's position in the playlist. It keeps its value when rows are filtered out, so a search can show 2, 5, 8. All tracks has no # column, because a position only means something inside a playlist |
-| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead, and a duplicate the duplicate icon. Hovering the cell shows the word as a tooltip (`Downloaded`, `Needs review`, `Downloading 62%`, …); a duplicate's reads `Duplicate of track #3 (<its track's word>)`, with the original's position |
+| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead (the status bar's ring at 16 px, filled as far as yt-dlp's percentage), a row whose download waits for a tool the gray hourglass, and a duplicate the duplicate icon. Hovering the cell shows the word as a tooltip (`Downloaded`, `Needs review`, `Downloading 62%`, `Waiting for ffmpeg`, …); a duplicate's reads `Duplicate of track #3 (<its track's word>)`, with the original's position |
 | Title     | on      | |
 | Artists   | on      | joined with `, ` |
 | Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time, unless a Spotify source merged in has one. Title, Artists, Album and Time show the track's effective metadata (`arch.md`), so a duplicate reads like its original |
@@ -454,7 +459,7 @@ tab, search or source starts it at the top.
   tracks without a file show a placeholder.
 - **Status**: the status icon and word, plus one line explaining it.
   - Failed tracks add a red reason line, and most add a box with the last two lines of output (Consolas). There are
-    three reasons: `yt-dlp exited with code 1`, `No match on YouTube Music` (no box), or `Couldn't search YouTube
+    three reasons: `Couldn't download` (the box holds yt-dlp's error, or why tagging or placing the file failed), `No match on YouTube Music` (no box), or `Couldn't search YouTube
     Music` (the box holds the error).
   - Needs review tracks replace the explanation with an amber list of what the Matcher doubts, a line for each (see
     the track card below).
@@ -488,11 +493,11 @@ tab, search or source starts it at the top.
 **Several tracks selected**: `4 tracks selected`, a count per status, and the bulk actions that apply to all of
 them, for example `Keep 4 tracks` and `Move 4 files to Recycle Bin…`.
 
-So far the track card shows no cover and no year, and its `File` section reads `Not downloaded yet.` even for a
-downloaded track. A failed download's reason is `Couldn't download`, with the error in the box. It shows the
+So far the track card shows a downloading track as Waiting, without its percentage. It shows the cover the file
+holds, the year, and the file's name with `Show in folder`. It shows the
 status with its explanation, a failure's reason and output, and the Audio rows of the YouTube Music id that a
-YouTube Music source, the Matcher or an override chose. The only action so far is `Choose match…`, for Needs review and for Failed,
-no match. The ISRC and the other action buttons come with their
+YouTube Music source, the Matcher or an override chose. The actions so far are `Choose match…`, for Needs review and
+for Failed, no match, and `Retry` for Failed, after it. The ISRC and the other action buttons come with their
 features, and so do the selection card's bulk actions.
 
 ```
@@ -587,7 +592,13 @@ The track card, from the top, in DIPs:
   as a link to `https://music.youtube.com/watch?v=<id>`. `Confidence` is a 110 px bar, 6 px tall and centered on the
   line, filled as far as the confidence, then 6 px and the percentage; a narrower card shortens the bar. The fill is
   green, or `#D9A400` (a paused progress bar's yellow) when the track needs review.
-- **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file.
+- **File**: `Not downloaded yet.` in gray, 7 px under the section title, until there's a file. Then a `Name` row like
+  the other cards' (the file's name, ending in an ellipsis when it doesn't fit), and 8 px below it `Show in folder`,
+  which opens Explorer on the library folder with the file selected.
+- **Cover**: the front cover the file holds, scaled to the square; the placeholder without a file or without a cover
+  in it.
+- The album line's year is the effective metadata's: Spotify's has none, so it comes from the YouTube Music source's
+  info JSON once the track is downloaded.
 
 The selection card: `N tracks selected` in the title's font and line, without a glyph; then **Status**, with a row for
 each status that holds any of the tracks, in the order Downloaded, Waiting, Failed, Removed, Kept (a track that needs
@@ -702,7 +713,7 @@ the rest of the width. Rows are 20 px tall.
 
 | Part    | Content |
 |---------|---------|
-| Run     | `Updated today 14:05` (`Ready` before any update), or the phase of the running update with an embedded 120 px progress bar against the part's right edge: `Syncing 1 of 2` while it syncs playlists (the first one being synced), `Matching 6 of 25` while it matches tracks, later `Downloading 6 of 25`; or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools |
+| Run     | `Updated today 14:05` (`Ready` before any update), or the phase of the running update with an embedded 120 px progress bar against the part's right edge: `Syncing 1 of 2` while it syncs playlists (the first one being synced), `Matching 6 of 25` while it matches tracks, `Downloading 6 of 25` while it downloads them (the ones downloading right now count, as for a playlist); or `⧗ Waiting for ffmpeg` while all that's left of the run waits for tools |
 | Tracks  | `100 tracks` (`1 track`) |
 | Library | the library folder, `D:\Music\WestieLib` |
 | Tools   | `Tools ✓` or `Tools ⚠`, or while the tools are at work, `Tools ◔ installing ffmpeg 35%` with the progress ring: the word, 7 px, a 12 px icon, and then 7 px and what is going on (see below) |
@@ -892,7 +903,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
       `Last checked 12 Oct` (`12 Oct 2025` in another year), or `Never checked`.
   - **Maintenance**: `Rebuild library from files…`.
   - The footer shows the version on the left, and `OK` / `Cancel`.
-  - So far the dialog has the Library and Tools groups; the other groups come with their features. A folder chosen
+  - So far the dialog has the Library, Files, Downloads and Tools groups; Maintenance comes with its feature. A folder chosen
     with `Browse…` and the check box take effect on `OK`.
 - **About** is a TaskDialog with the app icon, `WestieLib` as the main instruction, `Version 1.2.0` (the build's
   version) and OK.

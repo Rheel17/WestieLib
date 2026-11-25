@@ -32,7 +32,8 @@ constexpr UINT SpinIntervalMs = 100;
 constexpr std::chrono::milliseconds SpinTurn{1200};
 
 bool spins(const PlaylistRow& row) {
-    return (row.run == PlaylistRun::Syncing && row.waiting_for.empty()) || (row.run == PlaylistRun::Matching && row.matching_now);
+    bool waits = !row.waiting_for.empty();
+    return ((row.run == PlaylistRun::Syncing || row.run == PlaylistRun::Downloading) && !waits) || (row.run == PlaylistRun::Matching && row.matching_now);
 }
 
 }

@@ -114,7 +114,7 @@ DownloadedAudio Downloader::download(
         std::format("deno:{}", to_utf8(tools_.program(ToolPackage::Deno))),
         "--newline",
         "--progress-template",
-        "download:%(progress._percent_str)s",
+        "download:[progress] %(progress._percent_str)s",
         "--no-playlist",
         "-o",
         to_utf8(work / L"%(id)s.%(ext)s"),

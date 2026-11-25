@@ -698,6 +698,32 @@ function Test-Syncing($hwnd) {
 	([W]::GetMenuState($menu, [W]::CommandOf($menu, '&Cancel'), 0) -band 0x1) -eq 0
 }
 
+# The table's rows, each as its cells in display order
+function Get-TrackRows($hwnd) {
+	$list = Get-TrackTable $hwnd
+	$count = [int][W]::SendMessageW($list, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
+	@(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) } }) -join ' / '
+}
+
+# The tooltip of row $index's Status cell, the column at display position $position, once the mouse moves onto it
+# (HDM_ORDERTOINDEX, HDM_GETITEMRECT, LVM_GETITEMRECT)
+function Get-StatusTip($hwnd, [int]$index, [int]$position = 0) {
+	$list = Get-TrackTable $hwnd
+	$header = [W]::SendMessageW($list, 0x101F, [IntPtr]::Zero, [IntPtr]::Zero)
+	$column = [W]::SendForRect($header, 0x1207, [W]::SendMessageW($header, 0x120F, [IntPtr]$position, [IntPtr]::Zero))
+	$row = [W]::SendForRect($list, 0x100E, [IntPtr]$index)
+	[void][W]::SendMessageW($list, 0x200, [IntPtr]::Zero, (LParam ([int](($column.Left + $column.Right) / 2)) ([int](($row.Top + $row.Bottom) / 2))))
+	[W]::TooltipText($list, 1)
+}
+
+# Selects row $index (from 0) of the table with Home and Down. A sent click would do, but the list sees the real cursor
+# away from it and starts a drag, which then takes the next click on the header.
+function Select-TrackRow($hwnd, [int]$index) {
+	$list = Get-TrackTable $hwnd
+	[void][W]::SendMessageW($list, 0x100, [IntPtr]0x24, [IntPtr]1)
+	for ($i = 0; $i -lt $index; $i++) { [void][W]::SendMessageW($list, 0x100, [IntPtr]0x28, [IntPtr]1) }
+}
+
 # A card's name, then the texts of its windows from the top, and left to right within a row
 function Get-CardTexts($hwnd) {
 	$card = Get-InspectorCard $hwnd

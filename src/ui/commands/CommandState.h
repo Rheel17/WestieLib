@@ -14,6 +14,10 @@ struct CommandState {
     bool review_selected = false;
     // Exactly one row, and its entry is a Spotify track
     bool spotify_entry_selected = false;
+    // At least one row whose track failed
+    bool failed_selected = false;
+    // Exactly one row, and its track has a file
+    bool file_selected = false;
     bool log_visible = false;
 
     bool enabled(CommandId command) const;

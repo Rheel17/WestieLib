@@ -21,6 +21,15 @@ LastSyncLine last_sync_line(const PlaylistRow& row, std::chrono::system_clock::t
             .text = std::format(L"Matching {} of {}", row.matching_now ? std::min(row.matched + 1, row.to_match) : row.matched, row.to_match),
             .control = row.matching_now ? SyncControl::Spinning : SyncControl::Queued,
         };
+    case PlaylistRun::Downloading:
+        if (!row.waiting_for.empty()) {
+            return {.mark = SyncMark::WaitingForTools, .text = waiting_for_text(row.waiting_for), .control = SyncControl::Queued};
+        }
+        // The tracks downloading side by side count, as the status bar's do
+        return {
+            .text = std::format(L"Downloading {} of {}", std::min(row.downloaded + row.downloading_now, row.to_download), row.to_download),
+            .control = SyncControl::Spinning,
+        };
     case PlaylistRun::Queued: return {.text = L"Queued", .control = SyncControl::Queued};
     case PlaylistRun::None:   break;
     }

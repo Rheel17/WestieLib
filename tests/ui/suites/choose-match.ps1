@@ -236,7 +236,7 @@ Check 'Track > Choose match, the library''s song: merged into its track' "$(Wait
 	"pending [ytm:libSong0001,$TellKey]   | -")
 
 Select-ListRow $table 1
-Check 'Lost Song, no match: the card offers Choose match' ((Wait-TrackCard $h $LostKey) -like "* / No match found. / * / $ChooseMatch / Source / *") 'True'
+Check 'Lost Song, no match: the card offers Choose match and Retry' ((Wait-TrackCard $h $LostKey) -like "* / No match found. / * / $ChooseMatch / Retry / Source / *") 'True'
 $open = Open-ChooseMatch $h { Send-Command $h 'C&hoose match...' }
 $dialog = $open.Dialog
 Check '  no current match, no results' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-CandidateRows $dialog $open.Before)" (

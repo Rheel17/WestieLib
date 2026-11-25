@@ -24,7 +24,7 @@ namespace westie::core {
 
 using CoreEvent = std::variant<
         ToolsRunChanged, ToolStatus, ToolsChecked, PlaylistLookedUp, SyncQueued, PlaylistFetching, PlaylistPageFetched, PlaylistFetched, PlaylistFetchFailed,
-        TracksQueued, TrackMatching, DownloadsQueued, TrackDownloading, TrackProgress, TrackStatusChanged, TracksMerged, SyncFinished, CandidateSearchResults,
+        TracksQueued, TrackMatching, DownloadsQueued, TrackDownloading, TrackProgress, DownloadsWaiting, TrackStatusChanged, TracksMerged, SyncFinished, CandidateSearchResults,
         LogLine>;
 
 }

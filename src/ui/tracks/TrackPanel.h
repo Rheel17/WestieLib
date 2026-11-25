@@ -27,6 +27,7 @@ public:
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total);
+    void show_activities(TrackActivities activities);
     std::vector<TrackRow> selected_rows() const;
     std::map<TrackColumn, int> column_widths() const;
     void set_column_widths(const std::map<TrackColumn, int>& width_dips);

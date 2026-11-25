@@ -22,6 +22,7 @@
 #include "core/sources/YouTubeMusicPlaylist.h"
 #include "core/state/MatchReview.h"
 #include "core/state/TrackYtmIds.h"
+#include "core/sync/ApplyDownload.h"
 #include "core/sync/ApplyFetch.h"
 #include "core/sync/ApplyMatch.h"
 #include "core/sync/PlaylistFetchFailed.h"
@@ -77,12 +78,7 @@ SyncEngine::SyncEngine(
 
 void SyncEngine::sync(const std::vector<std::string>& playlists) {
     std::unique_lock lock(mutex_);
-    if (running_ && worker_.get_stop_token().stop_requested()) {
-        // A cancelled run would drop the new playlists with its queue, so they wait for it to end and start their own
-        lock.unlock();
-        worker_.join();
-        lock.lock();
-    }
+    join_cancelled_run(lock);
 
     SyncQueued queued;
     for (const std::string& playlist : playlists) {
@@ -100,11 +96,57 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
     log_.write(LogLevel::Info, running_ ? std::format("Added {} to the update", what) : std::format("Update started: {}", what), std::move(subject));
     // Under the lock, so the run can't report on these playlists before the UI knows they're queued
     events_.emit(std::move(queued));
+    // An update looks at every track that waits, also in a run that retry started
+    only_.reset();
     if (running_) {
         wake_.notify_all();
         return;
     }
+    start_run(lock);
+}
+
+void SyncEngine::retry(const std::vector<std::string>& tracks) {
+    std::vector<std::string> retried;
+    try {
+        state_.update([&](State& state) { retried = apply_retry(state, tracks); });
+    } catch (const std::exception& error) {
+        log_.write(LogLevel::Error, std::format("Couldn't save the state: {}", error.what()));
+        return;
+    }
+    if (retried.empty()) {
+        return;
+    }
+    LogSubject subject = retried.size() == 1 ? track_subject(*state_.snapshot(), retried.front()) : LogSubject{};
+    log_.write(LogLevel::Info, std::format("Retrying {}", counted(retried.size(), "track")), std::move(subject));
+
+    std::unique_lock lock(mutex_);
+    join_cancelled_run(lock);
+    if (running_) {
+        retried_.insert(retried_.end(), retried.begin(), retried.end());
+        if (only_) {
+            only_->insert(retried.begin(), retried.end());
+        }
+        wake_.notify_all();
+        return;
+    }
+    only_.emplace(retried.begin(), retried.end());
+    // Under the lock, as for a sync, so the UI knows of the run before it reports
+    events_.emit(SyncQueued{});
+    start_run(lock);
+}
+
+// A cancelled run would drop what comes now with its queue, so that waits for it to end and starts a run of its own
+void SyncEngine::join_cancelled_run(std::unique_lock<std::mutex>& lock) {
+    if (running_ && worker_.get_stop_token().stop_requested()) {
+        lock.unlock();
+        worker_.join();
+        lock.lock();
+    }
+}
+
+void SyncEngine::start_run(std::unique_lock<std::mutex>& lock) {
     running_ = true;
+    retried_.clear();
     lock.unlock();
     // Assigning joins the run before, which has ended already
     worker_ = std::jthread([this](std::stop_token stop) { work(stop); });
@@ -123,6 +165,10 @@ void SyncEngine::work(const std::stop_token& stop) {
     bool changed = true;
     std::optional<DownloadPool> downloads;
     while (true) {
+        if (take_retried(tracks, downloads)) {
+            fetched = true;
+            changed = true;
+        }
         // A playlist queued meanwhile goes before the next track
         if (std::optional<std::string> playlist = take_next(stop)) {
             fetch(*playlist, stop);
@@ -158,8 +204,35 @@ void SyncEngine::work(const std::stop_token& stop) {
     }
 }
 
+// The tracks retried during the run may have been tried in it already, so the queues forget them first
+bool SyncEngine::take_retried(MatchQueue& queue, std::optional<DownloadPool>& pool) {
+    std::vector<std::string> retried;
+    {
+        std::scoped_lock lock(mutex_);
+        retried = std::exchange(retried_, {});
+    }
+    if (retried.empty()) {
+        return false;
+    }
+    for (const std::string& track : retried) {
+        queue.queued.erase(track);
+    }
+    if (pool) {
+        pool->forget(retried);
+    }
+    return true;
+}
+
+std::vector<QueuedTrack> SyncEngine::in_run(std::vector<QueuedTrack> tracks) {
+    std::scoped_lock lock(mutex_);
+    if (only_) {
+        std::erase_if(tracks, [this](const QueuedTrack& track) { return !only_->contains(track.track); });
+    }
+    return tracks;
+}
+
 void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::stop_token& stop) {
-    std::vector<QueuedTrack> ready = tracks_to_download(*state_.snapshot());
+    std::vector<QueuedTrack> ready = in_run(tracks_to_download(*state_.snapshot()));
     if (ready.empty()) {
         return;
     }
@@ -188,8 +261,8 @@ void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::s
 // True once the downloads are done, or the run is stopped; false when a playlist was queued meanwhile
 bool SyncEngine::wait_for_downloads(DownloadPool& pool, const std::stop_token& stop) {
     std::unique_lock lock(mutex_);
-    wake_.wait(lock, stop, [&] { return !queue_.empty() || pool.idle(); });
-    return queue_.empty() || stop.stop_requested();
+    wake_.wait(lock, stop, [&] { return !queue_.empty() || !retried_.empty() || pool.idle(); });
+    return (queue_.empty() && retried_.empty()) || stop.stop_requested();
 }
 
 // What an earlier run left, as one that was stopped with the app
@@ -214,11 +287,13 @@ std::optional<std::string> SyncEngine::take_next(const std::stop_token& stop) {
 
 bool SyncEngine::finish(const std::stop_token& stop) {
     std::scoped_lock lock(mutex_);
-    // A sync while the run matched its last track queued more playlists
-    if (!stop.stop_requested() && !queue_.empty()) {
+    // A sync or a retry while the run matched its last track queued more
+    if (!stop.stop_requested() && (!queue_.empty() || !retried_.empty())) {
         return false;
     }
     queue_.clear();
+    retried_.clear();
+    only_.reset();
     running_ = false;
     log_.write(LogLevel::Info, stop.stop_requested() ? "Update cancelled" : "Update finished");
     // Under the lock, so a sync that starts the next run comes after this in the events
@@ -320,7 +395,7 @@ void SyncEngine::merge_library_matches() {
 
 void SyncEngine::queue_tracks(MatchQueue& queue) {
     TracksQueued queued;
-    for (QueuedTrack& track : tracks_to_match(*state_.snapshot())) {
+    for (QueuedTrack& track : in_run(tracks_to_match(*state_.snapshot()))) {
         if (queue.queued.insert(track.track).second) {
             queue.waiting.push_back({.track = track.track});
             queued.tracks.push_back(std::move(track));
@@ -342,8 +417,8 @@ std::optional<SyncEngine::QueuedMatch> SyncEngine::take_track(MatchQueue& queue,
     }
     std::chrono::steady_clock::time_point first = std::ranges::min(queue.waiting | std::views::transform(&QueuedMatch::not_before));
     std::unique_lock lock(mutex_);
-    // A playlist queued meanwhile ends the wait, so it is fetched first
-    wake_.wait_until(lock, stop, first, [this] { return !queue_.empty(); });
+    // A playlist queued meanwhile ends the wait, so it is fetched first, and so do tracks retried meanwhile
+    wake_.wait_until(lock, stop, first, [this] { return !queue_.empty() || !retried_.empty(); });
     return std::nullopt;
 }
 

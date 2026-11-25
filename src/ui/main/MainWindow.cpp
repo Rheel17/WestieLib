@@ -256,7 +256,7 @@ void MainWindow::show_inspector() {
         return;
     }
     if (selected.size() == 1) {
-        if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), normalizer_, selected.front())) {
+        if (std::optional<TrackDetails> track = track_details(*state_.snapshot(), normalizer_, selected.front(), settings_.library_path)) {
             inspector_.show_track(*track);
             return;
         }
@@ -352,6 +352,8 @@ CommandState MainWindow::command_state() const {
         .playlist_selected = selected_playlist_.has_value(),
         .review_selected = selected.size() == 1 && selected.front().status == StatusTab::NeedsReview,
         .spotify_entry_selected = selected.size() == 1 && selected.front().source == core::SourceType::Spotify,
+        .failed_selected = std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Failed; }),
+        .file_selected = selected.size() == 1 && !selected.front().file.empty(),
         .log_visible = panels_.log_visible,
     };
 }
@@ -386,6 +388,8 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::FocusSearch:            tracks_.focus_search(); return;
     case CommandId::ConfirmMatch:           confirm_match(); return;
     case CommandId::ChooseMatch:            choose_match(); return;
+    case CommandId::Retry:                  retry_selected(); return;
+    case CommandId::ShowInFolder:           show_selected_in_folder(); return;
     default:                                return;
     }
 }
@@ -457,6 +461,24 @@ void MainWindow::choose_match() {
     }
     core::set_ytm_override(state_, logger_, source, *ytm_id);
     show_playlists();
+}
+
+void MainWindow::retry_selected() {
+    std::vector<std::string> tracks;
+    for (const TrackRow& row : tracks_.selected_rows()) {
+        if (row.counts_as == StatusTab::Failed && !std::ranges::contains(tracks, row.track)) {
+            tracks.push_back(row.track);
+        }
+    }
+    sync_.retry(tracks);
+    show_playlists();
+}
+
+void MainWindow::show_selected_in_folder() const {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    if (selected.size() == 1 && !selected.front().file.empty() && !platform::win32::show_in_folder(settings_.library_path / selected.front().file)) {
+        MessageBeep(MB_ICONWARNING);
+    }
 }
 
 void MainWindow::open_library_folder() const {
@@ -542,6 +564,7 @@ void MainWindow::on_core_events() {
     if (std::exchange(playlists_outdated_, false)) {
         show_playlists();
     }
+    tracks_.show_activities(sync_board_.activities());
     log_.show_added();
     show_tools();
 }
@@ -598,12 +621,25 @@ void MainWindow::apply_event(const core::TrackMatching& event) {
     playlists_outdated_ = true;
 }
 
-// The downloading phase doesn't show yet; a download shows as it ends, with TrackStatusChanged
-void MainWindow::apply_event(const core::DownloadsQueued&) {}
+void MainWindow::apply_event(const core::DownloadsQueued& event) {
+    sync_board_.apply(event);
+    playlists_outdated_ = true;
+}
 
-void MainWindow::apply_event(const core::TrackDownloading&) {}
+void MainWindow::apply_event(const core::TrackDownloading& event) {
+    sync_board_.apply(event);
+    playlists_outdated_ = true;
+}
 
-void MainWindow::apply_event(const core::TrackProgress&) {}
+// Only the track's ring changes, so the rows stay as they are
+void MainWindow::apply_event(const core::TrackProgress& event) {
+    sync_board_.apply(event);
+}
+
+void MainWindow::apply_event(const core::DownloadsWaiting& event) {
+    sync_board_.apply(event);
+    playlists_outdated_ = true;
+}
 
 void MainWindow::apply_event(const core::TrackStatusChanged& event) {
     sync_board_.finish_track(event.track);

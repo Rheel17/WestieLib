@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/sync/TracksQueued.h"
+#include "core/tools/ToolPackage.h"
 
 namespace westie::core {
 
@@ -18,6 +19,11 @@ struct TrackDownloading {
 struct TrackProgress {
     std::string track{};
     int percent = 0;
+};
+
+// None once the downloads go on
+struct DownloadsWaiting {
+    std::vector<ToolPackage> waiting_for{};
 };
 
 }

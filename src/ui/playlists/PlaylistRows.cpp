@@ -92,16 +92,23 @@ void mark_runs(std::vector<PlaylistRow>& rows, const SyncBoard& board) {
         row.run = PlaylistRun::None;
         row.waiting_for.clear();
         row.matching_now = false;
+        row.downloading_now = 0;
         if (board.current() == row.key) {
             row.run = PlaylistRun::Syncing;
-            row.waiting_for.assign(board.waiting_for().begin(), board.waiting_for().end());
+            row.waiting_for.assign(board.fetch_waiting_for().begin(), board.fetch_waiting_for().end());
         } else if (board.queued(row.key)) {
             row.run = PlaylistRun::Queued;
-        } else if (std::optional<MatchProgress> progress = board.match_progress(row.key)) {
+        } else if (std::optional<StageProgress> matches = board.match_progress(row.key)) {
             row.run = PlaylistRun::Matching;
-            row.matched = progress->ended;
-            row.to_match = progress->queued;
+            row.matched = matches->ended;
+            row.to_match = matches->queued;
             row.matching_now = board.matching_now(row.key);
+        } else if (std::optional<StageProgress> downloads = board.download_progress(row.key)) {
+            row.run = PlaylistRun::Downloading;
+            row.downloaded = downloads->ended;
+            row.to_download = downloads->queued;
+            row.downloading_now = board.downloading_in(row.key);
+            row.waiting_for.assign(board.downloads_waiting_for().begin(), board.downloads_waiting_for().end());
         }
     }
 }

@@ -1,5 +1,7 @@
 #include "ui/inspector/CoverArt.h"
 
+#include <utility>
+
 #include "ResourceIds.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/framework/BufferedPaint.h"
@@ -24,6 +26,11 @@ void CoverArt::apply_dpi(framework::Dpi dpi) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
+void CoverArt::set_image(std::optional<framework::GdiPlusImage> image) {
+    image_ = std::move(image);
+    platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
 LRESULT CoverArt::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_PAINT: paint(); return 0;
@@ -41,6 +48,10 @@ void CoverArt::paint() const {
     framework::BufferedPaint paint(hwnd());
     RECT client;
     platform::win32::check(GetClientRect(hwnd(), &client), "GetClientRect");
+    if (image_) {
+        image_->draw(paint.dc(), client);
+        return;
+    }
     SetDCBrushColor(paint.dc(), BorderColor);
     FillRect(paint.dc(), &client, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
     RECT face{client.left + BorderPixels, client.top + BorderPixels, client.right - BorderPixels, client.bottom - BorderPixels};

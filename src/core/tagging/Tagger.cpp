@@ -100,6 +100,21 @@ void write_flac(const std::filesystem::path& file, const TrackTags& tags) {
     }
 }
 
+// The front cover when there is one, else the first picture
+std::string cover_of(const TagLib::List<TagLib::FLAC::Picture*>& pictures) {
+    const TagLib::FLAC::Picture* chosen = nullptr;
+    for (const TagLib::FLAC::Picture* picture : pictures) {
+        if (chosen == nullptr || (picture->type() == TagLib::FLAC::Picture::FrontCover && chosen->type() != TagLib::FLAC::Picture::FrontCover)) {
+            chosen = picture;
+        }
+    }
+    if (chosen == nullptr) {
+        return {};
+    }
+    TagLib::ByteVector data = chosen->data();
+    return {data.data(), data.size()};
+}
+
 }
 
 void write_tags(const std::filesystem::path& file, const TrackTags& tags) {
@@ -108,6 +123,15 @@ void write_tags(const std::filesystem::path& file, const TrackTags& tags) {
     } else {
         write_opus(file, tags);
     }
+}
+
+std::string read_cover(const std::filesystem::path& file) {
+    if (file.extension() == L".flac") {
+        TagLib::FLAC::File flac(file.c_str(), false);
+        return flac.isValid() ? cover_of(flac.pictureList()) : std::string();
+    }
+    TagLib::Ogg::Opus::File opus(file.c_str(), false);
+    return opus.isValid() && opus.tag() != nullptr ? cover_of(opus.tag()->pictureList()) : std::string();
 }
 
 }

@@ -34,6 +34,7 @@ std::weak_ordering compare_by(const TrackRow& left, const TrackRow& right, Track
     case TrackColumn::Album:     return compare_text(left.album, right.album);
     case TrackColumn::Playlists: return compare_text(left.playlists, right.playlists);
     case TrackColumn::Time:      return left.duration <=> right.duration;
+    case TrackColumn::File:      return compare_text(left.file, right.file);
     default:                     return std::weak_ordering::equivalent;
     }
 }

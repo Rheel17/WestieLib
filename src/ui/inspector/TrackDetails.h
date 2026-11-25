@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,8 +60,13 @@ struct TrackDetails {
     core::TrackFailure failure = core::TrackFailure::None;
     // Its last lines
     std::wstring error{};
+    std::optional<int> year{};
+    // In the library folder, empty without a file
+    std::filesystem::path file{};
 };
 
-std::optional<TrackDetails> track_details(const core::State& state, const platform::TextNormalizer& normalizer, const TrackRow& row);
+std::optional<TrackDetails> track_details(
+        const core::State& state, const platform::TextNormalizer& normalizer, const TrackRow& row, const std::filesystem::path& library_folder
+);
 
 }

@@ -8,6 +8,7 @@
 
 #include "core/matching/MatchEvidence.h"
 #include "core/sources/SourcePage.h"
+#include "core/state/EffectiveMetadata.h"
 #include "core/state/TrackYtmIds.h"
 #include "platform/win32/Utf16.h"
 #include "ui/ArtistsText.h"
@@ -120,7 +121,9 @@ std::wstring last_lines(std::string_view text) {
 
 }
 
-std::optional<TrackDetails> track_details(const core::State& state, const platform::TextNormalizer& normalizer, const TrackRow& row) {
+std::optional<TrackDetails> track_details(
+        const core::State& state, const platform::TextNormalizer& normalizer, const TrackRow& row, const std::filesystem::path& library_folder
+) {
     auto track = state.tracks.find(row.track);
     if (track == state.tracks.end()) {
         return std::nullopt;
@@ -141,6 +144,10 @@ std::optional<TrackDetails> track_details(const core::State& state, const platfo
     if (track->second.status == core::TrackStatus::Failed) {
         details.failure = track->second.failure;
         details.error = last_lines(track->second.error);
+    }
+    details.year = core::effective_metadata(state, track->second).year;
+    if (!track->second.file.empty()) {
+        details.file = library_folder / track->second.file;
     }
     return details;
 }

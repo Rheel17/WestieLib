@@ -84,12 +84,16 @@ void check_percent(std::string_view line, std::optional<int> expected, std::sour
 }
 
 void check_progress() {
-    check_percent("download: 45.3%", 45);
-    check_percent("download:  0.0%", 0);
-    check_percent("download:100.0%", 100);
-    check_percent("download: 99.9%", 99);
-    check_percent("download:  N/A%", std::nullopt);
-    check_percent("download:N/A", std::nullopt);
+    check_percent("[progress]  45.3%", 45);
+    check_percent("[progress]   0.0%", 0);
+    check_percent("[progress] 100.0%", 100);
+    check_percent("[progress]  99.9%", 99);
+    check_percent("[progress] \x1b[0;94m 62.5%\x1b[0m", 62);
+    check_percent("[progress]   N/A%", std::nullopt);
+    check_percent("[progress] Unknown", std::nullopt);
+    // What the template printed before: yt-dlp takes "download:" as the kind of progress, not as text
+    check_percent("download: 45.3%", std::nullopt);
+    check_percent("[download]  45.3% of 3.42MiB", std::nullopt);
     check_percent("[download] Destination: x.webm", std::nullopt);
     check_percent("45.3%", std::nullopt);
 }

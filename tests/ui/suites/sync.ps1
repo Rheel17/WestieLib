@@ -102,34 +102,8 @@ function Wait-Fetches($hwnd, [int]$before, [int]$count, [switch]$Spotify) {
 	Start-Sleep -Milliseconds 200
 }
 
-# The table's rows, each as its cells in display order
-function Get-TrackRows($hwnd) {
-	$list = Get-TrackTable $hwnd
-	$count = [int][W]::SendMessageW($list, 0x1004, [IntPtr]::Zero, [IntPtr]::Zero)
-	@(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) } }) -join ' / '
-}
-
-# The tooltip of row $index's Status cell, the column at display position $position, once the mouse moves onto it
-# (HDM_ORDERTOINDEX, HDM_GETITEMRECT, LVM_GETITEMRECT)
-function Get-StatusTip($hwnd, [int]$index, [int]$position = 0) {
-	$list = Get-TrackTable $hwnd
-	$header = [W]::SendMessageW($list, 0x101F, [IntPtr]::Zero, [IntPtr]::Zero)
-	$column = [W]::SendForRect($header, 0x1207, [W]::SendMessageW($header, 0x120F, [IntPtr]$position, [IntPtr]::Zero))
-	$row = [W]::SendForRect($list, 0x100E, [IntPtr]$index)
-	[void][W]::SendMessageW($list, 0x200, [IntPtr]::Zero, (LParam ([int](($column.Left + $column.Right) / 2)) ([int](($row.Top + $row.Bottom) / 2))))
-	[W]::TooltipText($list, 1)
-}
-
 # The first row in view (LVM_GETTOPINDEX)
 function Get-TopRow($hwnd) { [int][W]::SendMessageW((Get-TrackTable $hwnd), 0x1027, [IntPtr]::Zero, [IntPtr]::Zero) }
-
-# Selects row $index (from 0) of the table with Home and Down. A sent click would do, but the list sees the real cursor
-# away from it and starts a drag, which then takes the next click on the header.
-function Select-TrackRow($hwnd, [int]$index) {
-	$list = Get-TrackTable $hwnd
-	[void][W]::SendMessageW($list, 0x100, [IntPtr]0x24, [IntPtr]1)
-	for ($i = 0; $i -lt $index; $i++) { [void][W]::SendMessageW($list, 0x100, [IntPtr]0x28, [IntPtr]1) }
-}
 
 # The selected rows in All tracks, each as its index and title
 function Get-SelectedRows($hwnd) {
@@ -342,12 +316,12 @@ Start-Sleep -Milliseconds 200
 Select-TrackRow $h 5
 Check 'Shared Song selected: its card' (Wait-CardTexts $h 'Track card') ("Track card:  / Shared Song / Both / No album yet / " +
 	"Status / Downloaded / The file is in the library and tagged. / Source / Source / YouTube Music / Playlists / $TracksName, $SharedName / " +
-	"Key / ytm:trackSHARE5 / Audio / ID / trackSHARE5 / Chosen by / Playlist / File / Not downloaded yet.")
+	"Key / ytm:trackSHARE5 / Audio / ID / trackSHARE5 / Chosen by / Playlist / File / Name / Both - Shared Song.opus / Show in folder")
 Select-TrackRow $h 1
 Check 'Late Night Swing selected: its card' (Wait-TrackCard $h 'spotify:spTrackLateNight000001') ("Track card:  / Late Night Swing / Ana, Ben / Nights / " +
 	"Status / Downloaded / The file is in the library and tagged. / Source / Source / Spotify / Playlists / $SpotifyName / " +
 	"Key / spotify:spTrackLateNight000001 / Audio / Matched / Late Night Swing / Artists / Ana, Ben / Length / 4:01 (Spotify 4:01) / " +
-	"ID / ytspTrackLateNight000001 / Chosen by / Matcher / Confidence / 100% / File / Not downloaded yet.")
+	"ID / ytspTrackLateNight000001 / Chosen by / Matcher / Confidence / 100% / File / Name / Ana, Ben - Late Night Swing.opus / Show in folder")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-track.png") }
 $card = Get-InspectorCard $h
 $cover =[W]::RectIn(([W]::Children($card, 'WestieLib.CoverArt'))[0], $card)
@@ -718,7 +692,7 @@ if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-mer
 Check '  no duplicate in All tracks: its Status tooltip' (Get-StatusTip $h 3) 'Waiting'
 Select-TrackRow $h 4
 Check 'No match: the reason, no output' (Wait-TrackCard $h 'spotify:spNoResults00000000004') ("Track card:  / No Results / The Late Hours / Sway / " +
-	"Status / Failed / No match found. / No match on YouTube Music / $ChooseMatch / Source / Source / Spotify / Playlists / Her playlist / " +
+	"Status / Failed / No match found. / No match on YouTube Music / $ChooseMatch / Retry / Source / Source / Spotify / Playlists / Her playlist / " +
 	"Key / spotify:spNoResults00000000004 / Audio / ID / No match found / File / Not downloaded yet.")
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-nomatch.png") }
 $card = Get-InspectorCard $h
@@ -732,7 +706,7 @@ $noId = ($labels | Where-Object { [W]::TextOf($_) -eq 'No match found' })[0]
 Check '  reason and ID in red' "$([W]::RedInk($h, $reasonLabel)) $([W]::RedInk($h, $noId))" 'True True'
 Select-TrackRow $h 5
 Check 'The search failed: its error' (Wait-TrackCard $h 'spotify:spOffline0000000000005') ("Track card:  / Offline / Nobody / Unplugged / " +
-	"Status / Failed / Retried on the next update. / Couldn't search YouTube Music / $SearchError / " +
+	"Status / Failed / Retried on the next update. / Couldn't search YouTube Music / $SearchError / Retry / " +
 	"Source / Source / Spotify / Playlists / Her playlist / Key / spotify:spOffline0000000000005 / " +
 	"Audio / ID / Not chosen yet / File / Not downloaded yet.")
 
@@ -949,7 +923,7 @@ Select-TrackRow $h 1
 Check '  its card' (Wait-TrackCard $h 'ytm:trackDDDDD6') ("Track card:  / Only Here / Solo / Here / Status / Downloaded / " +
 	"The file is in the library and tagged. / Sources / Listed on / YouTube Music /  / " +
 	"Spotify / Playlists / Matches, $SharedName / Key / ytm:trackDDDDD6 / Audio / ID / trackDDDDD6 / Chosen by / Playlist / " +
-	"Spotify match / Same ID (100%) / File / Not downloaded yet.")
+	"Spotify match / Same ID (100%) / File / Name / Solo - Only Here.opus / Show in folder")
 
 # Cancel while a track is searched leaves it as it was
 [void]$Web.YtmGate.Reset()

@@ -1,11 +1,13 @@
 #include "ui/inspector/TrackCard.h"
 
 #include <algorithm>
+#include <format>
 #include <ranges>
 #include <utility>
 #include <vector>
 
 #include "ResourceIds.h"
+#include "core/tagging/Tagger.h"
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/inspector/CardLayout.h"
@@ -26,6 +28,7 @@ constexpr int ExplanationGapDips = 3;
 constexpr int ReasonGapDips = 8;
 constexpr int OutputGapDips = 4;
 constexpr int FileGapDips = 7;
+constexpr int ShowInFolderGapDips = 8;
 constexpr IconTextStyle StatusStyle{.gap_dips = 6, .line_dips = 16};
 
 }
@@ -44,6 +47,7 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         reason_(hwnd(), L"", {.color = framework::TextColor::Error}),
         output_(hwnd()),
         choose_(hwnd(), {.text = L"Choose match…", .command = std::to_underlying(CommandId::ChooseMatch)}),
+        retry_(hwnd(), {.text = L"Retry", .command = std::to_underlying(CommandId::Retry)}),
         source_section_(hwnd(), L"Source"),
         first_source_key_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         first_source_(hwnd(), [this] { open_source(0); }),
@@ -56,7 +60,10 @@ TrackCard::TrackCard(HWND parent, InspectorEvents events) :
         key_(hwnd(), L""),
         audio_(hwnd(), events_.on_open_url),
         file_section_(hwnd(), L"File"),
-        file_(hwnd(), L"Not downloaded yet.", {.color = framework::TextColor::Gray}) {}
+        file_(hwnd(), L"Not downloaded yet.", {.color = framework::TextColor::Gray}),
+        file_name_key_(hwnd(), L"Name", {.color = framework::TextColor::Gray}),
+        file_name_(hwnd(), L""),
+        show_in_folder_(hwnd(), {.text = L"Show in folder", .command = std::to_underlying(CommandId::ShowInFolder)}) {}
 
 int TrackCard::height_for(int width) const {
     return arrange(width, nullptr);
@@ -71,12 +78,14 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
     }
     for (framework::Label* label : {
              &artists_, &album_, &explanation_, &doubts_, &reason_, &first_source_key_, &second_source_key_, &playlists_key_, &no_playlists_, &key_key_, &key_,
-             &file_,
+             &file_, &file_name_key_, &file_name_,
          }) {
         label->set_font(fonts.regular().handle());
     }
     output_.set_font(fonts.code().handle());
     choose_.apply_dpi(dpi, fonts.regular());
+    retry_.apply_dpi(dpi, fonts.regular());
+    show_in_folder_.apply_dpi(dpi, fonts.regular());
     audio_.apply_dpi(fonts);
     first_source_.apply_dpi(dpi, fonts.regular());
     second_source_.apply_dpi(dpi, fonts.regular());
@@ -89,7 +98,12 @@ void TrackCard::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
 void TrackCard::set_contents(const TrackDetails& track) {
     title_.set_text(track.row.title);
     artists_.set_text(track.row.artists);
-    album_.set_text(track.row.album.empty() ? L"No album yet" : track.row.album);
+    if (track.row.album.empty()) {
+        album_.set_text(L"No album yet");
+    } else {
+        album_.set_text(track.year ? std::format(L"{} ({})", track.row.album, *track.year) : track.row.album);
+    }
+    show_cover(track.file);
     if (track.row.duplicate_of) {
         status_.set(IDI_DUPLICATE, row_status_word(track.row));
         explanation_.set_text(duplicate_explanation(*track.row.duplicate_of));
@@ -113,6 +127,7 @@ void TrackCard::set_contents(const TrackDetails& track) {
     playlists_.set_links(track.playlists | std::views::transform(&TrackPlaylist::name) | std::ranges::to<std::vector>());
     key_.set_text(platform::win32::to_utf16(track.row.key));
     audio_.set_contents(track);
+    file_name_.set_text(track.file.filename().wstring());
     track_ = track;
     layout();
 }
@@ -154,10 +169,18 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
     }
     // Such a track's entries are all Spotify tracks, so Choose match applies whenever the button shows, and it's never
     // disabled: a themed button fades in from the state it was last drawn in
-    if (review || track_.failure == core::TrackFailure::NoMatch) {
+    bool failed = track_.failure != core::TrackFailure::None;
+    if (review) {
         layout.buttons({&choose_});
+        layout.hide(retry_.hwnd());
+    } else if (track_.failure == core::TrackFailure::NoMatch) {
+        layout.buttons({&choose_, &retry_});
+    } else if (failed) {
+        layout.buttons({&retry_});
+        layout.hide(choose_.hwnd());
     } else {
         layout.hide(choose_.hwnd());
+        layout.hide(retry_.hwnd());
     }
 
     layout.section(source_section_.hwnd());
@@ -171,7 +194,16 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
     audio_.arrange(layout);
 
     layout.section(file_section_.hwnd());
-    layout.block(file_.hwnd(), dpi.scale(FileGapDips), line_height_);
+    if (track_.file.empty()) {
+        layout.block(file_.hwnd(), dpi.scale(FileGapDips), line_height_);
+        layout.hide(file_name_key_.hwnd());
+        layout.hide(file_name_.hwnd());
+        layout.hide(show_in_folder_.hwnd());
+    } else {
+        layout.hide(file_.hwnd());
+        layout.row(file_name_key_.hwnd(), file_name_.hwnd());
+        layout.buttons({&show_in_folder_}, dpi.scale(ShowInFolderGapDips));
+    }
     return layout.height();
 }
 
@@ -193,6 +225,15 @@ void TrackCard::open_source(std::size_t index) const {
     if (index < track_.sources.size()) {
         events_.on_open_url(track_.sources[index].url);
     }
+}
+
+// Read again only for another file, as the card is refreshed with every event of an update
+void TrackCard::show_cover(const std::filesystem::path& file) {
+    if (file == track_.file && shown_cover_) {
+        return;
+    }
+    shown_cover_ = true;
+    cover_.set_image(file.empty() ? std::nullopt : framework::GdiPlusImage::decode(core::read_cover(file)));
 }
 
 void TrackCard::select_playlist(std::size_t index) const {

@@ -29,6 +29,8 @@ private:
     void browse_library_folder();
     void show_library_folder() const;
     void show_tool_list();
+    void set_spin(int spin, int minimum, int maximum, int value) const;
+    int spin_value(int edit, int minimum, int maximum) const;
     void accept();
 
     core::Settings settings_;

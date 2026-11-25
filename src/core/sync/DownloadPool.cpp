@@ -87,6 +87,13 @@ void DownloadPool::add(std::vector<QueuedTrack> tracks) {
     wake_.notify_all();
 }
 
+void DownloadPool::forget(const std::vector<std::string>& tracks) {
+    std::scoped_lock lock(mutex_);
+    for (const std::string& track : tracks) {
+        queued_.erase(track);
+    }
+}
+
 bool DownloadPool::idle() {
     std::scoped_lock lock(mutex_);
     return queue_.empty() && active_ == 0;
@@ -198,21 +205,17 @@ void DownloadPool::fail(const std::string& track, const std::string& error) {
 
 // The track goes back to the front of the queue, and the pool starts no track until the tools are in
 void DownloadPool::wait_for_tools(const Taken& taken, const std::vector<ToolPackage>& missing, const InstallCounts& seen) {
-    std::vector<std::string> waiting;
     bool first = false;
     {
         std::scoped_lock lock(mutex_);
         queue_.push_front(taken.track);
         first = !std::exchange(waiting_for_tools_, true);
-        waiting.assign(queue_.begin(), queue_.end());
     }
     if (!first) {
         return;
     }
     services_.log.write(LogLevel::Warning, std::format("Waiting for {} to install", tools_text(missing)));
-    for (const std::string& track : waiting) {
-        services_.events.emit(TrackStatusChanged{.track = track, .waiting_for = missing});
-    }
+    services_.events.emit(DownloadsWaiting{.waiting_for = missing});
     for (ToolPackage package : missing) {
         if (!services_.tools.wait_for_install_after(package, seen[std::to_underlying(package)], stop_)) {
             return;
@@ -221,11 +224,8 @@ void DownloadPool::wait_for_tools(const Taken& taken, const std::vector<ToolPack
     {
         std::scoped_lock lock(mutex_);
         waiting_for_tools_ = false;
-        waiting.assign(queue_.begin(), queue_.end());
     }
-    for (const std::string& track : waiting) {
-        services_.events.emit(TrackStatusChanged{.track = track});
-    }
+    services_.events.emit(DownloadsWaiting{});
     changed();
 }
 

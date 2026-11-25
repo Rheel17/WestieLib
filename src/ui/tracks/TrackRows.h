@@ -30,7 +30,9 @@ struct TrackRow {
     std::wstring album{};
     std::wstring playlists{};
     std::chrono::milliseconds duration{};
-    // The title, artists and album, normalized for the search
+    // Its name in the library, empty without a file
+    std::wstring file{};
+    // The title, artists, album and file name, normalized for the search
     std::string search_text{};
     // Where the scope's playlist first lists the entry, from 1; 0 in All tracks
     int position = 0;

@@ -123,6 +123,8 @@ private:
     void show_settings();
     void show_tools();
     void on_core_events();
+    void retry_selected();
+    void show_selected_in_folder() const;
     void apply_event(const core::ToolsRunChanged& event);
     void apply_event(const core::ToolStatus& status);
     void apply_event(const core::ToolsChecked& event);
@@ -137,6 +139,7 @@ private:
     void apply_event(const core::DownloadsQueued& event);
     void apply_event(const core::TrackDownloading& event);
     void apply_event(const core::TrackProgress& event);
+    void apply_event(const core::DownloadsWaiting& event);
     void apply_event(const core::TrackStatusChanged& event);
     void apply_event(const core::TracksMerged& event);
     void apply_event(const core::SyncFinished& event);

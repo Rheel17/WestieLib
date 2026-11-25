@@ -162,6 +162,7 @@ add_executable(WestieLib WIN32
 	src/ui/FatalError.cpp
 	src/ui/PlaylistTypeText.cpp
 	src/ui/RelativeDayText.cpp
+	src/ui/RingIcons.cpp
 	src/ui/RowLook.cpp
 	src/ui/SourceLogo.cpp
 	src/ui/SyncBar.cpp
@@ -200,6 +201,7 @@ add_executable(WestieLib WIN32
 	src/ui/framework/EditKeys.cpp
 	src/ui/framework/FocusMemory.cpp
 	src/ui/framework/FontSet.cpp
+	src/ui/framework/GdiPlusImage.cpp
 	src/ui/framework/GdiPlusSession.cpp
 	src/ui/framework/IconImageList.cpp
 	src/ui/framework/IconResource.cpp
@@ -269,6 +271,7 @@ add_executable(WestieLib WIN32
 	src/ui/playlists/PlaylistRows.cpp
 	src/ui/statusbar/MainStatusBar.cpp
 	src/ui/sync/SyncBoard.cpp
+	src/ui/sync/TrackStage.cpp
 	src/ui/sync/WaitingText.cpp
 	src/ui/toolbar/MainToolbar.cpp
 	src/ui/tools/ToolBoard.cpp
@@ -327,6 +330,7 @@ add_executable(WestieLibTests
 	src/ui/RelativeDayText.cpp
 	src/ui/playlists/LastSyncLine.cpp
 	src/ui/sync/SyncBoard.cpp
+	src/ui/sync/TrackStage.cpp
 	src/ui/sync/WaitingText.cpp
 )
 target_include_directories(WestieLibTests PRIVATE src)

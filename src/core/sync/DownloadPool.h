@@ -46,6 +46,8 @@ public:
     DownloadPool& operator=(const DownloadPool&) = delete;
 
     void add(std::vector<QueuedTrack> tracks);
+    // So a track tried already can be queued again
+    void forget(const std::vector<std::string>& tracks);
     bool idle();
 
 private:

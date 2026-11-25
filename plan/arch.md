@@ -531,8 +531,9 @@ tools it needs (ui.md, Vocabulary › Waiting for tools):
 | `searchCandidates`                     | –              |
 | Downloader (audio, thumbnail crop)     | yt-dlp, ffmpeg, deno |
 
-A step whose tool isn't available stays queued, and the track stays `pending` with a `waitingFor` list of tool names
-in its `TrackStatusChanged` event; it isn't a failure, and nothing is written to the state for it. When ToolManager
+A step whose tool isn't available stays queued: a fetch's `PlaylistFetching` names the tools it waits for, and the
+downloads' `DownloadsWaiting` does for all the run's downloads at once. It isn't a failure, and nothing is written to
+the state for it. When ToolManager
 reports a tool installed, the waiting steps go ahead. So a sync can run while tools install, and a failed tool
 install leaves the work waiting, not failed.
 
@@ -861,7 +862,7 @@ The Downloader produces one tagged `.opus` or `.flac` file in `work\<track key>\
 yt-dlp -f "bestaudio[acodec=opus]/bestaudio" -x --audio-format <format>
        --write-info-json --write-thumbnail --convert-thumbnails jpg
        --ffmpeg-location <tools> --js-runtimes deno:<tools>\deno.exe
-       --newline --progress-template "download:%(progress._percent_str)s"
+       --newline --progress-template "download:[progress] %(progress._percent_str)s"
        --no-playlist -o "<work>\%(id)s.%(ext)s"
        https://music.youtube.com/watch?v=<ytmId>
 ```
@@ -874,8 +875,10 @@ yt-dlp -f "bestaudio[acodec=opus]/bestaudio" -x --audio-format <format>
 
   A format change applies to new downloads only. Existing files keep their format, so a library can mix both.
 - Progress lines from `--progress-template` become `TrackProgress` events. `download_percent`
-  (`src/core/download/DownloadProgress`) reads a line: `download:` and a percentage such as ` 45.3%`, rounded down to
-  a whole percent from 0 to 100; any other line is no progress. yt-dlp prints a line per update, so the Downloader
+  (`src/core/download/DownloadProgress`) reads a line: `[progress] ` and a percentage such as ` 45.3%`, rounded down to
+  a whole percent from 0 to 100; any other line is no progress. The template's `download:` only says which progress it
+  is for, so yt-dlp doesn't print it; `[progress]` is what marks the line. Color codes, which yt-dlp writes when it
+  takes the pipe for a terminal, are left out. yt-dlp prints a line per update, so the Downloader
   sends an event only when the whole percent changes.
 - yt-dlp runs under the shared locks of yt-dlp, ffmpeg and deno (Tool folder), as it runs the other two. A missing
   one throws `ToolMissing` for it, before anything starts.
@@ -916,7 +919,8 @@ effective metadata, so `edits` win over source values:
 
 `WESTIELIB_SOURCE` and `WESTIELIB_YTMID` make every file self-identifying, which powers state rebuilds.
 
-The Tagger also re-tags finished library files in place, after `editTrack` and after a merge.
+The Tagger also re-tags finished library files in place, after `editTrack` and after a merge. `read_cover` reads the
+front cover back out of a file, for the track card; it is empty when the file has none or doesn't read.
 
 `Tagger` (`src/core/tagging/`) replaces the file's own Vorbis comments and pictures with these, so the tags yt-dlp's
 ffmpeg left from the video don't stay. It opens the file by its wide name, and a file TagLib can't read or save
@@ -977,6 +981,11 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
 
 **Retry.** `retry(trackKeys)` sets the tracks to `pending` and queues them without a fetch step. While a run is
 active, they join its queue. Otherwise they start a run of their own.
+- `retry` takes the failed ones among the tracks it is given, clears their failure in one save, and logs `Retrying 2
+  tracks`. A track whose match failed is matched again, and one whose download failed downloads again.
+- A run of its own emits `SyncQueued` without playlists, and matches and downloads only those tracks. A `sync` during
+  it widens it to every track that waits, as an update does.
+- During a run, the tracks join its queues even when the run has already tried them.
 
 **Removal decisions** arrive through `resolveRemovals` at any time during or after a run.
 - `remove` sends the file to the Recycle Bin and deletes the track and its sources.
@@ -988,7 +997,7 @@ A `kept` or `orphaned` track that one of its sources brings back into a playlist
 and their work folders are cleaned.
 
 **So far** (`src/core/sync/`), a run fetches, YouTube Music and Spotify playlists alike, then matches, then
-downloads. Files don't take part in merges and orphans yet, and there is no `retry` or `resolveRemovals`.
+downloads. Files don't take part in merges and orphans yet, and there is no `resolveRemovals`.
 - `sync(keys)` queues the playlists that aren't queued yet and emits `SyncQueued`. Without a run it starts one on a
   worker thread (`std::jthread`); during a run they join its queue. The queue is behind a mutex, so a run that finds
   it empty and ends can't miss a `sync` that comes at the same moment.
@@ -1045,9 +1054,10 @@ downloads. Files don't take part in merges and orphans yet, and there is no `ret
     "<file>"`.
   - A failed download, tag or placement stores `failed` with `download` and the error, logs `Couldn't download:
     <error>`, and emits `TrackStatusChanged`; the next sync tries again.
-  - A missing tool stops the pool from starting tracks: each queued track, and the one that found it missing, gets a
-    `TrackStatusChanged` with the tools it waits for (`waitingFor`), and the log a Warning `Waiting for ffmpeg to
-    install`. Nothing is written to the state. When `ToolFolder` reports the install, the tracks go on.
+  - A missing tool stops the pool from starting tracks: the one that found it missing goes back to the front of the
+    queue, the run emits `DownloadsWaiting` with the tools, and the log gets a Warning `Waiting for ffmpeg to install`.
+    Nothing is written to the state. When `ToolFolder` reports the install, `DownloadsWaiting` without tools follows, and
+    the tracks go on.
 - `cancel()` and `stop()` end the run. The playlist being fetched keeps its previous state, apart from the pages a
   Spotify fetch already read (as for a failure); a track being matched or downloaded stays as it was, and a download's
   work folder is removed; the queues are dropped, and nothing more is written. A run starts by removing what an
@@ -1093,10 +1103,12 @@ cancelled`.
 | `PlaylistFetchFailed`          | playlist id, error                              |
 | `TracksQueued`                 | so far: the tracks the run will match, each with the keys of the playlists that list it |
 | `TrackMatching`                | so far: track key, as the run starts matching it (again after a refused search) |
-| `TrackStatusChanged`           | track key, status, failure, error, the tools it waits for |
+| `TrackStatusChanged`           | track key, status, failure, error                 |
+| `DownloadsWaiting`             | so far: the tools the run's downloads wait for, none once they go on |
 | `DownloadsQueued`              | so far: the tracks the run will download, each with the keys of the playlists that list it |
 | `TrackDownloading`             | so far: track key, as a worker starts downloading it |
-| `TrackProgress`                | track key, percent                              |
+| `TrackProgress`                | track key, percent, as it changes by a whole percent |
+
 | `TrackUpdated`                 | track key (tags, cover or file changed)         |
 | `TracksMerged`                 | deleted track key, surviving track key          |
 | `CandidateSearchResults`           | request number, candidates, error               |

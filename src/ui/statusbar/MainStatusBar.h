@@ -13,6 +13,7 @@
 #include "ui/framework/MessageFont.h"
 #include "ui/framework/ProgressBar.h"
 #include "ui/framework/StatusBar.h"
+#include "ui/RingIcons.h"
 #include "ui/sync/SyncBoard.h"
 #include "ui/tools/ToolBoard.h"
 #include "ui/tools/ToolMark.h"
@@ -40,7 +41,6 @@ private:
     void show_run_bar();
     void set_parts();
     const framework::IconResource* tool_icon() const noexcept;
-    const framework::IconResource& ring(int percent) const noexcept;
 
     framework::StatusBar status_bar_;
     framework::ProgressBar run_bar_;
@@ -48,7 +48,7 @@ private:
     framework::IconResource ready_icon_;
     framework::IconResource attention_icon_;
     framework::IconResource tool_wait_icon_;
-    std::vector<framework::IconResource> rings_;
+    RingIcons rings_;
     bool run_bar_shown_ = false;
     ToolMark tool_mark_ = ToolMark::Working;
     std::wstring tools_tip_;

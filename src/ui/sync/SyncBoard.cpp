@@ -13,44 +13,52 @@ void SyncBoard::apply(const core::SyncQueued& queued) {
 void SyncBoard::apply(const core::PlaylistFetching& fetching) {
     std::erase(queue_, fetching.playlist);
     current_ = fetching.playlist;
-    waiting_for_ = fetching.waiting_for;
+    fetch_waiting_for_ = fetching.waiting_for;
 }
 
 void SyncBoard::apply(const core::TracksQueued& queued) {
-    tracks_total_ += static_cast<int>(queued.tracks.size());
-    for (const core::QueuedTrack& track : queued.tracks) {
-        for (const std::string& playlist : track.playlists) {
-            ++playlist_matches_[playlist].queued;
-        }
-        track_playlists_[track.track] = track.playlists;
-    }
+    matches_.queue(queued.tracks);
 }
 
 void SyncBoard::apply(const core::TrackMatching& matching) {
-    if (auto found = track_playlists_.find(matching.track); found != track_playlists_.end()) {
-        matching_playlists_ = found->second;
+    matches_.start(matching.track);
+}
+
+void SyncBoard::apply(const core::DownloadsQueued& queued) {
+    downloads_.queue(queued.tracks);
+}
+
+void SyncBoard::apply(const core::TrackDownloading& downloading) {
+    if (downloads_.has(downloading.track)) {
+        downloads_.start(downloading.track);
+        percents_[downloading.track] = 0;
     }
+}
+
+void SyncBoard::apply(const core::TrackProgress& progress) {
+    if (downloads_.started(progress.track)) {
+        percents_[progress.track] = progress.percent;
+    }
+}
+
+void SyncBoard::apply(const core::DownloadsWaiting& waiting) {
+    downloads_waiting_for_ = waiting.waiting_for;
 }
 
 void SyncBoard::finish_playlist(const std::string& playlist) {
     if (current_ == playlist) {
         current_.reset();
-        waiting_for_.clear();
+        fetch_waiting_for_.clear();
     }
     ++finished_;
 }
 
+// A track is in one step at a time, and an event that ends it ends that one
 void SyncBoard::finish_track(const std::string& track) {
-    auto found = track_playlists_.find(track);
-    // Not one the run queued
-    if (found == track_playlists_.end()) {
-        return;
+    if (!matches_.finish(track)) {
+        downloads_.finish(track);
+        percents_.erase(track);
     }
-    for (const std::string& playlist : found->second) {
-        ++playlist_matches_[playlist].ended;
-    }
-    track_playlists_.erase(found);
-    ++tracks_finished_;
 }
 
 void SyncBoard::finish() {
@@ -69,32 +77,75 @@ const std::optional<std::string>& SyncBoard::current() const noexcept {
     return current_;
 }
 
+std::span<const core::ToolPackage> SyncBoard::fetch_waiting_for() const noexcept {
+    return fetch_waiting_for_;
+}
+
 std::span<const core::ToolPackage> SyncBoard::waiting_for() const noexcept {
-    return waiting_for_;
+    if (current_) {
+        return fetch_waiting_for_;
+    }
+    return downloading() ? std::span<const core::ToolPackage>(downloads_waiting_for_) : std::span<const core::ToolPackage>();
+}
+
+std::span<const core::ToolPackage> SyncBoard::downloads_waiting_for() const noexcept {
+    return downloads_waiting_for_;
 }
 
 bool SyncBoard::matching() const noexcept {
-    return tracks_total_ > 0 && !current_ && queue_.empty();
+    return matches_.total() > 0 && !current_ && queue_.empty() && (!matches_.done() || downloads_.total() == 0);
+}
+
+bool SyncBoard::downloading() const noexcept {
+    return downloads_.total() > 0 && !current_ && queue_.empty() && matches_.done();
 }
 
 int SyncBoard::finished() const noexcept {
-    return matching() ? tracks_finished_ : finished_;
+    if (downloading()) {
+        return downloads_.finished();
+    }
+    return matching() ? matches_.finished() : finished_;
+}
+
+// The playlist being synced or the track being matched, or the tracks downloading side by side
+int SyncBoard::under_way() const noexcept {
+    return downloading() ? downloads_.started_count() : 1;
 }
 
 int SyncBoard::total() const noexcept {
-    return matching() ? tracks_total_ : total_;
+    if (downloading()) {
+        return downloads_.total();
+    }
+    return matching() ? matches_.total() : total_;
 }
 
-std::optional<MatchProgress> SyncBoard::match_progress(const std::string& playlist) const {
-    auto found = playlist_matches_.find(playlist);
-    if (found == playlist_matches_.end() || found->second.ended >= found->second.queued) {
-        return std::nullopt;
-    }
-    return found->second;
+std::optional<StageProgress> SyncBoard::match_progress(const std::string& playlist) const {
+    return matches_.progress(playlist);
 }
 
 bool SyncBoard::matching_now(const std::string& playlist) const {
-    return std::ranges::contains(matching_playlists_, playlist);
+    return matches_.last_started_in(playlist);
+}
+
+std::optional<StageProgress> SyncBoard::download_progress(const std::string& playlist) const {
+    return downloads_.progress(playlist);
+}
+
+int SyncBoard::downloading_in(const std::string& playlist) const {
+    return downloads_.started_in(playlist);
+}
+
+TrackActivities SyncBoard::activities() const {
+    TrackActivities activities;
+    for (const auto& [track, percent] : percents_) {
+        activities[track].percent = percent;
+    }
+    if (!downloads_waiting_for_.empty()) {
+        for (const std::string& track : downloads_.waiting()) {
+            activities[track].waiting_for = downloads_waiting_for_;
+        }
+    }
+    return activities;
 }
 
 }
