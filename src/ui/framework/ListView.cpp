@@ -1,5 +1,6 @@
 #include "ui/framework/ListView.h"
 
+#include <algorithm>
 #include <utility>
 
 #include <windows.h>
@@ -156,6 +157,19 @@ RECT ListView::cell_rect(int item, int column_index) const {
     RECT rect{LVIR_BOUNDS, column_index, 0, 0};
     platform::win32::check(SendMessageW(hwnd(), LVM_GETSUBITEMRECT, item, reinterpret_cast<LPARAM>(&rect)), "LVM_GETSUBITEMRECT");
     return rect;
+}
+
+ListItemRange ListView::visible_items() const {
+    auto first = static_cast<int>(SendMessageW(hwnd(), LVM_GETTOPINDEX, 0, 0));
+    // The count leaves out the row cut off at the bottom
+    auto shown = static_cast<int>(SendMessageW(hwnd(), LVM_GETCOUNTPERPAGE, 0, 0)) + 1;
+    auto count = static_cast<int>(SendMessageW(hwnd(), LVM_GETITEMCOUNT, 0, 0));
+    return {.first = first, .end = std::min(first + shown, count)};
+}
+
+void ListView::invalidate_cell(int item, int column_index) const {
+    RECT cell = cell_rect(item, column_index);
+    platform::win32::check(InvalidateRect(hwnd(), &cell, FALSE), "InvalidateRect");
 }
 
 std::vector<int> ListView::selected_items() const {

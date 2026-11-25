@@ -34,6 +34,12 @@ struct ListSortArrow {
     SortDirection direction = SortDirection::Ascending;
 };
 
+// The items from first up to end
+struct ListItemRange {
+    int first = 0;
+    int end = 0;
+};
+
 class ListView final : public Control {
 public:
     explicit ListView(HWND parent);
@@ -52,6 +58,8 @@ public:
     void set_item_count(int count);
     void scroll_to_top();
     RECT cell_rect(int item, int column_index) const;
+    ListItemRange visible_items() const;
+    void invalidate_cell(int item, int column_index) const;
     std::vector<int> selected_items() const;
     std::optional<int> focused_item() const;
     void select_items(std::span<const int> items, std::optional<int> focused);

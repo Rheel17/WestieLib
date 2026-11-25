@@ -10,6 +10,8 @@
 
 namespace westie::ui {
 
+std::vector<std::string> playlist_keys(const core::State& state);
+std::wstring playlist_name(const std::string& key, const core::Playlist& playlist);
 std::vector<PlaylistRow> playlist_rows(const core::State& state);
 std::optional<PlaylistRow> playlist_row(const core::State& state, const std::string& key);
 void mark_runs(std::vector<PlaylistRow>& rows, const SyncBoard& board);

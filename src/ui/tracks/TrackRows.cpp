@@ -10,7 +10,6 @@
 #include "core/json/Utf8Path.h"
 #include "core/state/EffectiveMetadata.h"
 #include "platform/win32/Utf16.h"
-#include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
 #include "ui/tracks/TrackEntries.h"
 #include "ui/tracks/TrackReview.h"
@@ -73,11 +72,13 @@ std::vector<Listing> listings(const core::Playlist& playlist) {
 // By track, the playlists that list one of its sources, in the left panel's order
 std::map<std::string, std::vector<std::wstring>> playlist_names(const core::State& state) {
     std::map<std::string, std::vector<std::wstring>> names;
-    for (const PlaylistRow& row : playlist_rows(state)) {
+    for (const std::string& key : playlist_keys(state)) {
+        const core::Playlist& playlist = state.playlists.at(key);
+        std::wstring name = playlist_name(key, playlist);
         std::set<std::string> tracks;
-        for (const std::string& key : state.playlists.at(row.key).sources) {
-            if (auto source = state.sources.find(key); source != state.sources.end() && tracks.insert(source->second.track).second) {
-                names[source->second.track].push_back(row.name);
+        for (const std::string& listed : playlist.sources) {
+            if (auto source = state.sources.find(listed); source != state.sources.end() && tracks.insert(source->second.track).second) {
+                names[source->second.track].push_back(name);
             }
         }
     }

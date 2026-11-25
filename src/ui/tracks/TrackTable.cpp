@@ -6,6 +6,7 @@
 #include <format>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <string>
 #include <string_view>
@@ -87,6 +88,21 @@ framework::ListColumn list_column(const ColumnSpec& spec, int width) {
 
 TrackSort default_sort(bool playlist) {
     return TrackSort(playlist ? TrackColumn::Number : TrackColumn::Title);
+}
+
+std::set<std::string> changed_tracks(const TrackActivities& before, const TrackActivities& after) {
+    std::set<std::string> changed;
+    for (const auto& [track, activity] : before) {
+        if (auto now = after.find(track); now == after.end() || now->second != activity) {
+            changed.insert(track);
+        }
+    }
+    for (const std::string& track : after | std::views::keys) {
+        if (!before.contains(track)) {
+            changed.insert(track);
+        }
+    }
+    return changed;
 }
 
 // The Status column shows only its icon
@@ -179,13 +195,24 @@ void TrackTable::set_rows(std::vector<TrackRow> rows) {
     platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
-// Only the Status cells change, so the rows and the selection stay as they are
+// Only the Status cells of the tracks whose activity changed are painted again: a download's ring moves with every
+// percent, and painting the whole list that often keeps the window from the user's input
 void TrackTable::set_activities(TrackActivities activities) {
     if (activities == activities_) {
         return;
     }
+    std::set<std::string> changed = changed_tracks(activities_, activities);
     activities_ = std::move(activities);
-    platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
+    std::optional<int> column = list_.column_index(std::to_underlying(TrackColumn::Status));
+    if (!column) {
+        return;
+    }
+    framework::ListItemRange visible = list_.visible_items();
+    for (int item = visible.first; item < visible.end && std::cmp_less(item, rows_.size()); ++item) {
+        if (changed.contains(rows_[item].track)) {
+            list_.invalidate_cell(item, *column);
+        }
+    }
 }
 
 void TrackTable::scroll_to_top() {

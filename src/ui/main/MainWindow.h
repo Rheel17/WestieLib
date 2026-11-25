@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <initializer_list>
 #include <optional>
@@ -88,6 +89,15 @@ protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
 
 private:
+    // What the panels' layout depends on besides the window's size and the splitters
+    struct ShownPanels {
+        bool notice = false;
+        // Or the welcome screen in their place
+        bool tracks = false;
+
+        bool operator==(const ShownPanels&) const = default;
+    };
+
     static const framework::WindowClass& window_class();
 
     void attach_menu();
@@ -101,9 +111,13 @@ private:
     void show_scope();
     void show_inspector();
     void show_playlists();
-    void show_run(const std::vector<PlaylistRow>& rows);
+    void show_outdated_state();
+    void on_timer(WPARAM timer);
+    void show_run();
     void save_state() const;
     MainLayout current_layout() const;
+    ShownPanels shown_panels() const;
+    void layout_moved_panels();
     void layout_panels();
     CommandState command_state() const;
     void update_commands();
@@ -200,8 +214,16 @@ private:
     FetchFailureNotice fetch_failure_;
     // A playlist's key, or nothing while All tracks is selected
     std::optional<std::string> selected_playlist_;
-    // Set by the sync events, so a batch of them shows the playlists and tracks once
-    bool playlists_outdated_ = false;
+    // The playlists as the state last showed them, before the update's progress is marked on them
+    std::vector<PlaylistRow> playlist_rows_;
+    // Set by the events, so a batch of them shows the state, or only the update's progress, once
+    bool state_outdated_ = false;
+    bool run_outdated_ = false;
+    // A playlist or a page of one was fetched, which shows at once
+    bool fetched_ = false;
+    std::chrono::steady_clock::time_point state_shown_at_{};
+    bool state_timer_set_ = false;
+    std::optional<ShownPanels> laid_out_;
     // Only while they're open, so tool, look-up and search events can reach them
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;

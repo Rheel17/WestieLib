@@ -50,6 +50,8 @@ namespace {
 
 constexpr framework::Size InitialWindowDips{1280, 800};
 constexpr framework::Size MinimumWindowDips{1100, 680};
+constexpr UINT_PTR StateTimer = 1;
+constexpr std::chrono::seconds StateInterval{1};
 
 }
 
@@ -153,6 +155,7 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     case WM_DRAWITEM:       return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
     case WM_GETMINMAXINFO:  on_get_min_max_info(*reinterpret_cast<MINMAXINFO*>(lparam)); return 0;
     case WM_SIZE:           layout_panels(); return 0;
+    case WM_TIMER:          on_timer(wparam); return 0;
     case WM_ACTIVATE:       on_activate(LOWORD(wparam)); return Window::handle_message(message, wparam, lparam);
     case WM_SETFOCUS:       focus_.restore(hwnd()); return 0;
     case WM_DPICHANGED:     on_dpi_changed(HIWORD(wparam), *reinterpret_cast<const RECT*>(lparam)); return 0;
@@ -278,18 +281,18 @@ void MainWindow::show_inspector() {
 }
 
 void MainWindow::show_playlists() {
+    state_outdated_ = false;
+    fetched_ = false;
+    state_shown_at_ = std::chrono::steady_clock::now();
     std::shared_ptr<const core::State> state = library_.snapshot();
     if (selected_playlist_ && !state->playlists.contains(*selected_playlist_)) {
         selected_playlist_.reset();
     }
-    std::vector<PlaylistRow> rows = playlist_rows(*state);
+    playlist_rows_ = playlist_rows(*state);
     removals_.update(*state);
-    mark_runs(rows, sync_board_);
-    show_run(rows);
-    playlists_.set_playlists(std::move(rows));
-    playlists_.show_selection(selected_playlist_);
+    show_run();
     show_scope();
-    layout_panels();
+    layout_moved_panels();
     // A hidden window would keep the keyboard focus from going anywhere
     if (IsChild(welcome_.hwnd(), GetFocus())) {
         SetFocus(hwnd());
@@ -297,7 +300,38 @@ void MainWindow::show_playlists() {
     update_commands();
 }
 
-void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
+// Showing the tracks takes a tenth of a second in a large library, and during an update they change with every match
+// and download, so those show at most once a StateInterval. A fetched page or playlist, which comes far less often,
+// shows at once, and so does the update's progress
+void MainWindow::show_outdated_state() {
+    std::chrono::steady_clock::duration since = std::chrono::steady_clock::now() - state_shown_at_;
+    if (!sync_board_.running() || fetched_ || since >= StateInterval) {
+        show_playlists();
+        return;
+    }
+    show_run();
+    layout_moved_panels();
+    if (!std::exchange(state_timer_set_, true)) {
+        auto wait = std::chrono::ceil<std::chrono::milliseconds>(StateInterval - since);
+        platform::win32::check(SetTimer(hwnd(), StateTimer, static_cast<UINT>(wait.count()), nullptr), "SetTimer");
+    }
+}
+
+void MainWindow::on_timer(WPARAM timer) {
+    if (timer != StateTimer) {
+        return;
+    }
+    KillTimer(hwnd(), StateTimer);
+    state_timer_set_ = false;
+    if (state_outdated_) {
+        show_playlists();
+    }
+}
+
+// The playlists' counts as the state last showed them, with the update's progress as it is now
+void MainWindow::show_run() {
+    std::vector<PlaylistRow> rows = playlist_rows_;
+    mark_runs(rows, sync_board_);
     std::optional<std::chrono::system_clock::time_point> last_sync;
     for (const PlaylistRow& row : rows) {
         if (row.last_sync && (!last_sync || *row.last_sync > *last_sync)) {
@@ -312,6 +346,8 @@ void MainWindow::show_run(const std::vector<PlaylistRow>& rows) {
     } else if (const std::optional<std::wstring>& failure = fetch_failure_.message()) {
         infobar_.set_message(*failure, InfobarAction::Details);
     }
+    playlists_.set_playlists(std::move(rows));
+    playlists_.show_selection(selected_playlist_);
 }
 
 void MainWindow::save_state() const {
@@ -331,7 +367,19 @@ MainLayout MainWindow::current_layout() const {
     return compute_main_layout(framework::Rect::from_rect(client), framework::Dpi::of(hwnd()), bars, panels_);
 }
 
+MainWindow::ShownPanels MainWindow::shown_panels() const {
+    return {.notice = shows_notice(), .tracks = has_playlists()};
+}
+
+// Laying out paints every panel at once, so it waits for a panel to come or go
+void MainWindow::layout_moved_panels() {
+    if (shown_panels() != laid_out_) {
+        layout_panels();
+    }
+}
+
 void MainWindow::layout_panels() {
+    laid_out_ = shown_panels();
     MainLayout layout = current_layout();
 
     framework::DeferredPositions positions;
@@ -623,9 +671,13 @@ void MainWindow::on_core_events() {
     for (const core::CoreEvent& event : events_.take()) {
         std::visit([this](const auto& payload) { apply_event(payload); }, event);
     }
-    if (std::exchange(playlists_outdated_, false)) {
-        show_playlists();
+    if (state_outdated_) {
+        show_outdated_state();
+    } else if (run_outdated_) {
+        show_run();
+        layout_moved_panels();
     }
+    run_outdated_ = false;
     tracks_.show_activities(sync_board_.activities());
     log_.show_added();
     show_tools();
@@ -651,46 +703,49 @@ void MainWindow::apply_event(const core::PlaylistLookedUp& event) {
 
 void MainWindow::apply_event(const core::SyncQueued& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistFetching& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistPageFetched&) {
-    playlists_outdated_ = true;
+    state_outdated_ = true;
+    fetched_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistFetched& event) {
     sync_board_.finish_playlist(event.playlist);
-    playlists_outdated_ = true;
+    state_outdated_ = true;
+    fetched_ = true;
 }
 
 void MainWindow::apply_event(const core::PlaylistFetchFailed& event) {
     sync_board_.finish_playlist(event.playlist);
-    playlists_outdated_ = true;
+    state_outdated_ = true;
+    fetched_ = true;
 }
 
 void MainWindow::apply_event(const core::TracksQueued& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TrackMatching& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::DownloadsQueued& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TrackDownloading& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 // Only the track's ring changes, so the rows stay as they are
@@ -700,23 +755,23 @@ void MainWindow::apply_event(const core::TrackProgress& event) {
 
 void MainWindow::apply_event(const core::DownloadsWaiting& event) {
     sync_board_.apply(event);
-    playlists_outdated_ = true;
+    run_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TrackStatusChanged& event) {
     sync_board_.finish_track(event.track);
-    playlists_outdated_ = true;
+    state_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::TracksMerged& event) {
     log_.rename_track(event.merged, event.survivor);
     sync_board_.finish_track(event.merged);
-    playlists_outdated_ = true;
+    state_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::SyncFinished&) {
     sync_board_.finish();
-    playlists_outdated_ = true;
+    state_outdated_ = true;
 }
 
 void MainWindow::apply_event(const core::CandidateSearchResults& results) {

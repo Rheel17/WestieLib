@@ -12,7 +12,6 @@
 #include "core/state/TrackYtmIds.h"
 #include "platform/win32/Utf16.h"
 #include "ui/ArtistsText.h"
-#include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
 
 namespace westie::ui {
@@ -135,9 +134,11 @@ std::optional<TrackDetails> track_details(
             details.sources.push_back(std::move(*source));
         }
     }
-    for (PlaylistRow& playlist : playlist_rows(state)) {
-        if (lists_track(state, state.playlists.at(playlist.key), row.track)) {
-            details.playlists.push_back({.key = std::move(playlist.key), .name = std::move(playlist.name)});
+    for (std::string& key : playlist_keys(state)) {
+        const core::Playlist& playlist = state.playlists.at(key);
+        if (lists_track(state, playlist, row.track)) {
+            std::wstring name = playlist_name(key, playlist);
+            details.playlists.push_back({.key = std::move(key), .name = std::move(name)});
         }
     }
     show_entry_audio(state, normalizer, track->second, row.key, details);

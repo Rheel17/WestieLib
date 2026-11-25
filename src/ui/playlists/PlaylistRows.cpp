@@ -42,8 +42,7 @@ std::optional<PlaylistRow> row_of(const core::State& state, const std::string& k
     if (!type) {
         return std::nullopt;
     }
-    // Until its first fetch a playlist has no name
-    std::wstring name = playlist.name.empty() ? playlist_type_text(*type) : platform::win32::to_utf16(playlist.name);
+    std::wstring name = playlist_name(key, playlist);
     // The key is the source's prefix, a colon and the playlist's ID
     std::wstring id = platform::win32::to_utf16(std::string_view(key).substr(core::source_prefix(*type).size() + 1));
     std::optional<std::chrono::system_clock::time_point> failed_at;
@@ -65,14 +64,34 @@ std::optional<PlaylistRow> row_of(const core::State& state, const std::string& k
 
 }
 
-std::vector<PlaylistRow> playlist_rows(const core::State& state) {
+std::vector<std::string> playlist_keys(const core::State& state) {
     auto entries = state.playlists | std::views::transform([](const auto& entry) { return &entry; }) | std::ranges::to<std::vector>();
     // In the order they were added; the key only breaks ties
     std::ranges::sort(entries, {}, [](const auto* entry) { return std::tie(entry->second.added_at, entry->first); });
 
-    std::vector<PlaylistRow> rows;
+    std::vector<std::string> keys;
     for (const auto* entry : entries) {
-        if (std::optional<PlaylistRow> row = row_of(state, entry->first, entry->second)) {
+        // A playlist from a later version's source can't be shown
+        if (core::source_type_of_key(entry->first)) {
+            keys.push_back(entry->first);
+        }
+    }
+    return keys;
+}
+
+std::wstring playlist_name(const std::string& key, const core::Playlist& playlist) {
+    // Until its first fetch a playlist has no name
+    if (!playlist.name.empty()) {
+        return platform::win32::to_utf16(playlist.name);
+    }
+    std::optional<core::SourceType> type = core::source_type_of_key(key);
+    return type ? playlist_type_text(*type) : std::wstring();
+}
+
+std::vector<PlaylistRow> playlist_rows(const core::State& state) {
+    std::vector<PlaylistRow> rows;
+    for (const std::string& key : playlist_keys(state)) {
+        if (std::optional<PlaylistRow> row = row_of(state, key, state.playlists.at(key))) {
             rows.push_back(std::move(*row));
         }
     }

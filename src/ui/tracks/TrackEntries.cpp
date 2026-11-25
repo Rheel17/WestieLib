@@ -3,7 +3,6 @@
 #include <ranges>
 #include <set>
 
-#include "ui/playlists/PlaylistRow.h"
 #include "ui/playlists/PlaylistRows.h"
 
 namespace westie::ui {
@@ -11,8 +10,8 @@ namespace westie::ui {
 std::vector<TrackEntry> track_entries(const core::State& state) {
     std::vector<TrackEntry> entries;
     std::set<std::string> seen;
-    for (const PlaylistRow& row : playlist_rows(state)) {
-        for (const std::string& key : state.playlists.at(row.key).sources) {
+    for (const std::string& playlist : playlist_keys(state)) {
+        for (const std::string& key : state.playlists.at(playlist).sources) {
             auto source = state.sources.find(key);
             if (source == state.sources.end() || !state.tracks.contains(source->second.track) || !seen.insert(key).second) {
                 continue;
