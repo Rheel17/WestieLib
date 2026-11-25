@@ -12,8 +12,8 @@ struct CommandState {
     bool track_selected = false;
     // Exactly one row, and it needs review
     bool review_selected = false;
-    // Exactly one row, and its entry is a Spotify track
-    bool spotify_entry_selected = false;
+    // Exactly one row, and the Matcher matches its entry: a Spotify track, or a YouTube Music entry whose id is unavailable
+    bool matched_entry_selected = false;
     // At least one row whose track failed
     bool failed_selected = false;
     // At least one row whose track is Removed, and one whose track is Removed or Kept

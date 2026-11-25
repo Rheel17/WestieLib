@@ -105,8 +105,9 @@ Merging): the same song in a YouTube Music and a Spotify playlist, or one record
 several ids (single, album, compilation). All tracks shows a row per track. A playlist shows a row per *entry*: one
 source it lists. So a merge never takes a row out of a playlist: when a playlist lists several sources of one track,
 the first is the original and the later ones are *duplicates*, which download nothing of their own and share its
-file. Entries in different playlists are never duplicates of each other. A track with a YouTube Music source never
-needs review, because the playlist owner chose its id.
+file. Entries in different playlists are never duplicates of each other. A track with a YouTube Music source doesn't
+need review, because the playlist owner chose its id, unless YouTube Music no longer plays that id here: then the track
+is matched like a Spotify one, and its match can need review (`arch.md`, Unavailable ids).
 
 ## Menu bar and toolbar
 
@@ -146,7 +147,8 @@ The toolbar has `+ Add playlist`, `⟳ Update all ▾`, `■ Cancel` and `⚙ Se
   - `Remove playlist…` and `Update selected playlist` need a selected playlist, and `Update selected playlist` also
     needs no update running.
   - Track items need a selected track. `Confirm match` needs exactly one selected row, and that it needs review.
-    `Choose match…` needs exactly one selected row whose entry is a Spotify track. `Retry` needs a selected row whose
+    `Choose match…` needs exactly one selected row whose entry the Matcher matches: a Spotify track, or a YouTube Music
+    entry whose id is unavailable (`arch.md`, Unavailable ids). `Retry` needs a selected row whose
     track failed, and retries every such track the selection holds; it is enabled during an update too, whose queues
     the tracks join. `Show in folder` needs exactly one selected row whose track has a file.
   - So far the other Track items stay disabled; each is enabled with its feature.
@@ -597,6 +599,10 @@ The track card, from the top, in DIPs:
   - a Spotify entry with a match: `Matched`, `Artists`, `Length`, `ID`, `Chosen by` `Matcher`, `Confidence`;
   - a YouTube Music entry: `ID`, `Chosen by` `Playlist`, and `Spotify match` `Same ID (96%)` when the
     track's first Spotify source was matched to that id;
+  - a YouTube Music entry whose id is unavailable (`arch.md`, Unavailable ids): first `Listed ID`, the playlist's id
+    as a link, then ` (unavailable)` in gray; then the rows of the track's match as for a Spotify entry, with `Length`
+    reading ` (playlist 2:54)` in gray instead of ` (Spotify …)`. Before the match, `ID` reads `Not chosen yet`, as
+    below;
   - otherwise by where the track's YouTube Music id comes from (`arch.md`, YouTube Music id resolution), and with none, `ID` reads
     `Not chosen yet` in gray, or `No match found` in red after a failed match.
 
@@ -859,8 +865,9 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - `Use this match` on the current match confirms it. Any other result becomes the override, which downloads
     the track again.
   - **Play buttons** open a track's page in the browser, so it can be heard before it's chosen. Each is a small
-    button with the 12 px play glyph and a tooltip: `Play on Spotify` for the track, `Play on YouTube Music` for a
-    result or a link.
+    button with the 12 px play glyph and a tooltip: `Play on Spotify` for the track (`Play on YouTube Music` for a
+    YouTube Music entry whose id is unavailable, which opens its page though it won't play), `Play on YouTube Music`
+    for a result or a link. Such an entry's heading shows the YouTube Music logo.
     - The track's and the link's are push buttons, as tall as the search field. The link's grays out with its glyph
       while the link names no YouTube Music id.
     - A row's is painted in its cell: just the glyph, and on hover a box with the hover colors of the playlist rows'

@@ -43,7 +43,8 @@ std::string joined(const std::vector<std::string>& parts, std::string_view separ
 Matcher::Matcher(YouTubeMusicSearch& search, const platform::TextNormalizer& normalizer, Log& log) : search_(search), normalizer_(normalizer), log_(log) {}
 
 std::expected<Match, std::string> Matcher::match(
-        const Source& source, const std::set<std::string>& known_ytm_ids, const LogSubject& subject, const std::stop_token& stop
+        const Source& source, const std::set<std::string>& known_ytm_ids, const std::set<std::string>& unavailable_ytm_ids, const LogSubject& subject,
+        const std::stop_token& stop
 ) const {
     SongFacts wanted = song_facts(normalizer_, source.title, source.artists, source.album, source.duration, source.explicit_content);
     // Each YouTube Music id once, in the order the searches found them
@@ -65,6 +66,10 @@ std::expected<Match, std::string> Matcher::match(
         // This search's results, as places in the pool
         std::vector<std::size_t> found;
         for (SongResult& result : results) {
+            // The search still lists ids that YouTube Music no longer plays
+            if (unavailable_ytm_ids.contains(result.ytm_id)) {
+                continue;
+            }
             auto known = std::ranges::find(pool, result.ytm_id, [](const Candidate& candidate) { return candidate.song.ytm_id; });
             if (known != pool.end()) {
                 found.push_back(static_cast<std::size_t>(known - pool.begin()));

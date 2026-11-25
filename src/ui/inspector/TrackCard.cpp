@@ -196,7 +196,7 @@ int TrackCard::arrange(int width, framework::DeferredPositions* positions) const
     return layout.height();
 }
 
-// Such a track's entries are all Spotify tracks, so Choose match applies whenever the button shows, and the buttons are
+// Such a track's entries are all ones the Matcher matches, so Choose match applies whenever the button shows, and the buttons are
 // never disabled: a themed button fades in from the state it was last drawn in
 void TrackCard::arrange_actions(CardLayout& layout) const {
     if (track_.row.status == StatusTab::NeedsReview) {

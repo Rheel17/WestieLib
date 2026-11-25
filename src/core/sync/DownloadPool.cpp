@@ -6,10 +6,12 @@
 #include <memory>
 #include <utility>
 
+#include "core/download/UnavailableError.h"
 #include "core/json/Utf8Path.h"
 #include "core/log/LogLevel.h"
 #include "core/log/LogSubject.h"
 #include "core/log/LogText.h"
+#include "core/sources/YtDlpError.h"
 #include "core/state/TrackYtmIds.h"
 #include "core/sync/ApplyDownload.h"
 #include "core/sync/DownloadEvents.h"
@@ -51,8 +53,15 @@ std::optional<std::string> ytm_id_of(const State& state, const std::string& trac
 
 }
 
-DownloadPool::DownloadPool(DownloadServices services, std::filesystem::path work_folder, std::stop_token stop, std::function<void()> on_idle) :
-        services_(services), work_folder_(std::move(work_folder)), stop_(std::move(stop)), on_idle_(std::move(on_idle)) {
+DownloadPool::DownloadPool(
+        DownloadServices services, std::filesystem::path work_folder, std::stop_token stop, std::function<void()> on_idle,
+        std::function<void(const std::string& track)> on_unavailable
+) :
+        services_(services),
+        work_folder_(std::move(work_folder)),
+        stop_(std::move(stop)),
+        on_idle_(std::move(on_idle)),
+        on_unavailable_(std::move(on_unavailable)) {
     Settings settings = services_.settings.current();
     delay_ = settings.delay_between_tracks;
     for (int index = 0; index < std::clamp(settings.concurrency, MinConcurrency, MaxConcurrency); ++index) {
@@ -160,7 +169,9 @@ void DownloadPool::download(const Taken& taken) {
         // Removed or being replaced since it was looked for
         wait_for_tools(taken, {missing.package()}, seen);
     } catch (const std::exception& error) {
-        fail(taken.track, error.what());
+        if (!is_unavailable_error(error.what()) || !set_unavailable(taken, error.what())) {
+            fail(taken.track, error.what());
+        }
     }
     remove_work_folder(work, taken.track);
 }
@@ -191,6 +202,28 @@ void DownloadPool::fail(const std::string& track, const std::string& error) {
         services_.log.write(LogLevel::Error, std::format("Couldn't save the state: {}", save_error.what()), std::move(subject));
     }
     services_.events.emit(TrackStatusChanged{.track = track, .status = TrackStatus::Failed, .failure = TrackFailure::Download, .error = error});
+}
+
+bool DownloadPool::set_unavailable(const Taken& taken, const std::string& error) {
+    LogSubject subject = track_subject(*services_.library.snapshot(), taken.track);
+    bool applied = false;
+    try {
+        services_.library.update([&](State& state) { applied = apply_unavailable(state, taken.track, taken.ytm_id); });
+    } catch (const std::exception& save_error) {
+        services_.log.write(LogLevel::Error, std::format("Couldn't save the state: {}", save_error.what()), std::move(subject));
+        return false;
+    }
+    if (!applied) {
+        return false;
+    }
+    services_.log.write(
+            LogLevel::Warning,
+            std::format("YouTube Music doesn't play {} here ({}), so the track is matched again", taken.ytm_id, yt_dlp_error_message(error, taken.ytm_id)),
+            std::move(subject)
+    );
+    services_.events.emit(TrackStatusChanged{.track = taken.track, .status = TrackStatus::Pending});
+    on_unavailable_(taken.track);
+    return true;
 }
 
 // The track goes back to the front of the queue, and the pool starts no track until the tools are in

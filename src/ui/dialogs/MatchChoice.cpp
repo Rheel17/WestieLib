@@ -47,7 +47,7 @@ std::wstring current_text(const core::State& state, const core::Track& track) {
     if (source == state.sources.end()) {
         return L"";
     }
-    if (const std::optional<core::Match>& match = source->second.match; match && !core::own_ytm_id(resolved->source)) {
+    if (const std::optional<core::Match>& match = source->second.match; match && resolved->matched) {
         return std::format(L"Current match: {}, {}% confidence", platform::win32::to_utf16(match->title), std::lround(match->confidence * PercentPerWhole));
     }
     return std::format(L"Current match: {}, from a YouTube Music playlist", platform::win32::to_utf16(source->second.title));
@@ -57,14 +57,19 @@ std::wstring current_text(const core::State& state, const core::Track& track) {
 
 std::optional<MatchChoice> match_choice(const core::State& state, const std::string& source_key) {
     auto source = state.sources.find(source_key);
-    if (source == state.sources.end() || core::source_type_of_key(source_key) != core::SourceType::Spotify) {
+    if (source == state.sources.end() || !core::is_matched_entry(state, source_key)) {
         return std::nullopt;
     }
     auto track = state.tracks.find(source->second.track);
     if (track == state.tracks.end()) {
         return std::nullopt;
     }
-    LinkLine heading{.icon = IDI_SPOTIFY, .text = platform::win32::to_utf16(source->second.title), .source = heading_details(source->second)};
+    bool spotify = core::source_type_of_key(source_key) == core::SourceType::Spotify;
+    LinkLine heading{
+        .icon = spotify ? IDI_SPOTIFY : IDI_YTM,
+        .text = platform::win32::to_utf16(source->second.title),
+        .source = heading_details(source->second),
+    };
     return MatchChoice{
         .source = source_key,
         .heading = std::move(heading),

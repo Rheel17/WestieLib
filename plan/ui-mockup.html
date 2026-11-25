@@ -410,7 +410,8 @@ const SONGS = [
 
 	["Leave the Door Open", "Bruno Mars;Anderson .Paak;Silk Sonic", "An Evening with Silk Sonic", 2021, "4:02", "W"],
 	["Cool", "Dua Lipa", "Future Nostalgia", 2020, "3:29", "WC"],
-	["Electric Feel", "MGMT", "Oracular Spectacular", 2007, "3:49", "W"],
+	// YouTube Music no longer plays the id WCS lists, so the Matcher found another upload of the song
+	["Electric Feel", "MGMT", "Oracular Spectacular", 2007, "3:49", "W", { unavailable: true, conf: .9, md: "3:50" }],
 	["Talking to the Moon", "Bruno Mars", "Doo-Wops & Hooligans", 2010, "3:37", "W"],
 	["Bad Habits", "Ed Sheeran", "=", 2021, "3:51", "W"],
 	["Earned It", "The Weeknd", "Fifty Shades of Grey (Original Motion Picture Soundtrack)", 2015, "4:37", "W"],
@@ -495,7 +496,12 @@ function buildBase() {
 		const src = merged || !/[WC]/.test(mem) ? 'spotify' : 'ytm';    // a merged track takes Spotify metadata
 		const t = { title, artists, album, year, dur: secs(length), src, ytmId: rid(r, 11), review: false,
 			status: x.st || (mem === 'K' ? 'kept' : 'downloaded'), dup: x.dup, dupAt: x.dupAt };
-		if (src === 'ytm') {
+		if (src === 'ytm' && x.unavailable) {
+			t.key = 'ytm:' + t.ytmId;
+			t.listedId = t.ytmId;
+			t.ytmId = rid(r, 11);
+			Object.assign(t, { chosen: 'matcher', conf: x.conf, review: false, doubts: [], mt: title, mc: artists.join(', '), md: secs(x.md) });
+		} else if (src === 'ytm') {
 			t.key = 'ytm:' + t.ytmId;
 			t.chosen = 'playlist';
 		} else {
@@ -805,6 +811,7 @@ function trackInspector(s, t, cfg) {
 
 	// Audio
 	const audio = [];
+	if (t.listedId) audio.push(['Listed ID', `<span class="link">${t.listedId}</span> <span class="gray">(unavailable)</span>`]);
 	if (t.noMatch) {
 		audio.push(['ID', '<span class="red">No match found</span>']);
 	} else if (!t.ytmId) {
@@ -817,7 +824,7 @@ function trackInspector(s, t, cfg) {
 		if (t.chosen === 'matcher') {
 			audio.push(['Matched', esc(t.mt)],
 				['Artists', esc(t.mc)],
-				['Length', `${mmss(t.md)} <span class="gray">(Spotify ${mmss(t.dur)})</span>`]);
+				['Length', `${mmss(t.md)} <span class="gray">(${t.listedId ? 'playlist' : 'Spotify'} ${mmss(t.dur)})</span>`]);
 		}
 		audio.push(['ID', `<span class="link">${t.ytmId}</span>`]);
 		audio.push(['Chosen by', { playlist: 'Playlist', matcher: 'Matcher', override: 'Override' }[t.chosen]]);
@@ -1122,6 +1129,16 @@ const SCREENS = [
 			'The Audio section shows what was matched.',
 			'Confirm match clears the flag (<code>confirmMatch</code>). Choose match… opens the dialog on the next screen.',
 			'The confidence bar is yellow, the color of a paused progress bar.',
+		],
+	},
+	{
+		id: 'unavailable', title: 'Unavailable playlist id', state: base,
+		cfg: { scope: 'wcs', tab: 'all', sort: '#', sel: ['Electric Feel'] },
+		cap: 'YouTube Music no longer plays the id the WCS playlist lists, so the Matcher found another upload of the same song.',
+		notes: [
+			'Listed ID is the playlist’s id, marked unavailable. The rows under it are the match, as for a Spotify track.',
+			'Length compares with the playlist’s length, since there is no Spotify source.',
+			'A match the Matcher isn’t sure of needs review, like any other match.',
 		],
 	},
 	{

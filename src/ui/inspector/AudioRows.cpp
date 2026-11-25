@@ -28,6 +28,8 @@ const wchar_t* chooser_text(AudioChooser chooser) {
 AudioRows::AudioRows(HWND card, std::function<void(const std::wstring&)> on_open_url) :
         on_open_url_(std::move(on_open_url)),
         section_(card, L"Audio"),
+        listed_key_(key_label(card, L"Listed ID")),
+        listed_(card, [this](std::size_t) { on_open_url_(listed_url_); }),
         matched_key_(key_label(card, L"Matched")),
         matched_(card, L""),
         artists_key_(key_label(card, L"Artists")),
@@ -47,18 +49,25 @@ AudioRows::AudioRows(HWND card, std::function<void(const std::wstring&)> on_open
 void AudioRows::apply_dpi(const framework::FontSet& fonts) {
     section_.set_font(fonts.semibold().handle());
     for (framework::Label* label : {
-             &matched_key_, &matched_, &artists_key_, &artists_, &length_key_, &id_key_, &no_id_, &chosen_key_, &chosen_, &confidence_key_,
-             &spotify_match_key_, &spotify_match_,
+             &listed_key_, &matched_key_, &matched_, &artists_key_, &artists_, &length_key_, &id_key_, &no_id_, &chosen_key_, &chosen_,
+             &confidence_key_, &spotify_match_key_, &spotify_match_,
          }) {
         label->set_font(fonts.regular().handle());
     }
     length_.set_font(fonts.regular().handle());
+    listed_.set_font(fonts.regular().handle());
     id_.set_font(fonts.regular().handle());
     confidence_.set_font(fonts.regular().handle());
 }
 
 void AudioRows::set_contents(const TrackDetails& track) {
     has_id_ = track.audio.has_value();
+    has_listed_ = track.listed.has_value();
+    if (has_listed_) {
+        listed_url_ = track.listed->url;
+        listed_.set_text(track.listed->id);
+        listed_.set_suffix(L" (unavailable)");
+    }
     matcher_rows_ = has_id_ && track.audio->chosen_by == AudioChooser::Matcher && track.match;
     spotify_match_row_ = has_id_ && track.audio->chosen_by == AudioChooser::Playlist && track.match && track.match->ytm_id == track.audio->id;
 
@@ -74,7 +83,7 @@ void AudioRows::set_contents(const TrackDetails& track) {
     if (track.match) {
         matched_.set_text(track.match->title);
         artists_.set_text(track.match->artists);
-        length_.set_lengths(track.match->duration, track.match->source_duration);
+        length_.set_lengths(track.match->duration, track.match->source_duration, track.match->source_name);
         confidence_.set_confidence(track.match->confidence, track.row.status == StatusTab::NeedsReview);
         spotify_match_.set_text(std::format(L"Same ID ({}%)", std::lround(track.match->confidence * PercentPerWhole)));
     }
@@ -82,6 +91,7 @@ void AudioRows::set_contents(const TrackDetails& track) {
 
 void AudioRows::arrange(CardLayout& layout) const {
     layout.section(section_.hwnd());
+    layout.row_if(has_listed_, listed_key_.hwnd(), listed_.hwnd());
     layout.row_if(matcher_rows_, matched_key_.hwnd(), matched_.hwnd());
     layout.row_if(matcher_rows_, artists_key_.hwnd(), artists_.hwnd());
     layout.row_if(matcher_rows_, length_key_.hwnd(), length_.hwnd());

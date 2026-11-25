@@ -1,21 +1,16 @@
 #include "core/sync/TracksToMatch.h"
 
-#include "core/sources/SourceType.h"
 #include "core/state/TrackYtmIds.h"
 #include "core/sync/PlaylistOrder.h"
 
 namespace westie::core {
 
 bool needs_match(const State& state, const Track& track) {
-    // The user chose an override
-    if ((track.status != TrackStatus::Pending && track.status != TrackStatus::Failed) || !track.ytm_override.empty()) {
+    if (track.status != TrackStatus::Pending && track.status != TrackStatus::Failed) {
         return false;
     }
-    // The playlist owner chose a YouTube Music source
-    if (first_source_of(track, SourceType::YouTubeMusic) != nullptr) {
-        return false;
-    }
-    const std::string* key = first_source_of(track, SourceType::Spotify);
+    // None for an override, or a YouTube Music source the playlist owner chose that YouTube Music still plays
+    const std::string* key = source_to_match(state, track);
     if (key == nullptr) {
         return false;
     }

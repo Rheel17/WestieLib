@@ -14,5 +14,6 @@ void check_search_timeout();
 void check_library();
 void check_downloads_to_queue();
 void check_file_rules();
+void check_unavailable();
 
 }

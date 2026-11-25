@@ -35,7 +35,7 @@ std::vector<ListedSong> listed_songs(const State& state, const platform::TextNor
     for (const std::string& key : listed) {
         std::optional<std::string> ytm_id = own_ytm_id(key);
         auto source = state.sources.find(key);
-        if (!ytm_id || source == state.sources.end() || !state.tracks.contains(source->second.track)) {
+        if (!ytm_id || state.unavailable_ytm_ids.contains(*ytm_id) || source == state.sources.end() || !state.tracks.contains(source->second.track)) {
             continue;
         }
         const Source& listed_source = source->second;
@@ -51,8 +51,11 @@ std::vector<ListedSong> listed_songs(const State& state, const platform::TextNor
     return songs;
 }
 
-bool has_listed_youtube_music_source(const Track& track, const std::set<std::string>& listed) {
-    return std::ranges::any_of(track.sources, [&](const std::string& key) { return own_ytm_id(key) && listed.contains(key); });
+bool has_listed_youtube_music_source(const State& state, const Track& track, const std::set<std::string>& listed) {
+    return std::ranges::any_of(track.sources, [&](const std::string& key) {
+        std::optional<std::string> ytm_id = own_ytm_id(key);
+        return ytm_id && !state.unavailable_ytm_ids.contains(*ytm_id) && listed.contains(key);
+    });
 }
 
 }
@@ -70,12 +73,12 @@ std::vector<LibraryMatch> library_matches(const State& state, const platform::Te
 
     std::vector<LibraryMatch> matches;
     for (const auto& [key, track] : state.tracks) {
-        bool chosen = !track.ytm_override.empty() || has_listed_youtube_music_source(track, listed);
+        bool chosen = !track.ytm_override.empty() || has_listed_youtube_music_source(state, track, listed);
         if (track.status == TrackStatus::Orphaned || track.status == TrackStatus::Kept || chosen) {
             continue;
         }
-        const std::string* spotify = first_source_of(track, SourceType::Spotify);
-        auto source = spotify == nullptr ? state.sources.end() : state.sources.find(*spotify);
+        const std::string* wanted_key = match_source_of(state, track);
+        auto source = wanted_key == nullptr ? state.sources.end() : state.sources.find(*wanted_key);
         if (source == state.sources.end()) {
             continue;
         }

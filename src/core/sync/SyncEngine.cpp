@@ -252,6 +252,14 @@ void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::s
                     // Under the lock, so the run can't miss it between looking and waiting
                     { std::scoped_lock lock(mutex_); }
                     wake_.notify_all();
+                },
+                // Joins the run's queues as a retried track does, so it is matched again
+                [this](const std::string& track) {
+                    {
+                        std::scoped_lock lock(mutex_);
+                        retried_.push_back(track);
+                    }
+                    wake_.notify_all();
                 }
         );
     }
@@ -431,13 +439,13 @@ void SyncEngine::match(QueuedMatch queued, MatchQueue& queue, const std::stop_to
         return;
     }
     events_.emit(TrackMatching{.track = queued.track});
-    const Source& source = state->sources.at(*first_source_of(found->second, SourceType::Spotify));
+    const Source& source = state->sources.at(*source_to_match(*state, found->second));
     LogSubject subject = track_subject(*state, queued.track);
     int tries = queued.tries + 1;
 
     // An exception that leaves a thread ends the process, so it becomes the track's failure instead
     try {
-        std::expected<Match, std::string> matched = matcher_.match(source, track_ytm_ids(*state), subject, stop);
+        std::expected<Match, std::string> matched = matcher_.match(source, track_ytm_ids(*state), state->unavailable_ytm_ids, subject, stop);
         if (!matched) {
             fail_match(queued.track, TrackFailure::NoMatch, std::move(matched.error()), tries);
             return;

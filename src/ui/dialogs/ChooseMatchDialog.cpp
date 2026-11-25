@@ -10,6 +10,7 @@
 #include "ResourceIds.h"
 #include "core/matching/YouTubeMusicLink.h"
 #include "core/sources/SourcePage.h"
+#include "core/sources/SourceType.h"
 #include "platform/win32/ShellOpen.h"
 #include "platform/win32/Utf16.h"
 #include "platform/win32/Win32Error.h"
@@ -122,7 +123,8 @@ void ChooseMatchDialog::on_init_dialog() {
             play_result(candidates_[row].ytm_id);
         }
     });
-    source_play_.emplace(platform::win32::check(GetDlgItem(hwnd(), IDC_PLAY_SOURCE), "GetDlgItem"), L"Play on Spotify");
+    bool spotify = core::source_type_of_key(choice_.source) == core::SourceType::Spotify;
+    source_play_.emplace(platform::win32::check(GetDlgItem(hwnd(), IDC_PLAY_SOURCE), "GetDlgItem"), spotify ? L"Play on Spotify" : L"Play on YouTube Music");
     link_play_.emplace(platform::win32::check(GetDlgItem(hwnd(), IDC_PLAY_LINK), "GetDlgItem"), L"Play on YouTube Music");
     sizing_.emplace(hwnd(), Anchors);
     sizing_->resize(window_dips_);

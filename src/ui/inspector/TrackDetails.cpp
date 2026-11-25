@@ -63,6 +63,7 @@ std::optional<TrackMatch> match_of(const core::State& state, const platform::Tex
         .artists = artists_text(match.artists),
         .duration = match.duration,
         .source_duration = source->second.duration,
+        .source_name = core::source_type_of_key(*key) == core::SourceType::Spotify ? L"Spotify" : L"playlist",
         .confidence = match.confidence,
         .doubts = match.doubts,
         .explicit_content = match.explicit_content,
@@ -84,13 +85,18 @@ void show_entry_audio(
 ) {
     // How the entry itself got its YouTube Music id, so a duplicate shows what the Matcher did with it
     const std::string* first_spotify = core::first_source_of(track, core::SourceType::Spotify);
+    std::optional<std::string> own = core::own_ytm_id(entry);
+    bool unavailable = own && state.unavailable_ytm_ids.contains(*own);
+    if (unavailable) {
+        details.listed = audio(*own, AudioChooser::Playlist);
+    }
     // The user's choice is every entry's
     if (!track.ytm_override.empty()) {
         details.audio = audio(track.ytm_override, AudioChooser::Override);
-        details.match = match_of(state, normalizer, core::source_type_of_key(entry) == core::SourceType::Spotify ? &entry : first_spotify);
+        details.match = match_of(state, normalizer, core::is_matched_entry(state, entry) ? &entry : first_spotify);
         return;
     }
-    if (std::optional<std::string> own = core::own_ytm_id(entry)) {
+    if (own && !unavailable) {
         details.audio = audio(*own, AudioChooser::Playlist);
         details.match = match_of(state, normalizer, first_spotify);
         return;
@@ -100,11 +106,11 @@ void show_entry_audio(
         details.match = match_of(state, normalizer, &entry);
         return;
     }
-    if (std::optional<core::ResolvedYtmId> resolved = core::resolved_ytm_id(state, track)) {
-        bool chosen_by_playlist = core::source_type_of_key(resolved->source) == core::SourceType::YouTubeMusic;
-        details.audio = audio(resolved->ytm_id, chosen_by_playlist ? AudioChooser::Playlist : AudioChooser::Matcher);
+    std::optional<core::ResolvedYtmId> resolved = core::resolved_ytm_id(state, track);
+    if (resolved) {
+        details.audio = audio(resolved->ytm_id, resolved->matched ? AudioChooser::Matcher : AudioChooser::Playlist);
     }
-    details.match = match_of(state, normalizer, first_spotify);
+    details.match = match_of(state, normalizer, resolved && resolved->matched ? &resolved->source : first_spotify);
 }
 
 std::wstring last_lines(std::string_view text) {

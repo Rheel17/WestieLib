@@ -22,6 +22,8 @@ public:
     void set_font(HFONT font);
     void set_text(std::wstring text);
     void set_links(std::vector<std::wstring> links);
+    // Gray text after the last link, which isn't one
+    void set_suffix(std::wstring suffix);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -41,9 +43,11 @@ private:
     bool on_set_cursor() const;
     void on_left_button_up(LPARAM lparam);
     void paint() const;
+    void show_text();
 
     std::function<void(std::size_t)> on_click_;
     std::vector<std::wstring> links_;
+    std::wstring suffix_;
     HFONT font_ = nullptr;
     platform::win32::UniqueFont underlined_;
     ItemTracker mouse_;

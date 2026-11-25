@@ -38,7 +38,8 @@ std::vector<MatchCandidate> match_candidates(
     std::set<std::string> seen;
     // A YouTube Music id that comes again keeps its first row
     auto add = [&](MatchCandidate candidate, std::optional<bool> explicit_content, bool unless_rejected) {
-        if (seen.contains(candidate.ytm_id)) {
+        // YouTube Music no longer plays an unavailable id, so choosing it would only fail the download
+        if (seen.contains(candidate.ytm_id) || state.unavailable_ytm_ids.contains(candidate.ytm_id)) {
             return;
         }
         MatchJudgement judgement = judge_match(

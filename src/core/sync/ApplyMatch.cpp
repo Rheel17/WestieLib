@@ -2,7 +2,6 @@
 
 #include <utility>
 
-#include "core/sources/SourceType.h"
 #include "core/state/MatchReview.h"
 #include "core/state/MergeTracks.h"
 #include "core/state/TrackYtmIds.h"
@@ -15,7 +14,7 @@ std::optional<std::string> apply_match(State& state, const std::string& track_ke
     if (track == state.tracks.end() || !track->second.ytm_override.empty()) {
         return std::nullopt;
     }
-    const std::string* source = first_source_of(track->second, SourceType::Spotify);
+    const std::string* source = match_source_of(state, track->second);
     if (source == nullptr || !state.sources.contains(*source)) {
         return std::nullopt;
     }

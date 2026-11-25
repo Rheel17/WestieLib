@@ -37,8 +37,9 @@ struct TrackMatch {
     std::wstring title{};
     std::wstring artists{};
     std::chrono::milliseconds duration{};
-    // The Spotify source's, which the result's is held against
+    // The matched source's, which the result's is held against, and what it is: `Spotify` or `playlist`
     std::chrono::milliseconds source_duration{};
+    std::wstring source_name{};
     double confidence = 0.0;
     std::vector<core::MatchDoubt> doubts{};
     std::optional<bool> explicit_content{};
@@ -55,7 +56,9 @@ struct TrackDetails {
     std::vector<TrackPlaylist> playlists{};
     // How the entry got it
     std::optional<TrackAudio> audio{};
-    // The entry's own match, or for a YouTube Music entry its track's first Spotify source's
+    // A YouTube Music entry's own id, when YouTube Music no longer plays it
+    std::optional<TrackAudio> listed{};
+    // The entry's own match, or for a YouTube Music entry the match its track's id comes from
     std::optional<TrackMatch> match{};
     core::TrackFailure failure = core::TrackFailure::None;
     // Its last lines

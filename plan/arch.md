@@ -196,7 +196,8 @@ The state separates what playlists list from what is on disk:
       "error": "Searched ISRC QZxxx2400000: no results\nSearched \"Artist Title\": no usable results",
       "addedAt": "2026-10-11T14:05:00Z"
     }
-  }
+  },
+  "unavailableYtmIds": [ "eeeeeeeeeee" ]
 }
 ```
 
@@ -221,7 +222,7 @@ picked the same YouTube Music id (`ccccccccccc`) that WCS lists, so the two sour
 | `album`, `year`                  | Spotify: the album from the playlist response; its answer has no year. YouTube Music: from the info JSON (`album`, `release_year`), once the source has been downloaded |
 | `explicit`                       | Spotify only: whether the track is explicit (`contentRating.label` `EXPLICIT`); left out when unknown |
 | `isrc`, `coverUrl`               | Spotify only. The playlist response has the cover but no ISRC; where the ISRC comes from is decided with the Matcher |
-| `match`                          | Spotify only: the Matcher's result, with `ytmId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), `doubts` (why it needs review: `title`, `artist`, `version`, `length`, `explicit`; left out when there are none), and the result's `title`, `artists`, `album`, `durationMs` and `explicit` as YouTube Music lists them, so a review shows what was matched |
+| `match`                          | Spotify, and a YouTube Music source whose own id is unavailable (see Unavailable ids): the Matcher's result, with `ytmId`, `confidence` (0 to 1), `confirmed` (left out unless the user confirmed the match), `doubts` (why it needs review: `title`, `artist`, `version`, `length`, `explicit`; left out when there are none), and the result's `title`, `artists`, `album`, `durationMs` and `explicit` as YouTube Music lists them, so a review shows what was matched |
 | `track`                          | Key of the track this source belongs to                                    |
 
 **Track fields.**
@@ -249,8 +250,34 @@ picked the same YouTube Music id (`ccccccccccc`) that WCS lists, so the two sour
 
 **YouTube Music id resolution.** A track's YouTube Music id is the first of:
 1. its `ytmOverride`;
-2. the id of its first YouTube Music source, because the playlist owner chose it;
-3. the Matcher's result for its first Spotify source.
+2. the id of its first YouTube Music source whose id isn't unavailable, because the playlist owner chose it;
+3. the Matcher's result for its first Spotify source;
+4. the Matcher's result for its first YouTube Music source (see Unavailable ids).
+
+A match whose id is unavailable doesn't count: the track is matched again.
+
+**Unavailable ids.** YouTube Music keeps listing ids that it no longer plays here: a release that a label delivered
+again under new ids, whose old uploads went unlisted, or one blocked in this country. A playlist keeps such an id,
+and the search can still return one. yt-dlp then fails with `Video unavailable. This video is not available`
+whatever client it uses, and signing in doesn't change that. `unavailableYtmIds` (a sorted set) lists the ids a
+download found unavailable:
+- A download fails as unavailable (`is_unavailable_error`, `src/core/download/UnavailableError`) when an `ERROR:`
+  line says `Video unavailable`, `This video is not available`, `not made this video available in your country`,
+  `This video has been removed`, or `only available to Music Premium members`. The app doesn't sign in, so Premium is
+  unavailable too. An age check (`Sign in to confirm your age`), a bot check, or a network error isn't: those are
+  ordinary download failures.
+- Unless the id is the track's override (the user's choice, which fails as an ordinary download), it joins
+  `unavailableYtmIds`; a match that gave it is removed from its source; and the track goes back to
+  `pending` without a failure, so the run matches it (SyncEngine › So far). Its sources' facts don't change, so the
+  match searches with its first Spotify source's, or, with none, its first YouTube Music source's title, artists
+  and length. That source has no album and no explicit flag, so only a Same name, Same artists, the same version and a
+  Same or Close length make an Accept; anything less is a review, never a guess.
+- The Matcher leaves unavailable ids out of every candidate list: the search's, the library's (The library first) and
+  the Choose a match dialog's. A YouTube Music source whose id is unavailable isn't a candidate for the library either.
+- The set only grows. An id that becomes available again stays out until the user deletes it from the state; that
+  costs a review or a second upload, never a failed download on every sync.
+- The track keeps its key and sources, so its playlists still list it. Its file is made from the match's id; when
+  another track already has that id, the two merge as for any match.
 
 `resolved_ytm_id` (`src/core/state/TrackYtmIds`) gives the id, the source it comes from (for an override, the
 track's first source), and whether it is the override.
@@ -396,7 +423,8 @@ goes to `state.json.tmp` and replaces `state.json` with `ReplaceFileW`, which ke
   the new state in only after the save.
 - So far the state has playlists with `url`, `name`, `addedAt`, `sources`, `lastSync`, `fetchError` and
   `fetchErrorAt`; sources with `title`, `artists`, `album`, `year`, `durationMs`, `explicit`, `coverUrl`, `match` and
-  `track`; and tracks with `sources`, `ytmId`, `ytmOverride`, `status`, `failure`, `error`, `file` and `addedAt`. Empty
+  `track`; tracks with `sources`, `ytmId`, `ytmOverride`, `status`, `failure`, `error`, `file` and `addedAt`; and
+  `unavailableYtmIds`. Empty
   fields are left out, and a failure or doubt name from a later version reads as none. `isrc` and `edits` arrive with
   their features.
 - Earlier versions wrote `ytmId` and `ytmOverride` as `videoId` and `videoOverride`. Those keys still read, and the
@@ -452,6 +480,7 @@ every component that logs.
   | `Needs review: "Weekend Luv" by Quinn Lewis (75%), doubts: explicit` | Warning |
   | `No match found` | Error |
   | `Couldn't search YouTube Music: HTTP 403 from music.youtube.com (tried 4 times)`; `(tried …)` only after retries | Error |
+  | `YouTube Music doesn't play 1YKAZmwRGj8 here (Video unavailable. This video is not available), so the track is matched again`, from a download (Unavailable ids) | Warning |
 
   A match from the library writes only its outcome line, with ` from the library` after the match.
 - When the file can't be opened or written, the lines still reach the UI, and the first such failure is an Error line
@@ -675,7 +704,9 @@ never refreshed.
 ### Matcher
 
 The Matcher turns a Spotify source into a YouTube Music `ytmId`. It runs only for tracks that have no
-override and no YouTube Music source (see YouTube Music id resolution).
+override and no YouTube Music source whose id is available (see YouTube Music id resolution). For a track whose YouTube
+Music sources are all unavailable and that has no Spotify source, it matches the first YouTube Music source the same way
+(see Unavailable ids).
 
 A wrong match puts another recording in the library, which is worse than asking the user to confirm a right one. So
 the Matcher:
@@ -1043,8 +1074,9 @@ downloads. Its changes to tracks go through `Library`, so files follow merges an
   it (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
 - Once no playlist is left to fetch, the run first merges what the library matches (Matcher › The library first), in
   one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match`
-  (`TracksToMatch.cpp`) lists the tracks that are `pending` or `failed`, have no override and no YouTube Music source,
-  and whose first Spotify source has no match, in playlist order (playlists by `addedAt`, then their sources), each
+  (`TracksToMatch.cpp`) lists the tracks that are `pending` or `failed`, have no override and no YouTube Music source
+  whose id is available, and whose source to match (its first Spotify source, else its first YouTube Music source; see
+  Unavailable ids) has no match, in playlist order (playlists by `addedAt`, then their sources), each
   once, each with the playlists that list it. The run emits `TracksQueued` with the ones it hasn't queued yet, and
   matches them one at a time, saving after each. It emits `TrackMatching` as it starts each try, so the UI knows whose
   playlists are matching right now:
@@ -1082,6 +1114,11 @@ downloads. Its changes to tracks go through `Library`, so files follow merges an
     "<file>"`.
   - A failed download, tag or placement stores `failed` with `download` and the error, logs `Couldn't download:
     <error>`, and emits `TrackStatusChanged`; the next sync tries again.
+  - A download that fails as unavailable (Unavailable ids) instead adds the id to `unavailableYtmIds`, removes the
+    match that gave it, and leaves the track `pending` without a failure, in one save (`apply_unavailable`,
+    `ApplyDownload.cpp`). It logs the Warning line (Logging) and emits `TrackStatusChanged`, and the track joins the
+    run's match queue as a playlist's new tracks do. An override's id is the user's choice, so an unavailable override
+    fails as an ordinary download, and its id doesn't join the set.
   - A missing tool stops the pool from starting tracks: the one that found it missing goes back to the front of the
     queue, the run emits `DownloadsWaiting` with the tools, and the log gets a Warning `Waiting for ffmpeg to install`.
     Nothing is written to the state. When `ToolFolder` reports the install, `DownloadsWaiting` without tools follows, and

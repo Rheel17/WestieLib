@@ -192,7 +192,7 @@ $Downloads = @(
 )
 $DownloadedLines = @($Downloads | ForEach-Object { "T INFO    Downloaded as `"$($_.File)`" [$($_.Title); track $($_.Track)]" }) -join ' / '
 function Get-DownloadedRows([int[]]$which) { @($which | ForEach-Object { "T | Info | $($Downloads[$_].Title) | Downloaded as `"$($Downloads[$_].File)`"" }) -join ' / ' }
-$DownloadError = 'ERROR: [youtube] trackDDDDD6: Video unavailable'
+$DownloadError = 'ERROR: [youtube] trackDDDDD6: Requested format is not available'
 $DownloadErrorRow = "T | Error | Only Here | Couldn't download: $DownloadError"
 
 # The Spotify playlist: two tracks, one by a single artist with a comma in its name, an episode and a local file (both
@@ -344,8 +344,9 @@ if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-tra
 $card = Get-InspectorCard $h
 $cover =[W]::RectIn(([W]::Children($card, 'WestieLib.CoverArt'))[0], $card)
 Check '  cover: 144 square, centered' "$($cover.Right - $cover.Left)x$($cover.Bottom - $cover.Top) $($cover.Left - ((Get-ClientWidth $card) - $cover.Right))" "$(S 144)x$(S 144) 0"
-# Only the card's own link: the source rows' links open a browser
-$playlistLinks = @(Get-DirectChildren $card 'WestieLib.LinkLabel')[0]
+# Only the card's own link: the source rows' links open a browser. By its text, as the Audio rows' links are direct
+# children too, and the hidden Listed ID one has none
+$playlistLinks = @(Get-DirectChildren $card 'WestieLib.LinkLabel' | Where-Object { [W]::TextOf($_) -eq $SpotifyName })[0]
 if ([W]::TextOf($playlistLinks) -eq $SpotifyName) { Send-Click $playlistLinks 2 (S 8) }
 Check '  its playlist link: the playlist selected | card' "$(Get-Selection $h 4) | $([W]::TextOf((Get-InspectorCard $h)))" 'row 2 | Playlist card'
 Check '  no track selected' "[$(Get-SelectedRows $h)]" '[]'

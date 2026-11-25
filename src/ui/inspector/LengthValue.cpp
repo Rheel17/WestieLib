@@ -23,9 +23,9 @@ void LengthValue::set_font(HFONT font) {
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
-void LengthValue::set_lengths(std::chrono::milliseconds result, std::chrono::milliseconds source) {
+void LengthValue::set_lengths(std::chrono::milliseconds result, std::chrono::milliseconds source, std::wstring_view source_name) {
     result_ = duration_text(result);
-    source_ = std::format(L" (Spotify {})", duration_text(source));
+    source_ = std::format(L" ({} {})", source_name, duration_text(source));
     platform::win32::check(SetWindowTextW(hwnd(), (result_ + source_).c_str()), "SetWindowTextW");
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }

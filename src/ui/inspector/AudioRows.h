@@ -28,6 +28,8 @@ public:
 private:
     std::function<void(const std::wstring&)> on_open_url_;
     SectionTitle section_;
+    framework::Label listed_key_;
+    framework::LinkLabel listed_;
     framework::Label matched_key_;
     framework::Label matched_;
     framework::Label artists_key_;
@@ -44,7 +46,9 @@ private:
     framework::Label spotify_match_key_;
     framework::Label spotify_match_;
     std::wstring id_url_;
+    std::wstring listed_url_;
     bool has_id_ = false;
+    bool has_listed_ = false;
     bool matcher_rows_ = false;
     bool spotify_match_row_ = false;
 };

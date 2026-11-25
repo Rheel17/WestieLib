@@ -14,7 +14,7 @@ bool CommandState::enabled(CommandId command) const {
     case CommandId::CancelUpdate:           return syncing;
     case CommandId::CheckForUpdates:        return !tools_busy && !syncing;
     case CommandId::ConfirmMatch:           return review_selected;
-    case CommandId::ChooseMatch:            return spotify_entry_selected;
+    case CommandId::ChooseMatch:            return matched_entry_selected;
     // During an update too: the tracks join its queues
     case CommandId::Retry:                  return failed_selected;
     case CommandId::ShowInFolder:           return file_selected;

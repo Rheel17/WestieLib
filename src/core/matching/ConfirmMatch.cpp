@@ -4,7 +4,6 @@
 
 #include "core/log/LogLevel.h"
 #include "core/log/LogSubject.h"
-#include "core/sources/SourceType.h"
 #include "core/state/MergeTracks.h"
 #include "core/state/TrackYtmIds.h"
 
@@ -16,7 +15,7 @@ std::optional<std::string> confirm_match(State& state, const std::string& track_
         return std::nullopt;
     }
     std::optional<ResolvedYtmId> resolved = resolved_ytm_id(state, track->second);
-    if (!resolved || resolved->overridden || source_type_of_key(resolved->source) != SourceType::Spotify) {
+    if (!resolved || !resolved->matched) {
         return std::nullopt;
     }
     std::optional<Match>& match = state.sources.at(resolved->source).match;

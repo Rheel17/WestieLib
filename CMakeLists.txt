@@ -54,6 +54,7 @@ set(TAGLIB_INCLUDE_DIRS
 # they use, which the unit checks build as well
 set(MATCHING_SOURCES
 	src/core/download/DownloadProgress.cpp
+	src/core/download/UnavailableError.cpp
 	src/core/library/ApplyRemovals.cpp
 	src/core/library/FileChanges.cpp
 	src/core/library/LibraryFileName.cpp
@@ -76,8 +77,10 @@ set(MATCHING_SOURCES
 	src/core/state/MergeTracks.cpp
 	src/core/state/PruneTracks.cpp
 	src/core/state/TrackYtmIds.cpp
+	src/core/sync/ApplyDownload.cpp
 	src/core/sync/PlaylistOrder.cpp
 	src/core/sync/TracksToDownload.cpp
+	src/core/sync/TracksToMatch.cpp
 	src/platform/win32/Utf16.cpp
 	src/platform/win32/Win32Error.cpp
 	src/platform/win32/Win32TextNormalizer.cpp
@@ -124,13 +127,11 @@ add_executable(WestieLib WIN32
 	src/core/state/ListedSources.cpp
 	src/core/state/SplitSource.cpp
 	src/core/state/StateStore.cpp
-	src/core/sync/ApplyDownload.cpp
 	src/core/sync/ApplyFetch.cpp
 	src/core/sync/ApplyMatch.cpp
 	src/core/sync/DownloadPool.cpp
 	src/core/sync/SyncEngine.cpp
 	src/core/sync/TrackDownload.cpp
-	src/core/sync/TracksToMatch.cpp
 	src/core/tagging/Tagger.cpp
 	src/core/tools/Ffmpeg.cpp
 	src/core/tools/ToolFolder.cpp
@@ -332,6 +333,7 @@ add_executable(WestieLibTests
 	tests/unit/RunPhaseChecks.cpp
 	tests/unit/SearchTimeoutChecks.cpp
 	tests/unit/TitlePartsChecks.cpp
+	tests/unit/UnavailableChecks.cpp
 	${MATCHING_SOURCES}
 	# The update's phases, as the playlist rows show them
 	src/core/tools/ToolPackage.cpp

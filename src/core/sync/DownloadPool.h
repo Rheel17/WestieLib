@@ -39,7 +39,10 @@ struct DownloadServices {
 
 class DownloadPool {
 public:
-    DownloadPool(DownloadServices services, std::filesystem::path work_folder, std::stop_token stop, std::function<void()> on_idle);
+    DownloadPool(
+            DownloadServices services, std::filesystem::path work_folder, std::stop_token stop, std::function<void()> on_idle,
+            std::function<void(const std::string& track)> on_unavailable
+    );
     ~DownloadPool();
 
     DownloadPool(const DownloadPool&) = delete;
@@ -63,6 +66,7 @@ private:
     void download(const Taken& taken);
     void place(const Taken& taken, const std::filesystem::path& work);
     void fail(const std::string& track, const std::string& error);
+    bool set_unavailable(const Taken& taken, const std::string& error);
     void wait_for_tools(const Taken& taken, const std::vector<ToolPackage>& missing, const InstallCounts& seen);
     std::vector<ToolPackage> missing_tools() const;
     InstallCounts install_counts();
@@ -75,6 +79,8 @@ private:
     std::filesystem::path work_folder_;
     std::stop_token stop_;
     std::function<void()> on_idle_;
+    // A track whose id YouTube Music no longer plays goes back to be matched
+    std::function<void(const std::string& track)> on_unavailable_;
     std::chrono::seconds delay_;
     std::mutex mutex_;
     std::condition_variable_any wake_;

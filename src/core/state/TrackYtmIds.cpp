@@ -23,23 +23,55 @@ std::optional<std::string> own_ytm_id(std::string_view source_key) {
     return std::string(source_key.substr(source_prefix(SourceType::YouTubeMusic).size() + 1));
 }
 
+const std::string* available_ytm_source_of(const State& state, const Track& track) {
+    auto found = std::ranges::find_if(track.sources, [&](const std::string& key) {
+        std::optional<std::string> ytm_id = own_ytm_id(key);
+        return ytm_id && !state.unavailable_ytm_ids.contains(*ytm_id);
+    });
+    return found == track.sources.end() ? nullptr : &*found;
+}
+
+const std::string* match_source_of(const State& state, const Track& track) {
+    // Spotify's facts tell more than a playlist entry's, which has no album and no explicit flag
+    if (const std::string* key = first_source_of(track, SourceType::Spotify)) {
+        return key;
+    }
+    return available_ytm_source_of(state, track) == nullptr ? first_source_of(track, SourceType::YouTubeMusic) : nullptr;
+}
+
+const std::string* source_to_match(const State& state, const Track& track) {
+    if (!track.ytm_override.empty() || available_ytm_source_of(state, track) != nullptr) {
+        return nullptr;
+    }
+    return match_source_of(state, track);
+}
+
+bool is_matched_entry(const State& state, std::string_view source_key) {
+    if (source_type_of_key(source_key) == SourceType::Spotify) {
+        return true;
+    }
+    std::optional<std::string> ytm_id = own_ytm_id(source_key);
+    return ytm_id && state.unavailable_ytm_ids.contains(*ytm_id);
+}
+
 std::optional<ResolvedYtmId> resolved_ytm_id(const State& state, const Track& track) {
     if (!track.ytm_override.empty()) {
         return ResolvedYtmId{.ytm_id = track.ytm_override, .source = track.sources.empty() ? "" : track.sources.front(), .overridden = true};
     }
     // The playlist owner chose a YouTube Music source
-    if (const std::string* key = first_source_of(track, SourceType::YouTubeMusic)) {
+    if (const std::string* key = available_ytm_source_of(state, track)) {
         return ResolvedYtmId{.ytm_id = own_ytm_id(*key).value_or(""), .source = *key};
     }
-    const std::string* key = first_source_of(track, SourceType::Spotify);
+    const std::string* key = source_to_match(state, track);
     if (key == nullptr) {
         return std::nullopt;
     }
     auto source = state.sources.find(*key);
-    if (source == state.sources.end() || !source->second.match) {
+    // A match to an id YouTube Music no longer plays is matched again
+    if (source == state.sources.end() || !source->second.match || state.unavailable_ytm_ids.contains(source->second.match->ytm_id)) {
         return std::nullopt;
     }
-    return ResolvedYtmId{.ytm_id = source->second.match->ytm_id, .source = *key};
+    return ResolvedYtmId{.ytm_id = source->second.match->ytm_id, .source = *key, .matched = true};
 }
 
 std::optional<std::string> track_with_ytm_id(const State& state, std::string_view ytm_id, std::string_view except) {

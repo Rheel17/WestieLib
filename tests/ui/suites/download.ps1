@@ -276,3 +276,33 @@ Check '  Delete: the track and its source gone, and the file' (
 	'False False | Band - Good One.opus')
 Check '  log' ((Get-LogText) -match 'INFO    Deleted "Cee - Gone Soon\.opus" \[Gone Soon; track spotify:spGoneSoon00000000001\]') 'True'
 Stop-App $app
+
+"--- Run 6: an id YouTube Music no longer plays"
+$Web.YtmResults['Ghost Dead Song'] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Song('deadSONG001', 'Dead Song', @('Ghost'), 'Old Release', '3:20'),
+	[FakeWeb]::Song('liveSONG001', 'Dead Song', @('Ghost'), 'New Release', '3:20')
+)
+Write-DownloadPlaylists 'ytm:PLdead1'
+$downloads = @(Get-DownloadRuns).Count
+$app = Start-App
+$h = $app.Hwnd
+Invoke-UpdateAll $h
+$saved = Get-SavedState
+Check 'Update all: the listed id fails, the song found under another, in one update' (
+	"$(@(Get-DownloadRuns | Select-Object -Skip $downloads) -join ' ') | $(Get-SavedDownloads)") (
+	'deadSONG001 liveSONG001 | deadSONG001 downloaded [Ghost - Dead Song.opus] liveSONG001')
+Check '  state.json: the id unavailable, the match on the YouTube Music source, the search''s copy of it passed over' (
+	"$($saved.unavailableYtmIds -join ' ') | $($saved.sources.'ytm:deadSONG001'.match.ytmId) $($saved.sources.'ytm:deadSONG001'.match.confidence)") 'deadSONG001 | liveSONG001 1'
+Check '  log' ((Get-LogText) -match ('WARNING YouTube Music doesn''t play deadSONG001 here \(Video unavailable\. This video is not available\), so the track is ' +
+	'matched again \[Dead Song; track ytm:deadSONG001\]')) 'True'
+Select-TrackRow $h 0
+$card = Wait-TrackCard $h 'ytm:deadSONG001'
+Check 'Its card: the listed id, then the match' ($card -replace '^.* / Audio / ', 'Audio / ' -replace ' / File / .*$', '') (
+	'Audio / Listed ID / deadSONG001 (unavailable) / Matched / Dead Song / Artists / Ghost / Length / 3:20 (playlist 3:20) / ID / liveSONG001 / ' +
+	'Chosen by / Matcher / Confidence / 100%')
+if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-unavailable.png") }
+
+$downloads = @(Get-DownloadRuns).Count
+Invoke-UpdateAll $h
+Check 'Update all again: nothing to download' (@(Get-DownloadRuns | Select-Object -Skip $downloads).Count) 0
+Stop-App $app

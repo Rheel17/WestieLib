@@ -9,6 +9,7 @@
 
 #include "platform/win32/Win32Error.h"
 #include "ui/framework/BufferedPaint.h"
+#include "ui/framework/TextColor.h"
 #include "ui/framework/WindowClass.h"
 
 namespace westie::ui::framework {
@@ -51,15 +52,29 @@ void LinkLabel::set_links(std::vector<std::wstring> links) {
     if (links == links_) {
         return;
     }
+    links_ = std::move(links);
+    show_text();
+}
+
+void LinkLabel::set_suffix(std::wstring suffix) {
+    if (suffix == suffix_) {
+        return;
+    }
+    suffix_ = std::move(suffix);
+    show_text();
+}
+
+// The window text is for screen readers and the UI checks
+void LinkLabel::show_text() {
     std::wstring text;
-    for (const std::wstring& link : links) {
+    for (const std::wstring& link : links_) {
         if (!text.empty()) {
             text += Separator;
         }
         text += link;
     }
+    text += suffix_;
     platform::win32::check(SetWindowTextW(hwnd(), text.c_str()), "SetWindowTextW");
-    links_ = std::move(links);
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 
@@ -161,6 +176,12 @@ void LinkLabel::paint() const {
             RECT separator{found[index].right, client.top, found[index + 1].left, client.bottom};
             DrawTextW(paint.dc(), Separator.data(), static_cast<int>(Separator.size()), &separator, LineFormat);
         }
+    }
+    if (!suffix_.empty() && found.size() == links_.size()) {
+        SelectObject(paint.dc(), font_);
+        SetTextColor(paint.dc(), text_color(TextColor::Gray));
+        RECT suffix{found.empty() ? client.left : found.back().right, client.top, client.right, client.bottom};
+        DrawTextW(paint.dc(), suffix_.c_str(), static_cast<int>(suffix_.size()), &suffix, LineFormat);
     }
 }
 

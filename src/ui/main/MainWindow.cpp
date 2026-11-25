@@ -15,9 +15,9 @@
 #include "core/library/ResolveRemovals.h"
 #include "core/matching/ConfirmMatch.h"
 #include "core/matching/YtmOverride.h"
-#include "core/sources/SourceType.h"
 #include "core/playlists/AddPlaylist.h"
 #include "core/playlists/RemovePlaylist.h"
+#include "core/state/TrackYtmIds.h"
 #include "platform/NearestExistingFolder.h"
 #include "platform/win32/Clipboard.h"
 #include "platform/win32/ShellOpen.h"
@@ -448,7 +448,7 @@ CommandState MainWindow::command_state() const {
         .has_playlists = has_playlists(),
         .playlist_selected = selected_playlist_.has_value(),
         .review_selected = selected.size() == 1 && selected.front().status == StatusTab::NeedsReview,
-        .spotify_entry_selected = selected.size() == 1 && selected.front().source == core::SourceType::Spotify,
+        .matched_entry_selected = selected.size() == 1 && core::is_matched_entry(*library_.snapshot(), selected.front().key),
         .failed_selected = std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Failed; }),
         .removed_selected = std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Removed; }),
         .deletable_selected =

@@ -7,6 +7,7 @@
 #include <format>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -109,6 +110,7 @@ struct StateJson {
     std::map<std::string, PlaylistJson> playlists{};
     std::map<std::string, SourceJson> sources{};
     std::map<std::string, TrackJson> tracks{};
+    std::optional<std::set<std::string>> unavailable_ytm_ids{};
 };
 
 std::filesystem::path backup_for(const std::filesystem::path& file) {
@@ -267,7 +269,9 @@ struct glz::meta<westie::core::TrackJson> {
 template<>
 struct glz::meta<westie::core::StateJson> {
     using T = westie::core::StateJson;
-    constexpr static auto value = glz::object("version", &T::version, "playlists", &T::playlists, "sources", &T::sources, "tracks", &T::tracks);
+    constexpr static auto value = glz::object(
+            "version", &T::version, "playlists", &T::playlists, "sources", &T::sources, "tracks", &T::tracks, "unavailableYtmIds", &T::unavailable_ytm_ids
+    );
 };
 
 namespace westie::core {
@@ -325,6 +329,7 @@ State StateStore::load() const {
             .added_at = parse_iso_time(track.added_at).value_or(std::chrono::system_clock::time_point{}),
         };
     }
+    state.unavailable_ytm_ids = std::move(json.unavailable_ytm_ids).value_or(std::set<std::string>());
     return state;
 }
 
@@ -357,6 +362,9 @@ void StateStore::save(const State& state) {
             .file = track.file.empty() ? std::nullopt : std::optional(to_utf8(track.file)),
             .added_at = format_iso_time(track.added_at),
         };
+    }
+    if (!state.unavailable_ytm_ids.empty()) {
+        json.unavailable_ytm_ids = state.unavailable_ytm_ids;
     }
 
     glz::expected<std::string, glz::error_ctx> contents = glz::write<PrettyJsonWriteOptions>(json);
