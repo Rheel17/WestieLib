@@ -2,8 +2,8 @@
 // fetch gets the entries too: songs for ids starting with PLtracks and PLshared (which share one id), none for any
 // other id. Ids starting with PLmissing and PLprivate get YouTube's errors, PLbroken a network error, and PLslow its
 // answer 1.5 s late (a fetch 3 s late). A download (-x) prints progress and writes the audio, the info JSON and the
-// thumbnail from the fixtures in fake-fixtures beside it; ids starting with bad, and those fail-ids.txt beside it
-// lists, fail, and one with a hold-<id> file
+// thumbnail from the fixtures in fake-fixtures beside it; ids starting with bad (whose error is in Windows-1252, as the
+// real one writes it), and those fail-ids.txt beside it lists, fail, and one with a hold-<id> file
 // beside it stays at 50% while the file is there. Each run adds its arguments, joined with |, to yt-dlp-runs.txt
 // beside it.
 
@@ -70,6 +70,11 @@ public static class FakeYtDlp {
 		string id = url.Substring(url.IndexOf("v=") + 2);
 		string failing = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "fail-ids.txt");
 		if (id.StartsWith("bad") || (File.Exists(failing) && Array.IndexOf(File.ReadAllLines(failing), id) >= 0)) {
+			// yt-dlp.exe writes such a line in the ANSI code page, whatever PYTHONIOENCODING says
+			if (id.StartsWith("bad")) {
+				Write(Console.OpenStandardError(), "ERROR: [youtube] " + id + ": Sign in to confirm you" + (char)0x2019 + "re not a bot\n", Encoding.GetEncoding(1252));
+				return 1;
+			}
 			Write(Console.OpenStandardError(), "WARNING: [youtube] " + id + ": Some formats may be missing\nERROR: [youtube] " + id + ": Video unavailable\n");
 			return 1;
 		}
@@ -137,7 +142,11 @@ public static class FakeYtDlp {
 	}
 
 	static void Write(Stream stream, string text) {
-		byte[] bytes = Encoding.UTF8.GetBytes(text);
+		Write(stream, text, Encoding.UTF8);
+	}
+
+	static void Write(Stream stream, string text, Encoding encoding) {
+		byte[] bytes = encoding.GetBytes(text);
 		stream.Write(bytes, 0, bytes.Length);
 		stream.Flush();
 	}

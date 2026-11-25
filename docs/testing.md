@@ -171,7 +171,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
   template's `download:` names the kind of progress and doesn't print), then copies `tests/ui/fixtures/silence.opus`
   or `.flac` (real files, so TagLib can tag them) and `thumbnail.jpg`, which `Install-FakeTools` puts in
   `tools\fake-fixtures`, and writes an info JSON; only `trackGOOD01`'s has an album and a year. Ids starting with `bad`,
-  and those in `tools\fail-ids.txt`, fail with yt-dlp's `ERROR:` line; a `tools\hold-<id>` file holds that download at
+  and those in `tools\fail-ids.txt`, fail with yt-dlp's `ERROR:` line (a `bad` id's is a bot check in Windows-1252, as the real
+  yt-dlp.exe writes it, which the app must read as such); a `tools\hold-<id>` file holds that download at
   50% while it is there. `Get-YtDlpRuns` lists its playlist runs, `Get-DownloadRuns` the ids it downloaded. The fake
   ffmpeg copies its input to its output, and logs its runs in `tools\ffmpeg-runs.txt`.
 - The Spotify tracks `FakeWeb` builds have their covers on `FakeWeb` (`/image/<track id>`, the fixture's thumbnail),

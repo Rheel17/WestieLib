@@ -74,7 +74,8 @@ Check '  tracks: file and id, a failure, a review left waiting' (Get-SavedDownlo
 	'badTRACK002 failed []  / trackGOOD01 downloaded [Band - Good One.opus] trackGOOD01 / trackSLASH5 downloaded [Who - A_B_ Test_.opus] trackSLASH5 / ' +
 	'trackTWIN03 downloaded [Pair - Twin.opus] trackTWIN03 / trackTWIN04 downloaded [Pair - Twin (2).opus] trackTWIN04')
 $failure = (Get-SavedState).tracks.'ytm:badTRACK002'
-Check '  the failure: yt-dlp''s error line' "$($failure.failure) [$($failure.error)]" 'download [ERROR: [youtube] badTRACK002: Video unavailable]'
+$BotError = "ERROR: [youtube] badTRACK002: Sign in to confirm you$([char]0x2019)re not a bot"
+Check '  the failure: yt-dlp''s error line, read from Windows-1252' "$($failure.failure) [$($failure.error)]" "download [$BotError]"
 Check '  the library: the files, nothing else' (Get-LibraryFiles) 'Ann - Spot On.opus / Band - Good One.opus / Pair - Twin (2).opus / Pair - Twin.opus / Who - A_B_ Test_.opus'
 Check '  the work folder emptied' @(Get-ChildItem (Join-Path $DataDir 'work') -ErrorAction SilentlyContinue).Count 0
 $source = (Get-SavedState).sources.'ytm:trackGOOD01'
@@ -91,7 +92,7 @@ Check '  the thumbnails cropped square by ffmpeg' "$($crops.Count) $($crops[0] -
 $run = @(Get-Content $FakeYtDlpRuns -Encoding UTF8 | Where-Object { $_ -like '*v=trackGOOD01' })[0]
 Check '  yt-dlp: Opus, deno from the tools folder' "$($run -match '\|--audio-format\|opus\|') $($run.Contains("|--js-runtimes|deno:$ToolsDir\deno.exe|"))" 'True True'
 $log = Get-LogText
-Check '  log: a download, a failure' "$($log -match 'INFO    Downloaded as "Band - Good One\.opus" \[Good One; track ytm:trackGOOD01\]') $($log -match 'ERROR   Couldn''t download: ERROR: \[youtube\] badTRACK002: Video unavailable')" 'True True'
+Check '  log: a download, a failure' "$($log -match 'INFO    Downloaded as "Band - Good One\.opus" \[Good One; track ytm:trackGOOD01\]') $($log.Contains("ERROR   Couldn't download: $BotError"))" 'True True'
 
 $downloads = @(Get-DownloadRuns).Count
 Invoke-UpdateAll $h
