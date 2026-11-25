@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -79,12 +80,15 @@ void apply_fetch_page(State& state, const std::string& playlist_key, const Playl
     }
     // The earlier sources stay until the whole list is in, so no track leaves the playlist halfway
     std::vector<std::string> earlier = std::exchange(playlist->second.sources, {});
+    // A set, as a playlist of thousands would otherwise compare every earlier source with every listed one per page
+    std::unordered_set<std::string> listed_keys;
     for (const SourceTrack& listed : so_far.tracks) {
         playlist->second.sources.push_back(listed.key);
+        listed_keys.insert(listed.key);
         add_source(state, SourceTrack(listed), now);
     }
     for (std::string& key : earlier) {
-        if (!std::ranges::contains(playlist->second.sources, key)) {
+        if (listed_keys.insert(key).second) {
             playlist->second.sources.push_back(std::move(key));
         }
     }

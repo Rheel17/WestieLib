@@ -125,7 +125,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/ui/ui-checks.ps1 -Exe 
 - A sync enables Cancel until it ends (`Test-Syncing`). The `sync` suite waits for one with `Wait-Fetches`: first until
   the fake yt-dlp has logged the fetches it expects, which comes after the window knows of the sync, then until Cancel
   grays; with `-Spotify` it counts FakeWeb's Spotify queries instead. `Get-LogLines` reads the newest file in `logs\`
-  with `T` for each time, whose format the unit checks cover, and `Get-LogLevelLines` and `Get-LogToolRun` pick from it. `Get-TrackRows` reads the table's rows through
+  with `T` for each time, whose format the unit checks cover, and `Get-LogLevelLines` and `Get-LogToolRun` pick from it. During an update the rows come from a worker a moment after the state changed, so a
+  check of them while it runs waits for them (`Wait-TrackSummary`). `Get-TrackRows` reads the table's rows through
   `ListViewRow`, and `Get-SavedPlaylistSync`, `Get-SavedSources` and `Get-SavedTracks` read state.json, as do
   `Get-SavedMatches` and `Get-SavedJudgements` (the matches with their confidence and doubts). They all read through
   `Get-SavedState`, which tries again for a moment while the app is replacing the file.

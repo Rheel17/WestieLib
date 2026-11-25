@@ -50,6 +50,7 @@ namespace {
 
 constexpr framework::Size InitialWindowDips{1280, 800};
 constexpr framework::Size MinimumWindowDips{1100, 680};
+constexpr UINT StateRowsMessage = WM_APP + 2;
 constexpr UINT_PTR StateTimer = 1;
 constexpr std::chrono::seconds StateInterval{1};
 
@@ -120,7 +121,8 @@ MainWindow::MainWindow(
                     .on_close = [this] { run_command(CommandId::ToggleLog); },
                 }
         ),
-        status_bar_(hwnd()) {
+        status_bar_(hwnd()),
+        state_rows_worker_(normalizer, [window = hwnd()] { PostMessageW(window, StateRowsMessage, 0, 0); }) {
     apply_dpi(framework::Dpi::of(hwnd()));
     attach_menu();
     welcome_.set_library_folder(settings_.library_path);
@@ -150,6 +152,7 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
 
     switch (message) {
     case CoreEventsMessage: on_core_events(); return 0;
+    case StateRowsMessage:  on_state_rows(); return 0;
     case WM_COMMAND:        on_command(wparam, lparam); return 0;
     case WM_INITMENUPOPUP:  on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
     case WM_DRAWITEM:       return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
@@ -249,6 +252,7 @@ void MainWindow::select_playlist(std::optional<std::string> key) {
 }
 
 void MainWindow::show_scope() {
+    ++rows_generation_;
     std::shared_ptr<const core::State> state = library_.snapshot();
     std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(*state, *selected_playlist_) : std::nullopt;
     show_track_counts(*state);
@@ -288,10 +292,20 @@ void MainWindow::show_playlists() {
     if (selected_playlist_ && !state->playlists.contains(*selected_playlist_)) {
         selected_playlist_.reset();
     }
-    playlist_rows_ = playlist_rows(*state);
-    removals_.update(*state);
+    ++rows_generation_;
+    show_state_rows(state_rows(std::move(state), selected_playlist_, normalizer_));
+}
+
+void MainWindow::show_state_rows(StateRows rows) {
+    playlist_rows_ = std::move(rows.playlists);
+    removals_.update(*rows.state);
     show_run();
-    show_scope();
+    track_counts_ = rows.counts;
+    playlists_.set_track_counts(track_counts_);
+    status_bar_.set_track_count(track_counts_.total);
+    auto playlist = rows.playlist ? std::ranges::find(playlist_rows_, *rows.playlist, &PlaylistRow::key) : playlist_rows_.end();
+    tracks_.show_tracks(playlist == playlist_rows_.end() ? std::nullopt : std::optional(*playlist), std::move(rows.tracks), track_counts_.total);
+    show_inspector();
     layout_moved_panels();
     // A hidden window would keep the keyboard focus from going anywhere
     if (IsChild(welcome_.hwnd(), GetFocus())) {
@@ -300,13 +314,40 @@ void MainWindow::show_playlists() {
     update_commands();
 }
 
-// Showing the tracks takes a tenth of a second in a large library, and during an update they change with every match
-// and download, so those show at most once a StateInterval. A fetched page or playlist, which comes far less often,
-// shows at once, and so does the update's progress
+// Making the rows takes a quarter of a second for a large library in a debug build, so during an update the worker
+// makes them; the window shows them when they're ready (on_state_rows)
+void MainWindow::request_state_rows() {
+    state_outdated_ = false;
+    fetched_ = false;
+    state_shown_at_ = std::chrono::steady_clock::now();
+    state_rows_worker_.request(library_.snapshot(), selected_playlist_, rows_generation_);
+}
+
+void MainWindow::on_state_rows() {
+    std::optional<BuiltStateRows> built = state_rows_worker_.take();
+    if (!built) {
+        return;
+    }
+    // The user changed the scope since, or the window made newer rows itself
+    if (built->generation != rows_generation_) {
+        state_outdated_ = true;
+        show_outdated_state();
+        return;
+    }
+    show_state_rows(std::move(built->rows));
+}
+
+// During an update the tracks change with every match and download, so those show at most once a StateInterval. A
+// fetched page or playlist, which comes far less often, shows at once, and so does the update's progress. As the
+// update ends, everything shows at once.
 void MainWindow::show_outdated_state() {
-    std::chrono::steady_clock::duration since = std::chrono::steady_clock::now() - state_shown_at_;
-    if (!sync_board_.running() || fetched_ || since >= StateInterval) {
+    if (!sync_board_.running()) {
         show_playlists();
+        return;
+    }
+    std::chrono::steady_clock::duration since = std::chrono::steady_clock::now() - state_shown_at_;
+    if (fetched_ || since >= StateInterval) {
+        request_state_rows();
         return;
     }
     show_run();
@@ -324,7 +365,7 @@ void MainWindow::on_timer(WPARAM timer) {
     KillTimer(hwnd(), StateTimer);
     state_timer_set_ = false;
     if (state_outdated_) {
-        show_playlists();
+        show_outdated_state();
     }
 }
 

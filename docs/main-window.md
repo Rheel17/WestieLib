@@ -100,9 +100,16 @@ saved `Placement` and asks it for the current one.
   - `Sync all` hands the engine every playlist in row order, `Sync selected playlist` (also the menu's Sync and the
     card's button) the selected one, and Add playlist's `Sync now` the new one. `Cancel` calls `SyncEngine::cancel`.
   - It also counts the playlists the run was given and the ones it has done, for the status bar.
-  - Every sync event brings the window up to date from a new snapshot (`show_playlists`), `PlaylistPageFetched` too,
-    so a Spotify playlist's tracks show page by page: `mark_runs` tells each `PlaylistRow` whether it's queued or being
-    fetched, and what it waits for.
+  - An event that only moves the run along (`SyncQueued`, `TrackDownloading`, …) marks the rows the window has with
+    the run's progress (`show_run`, `mark_runs` tells each `PlaylistRow` whether it's queued or being fetched, and
+    what it waits for). An event that changed the state brings the window up to date from a new snapshot
+    (`show_outdated_state`): `PlaylistPageFetched` at once, so a Spotify playlist's tracks show page by page, the
+    matches and downloads at most once a `StateInterval`.
+  - Such a refresh builds its rows on `StateRowsWorker`'s thread (`state_rows`: the playlist rows, the counts and the
+    track rows of the scope), which took a quarter of a second for 4,500 tracks in a debug build, and posts
+    `StateRowsMessage` when they're ready; `show_state_rows` then shows them. Only the newest request is built. The
+    user's own actions call `show_playlists` or `show_scope`, which build the rows at once, and each raises
+    `rows_generation_`, so rows built for an older request are thrown away and asked for again.
   - A row's sync control (`PlaylistEvents::on_sync`) syncs its playlist. Like `Sync all`, it works only while nothing
     syncs; `update_commands` tells the list so (`set_sync_enabled`).
 - **Infobar.** `Infobar` (`src/ui/infobar/`) is the yellow strip under the toolbar: it paints the ⚠ and the rule

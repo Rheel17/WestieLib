@@ -155,6 +155,12 @@ function Get-LogToolRun([string]$pattern) {
 
 function Get-TrackSummary($hwnd) { "$([W]::TabTexts((Get-StatusTabs $hwnd))) | $([W]::TextOf((Get-ResultLine $hwnd)))" }
 
+# During an update the rows come from a worker, a moment after the state changed; up to 3 s for them to read $expected
+function Wait-TrackSummary($hwnd, [string]$expected) {
+	for ($i = 0; $i -lt 30 -and (Get-TrackSummary $hwnd) -ne $expected; $i++) { Start-Sleep -Milliseconds 100 }
+	Get-TrackSummary $hwnd
+}
+
 $Cafe = "Caf$([char]0xE9) Lights"
 $TracksName = 'Checked PLtracks1'
 $SharedName = 'Checked PLshared1'
@@ -562,7 +568,8 @@ $queries = Get-SpotifyQueries
 Send-Command $h 'Update &all'
 Wait-SpotifyQueries ($queries + 2)
 Check 'Second page asked for: the first one saved, not synced yet' (Get-BigPlaylist) "Big One 100 spBigTrack000000000001 - synced False error []"
-Check '  syncing | tabs | result line' "$(Test-Syncing $h) | $(Get-TrackSummary $h)" 'True | All 100 | Downloaded 0 | Waiting 100 | Needs review 0 | Failed 0 | Showing 100 of 100'
+$PageSummary = 'All 100 | Downloaded 0 | Waiting 100 | Needs review 0 | Failed 0 | Showing 100 of 100'
+Check '  syncing | tabs | result line' "$(Test-Syncing $h) | $(Wait-TrackSummary $h $PageSummary)" "True | $PageSummary"
 if ($Screenshot) { Save-Screenshot $h ("$($Screenshot -replace '\.png$', '')-page.png") }
 Send-Command $h '&Cancel'
 for ($i = 0; $i -lt 50 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
@@ -610,7 +617,8 @@ $queries = Get-SpotifyQueries
 Send-Command $h 'Update &all'
 Wait-SpotifyQueries ($queries + 2)
 Check 'A changed list, first page: new tracks, then the earlier ones' (Get-BigPlaylist) "Big One 250 spBigTrack000000000151 spBigTrack000000000001 synced True error []"
-Check '  tabs | result line' (Get-TrackSummary $h) 'All 250 | Downloaded 150 | Waiting 100 | Needs review 0 | Failed 0 | Showing 250 of 250'
+$PageSummary = 'All 250 | Downloaded 150 | Waiting 100 | Needs review 0 | Failed 0 | Showing 250 of 250'
+Check '  tabs | result line' (Wait-TrackSummary $h $PageSummary) $PageSummary
 [void]$Web.SpotifyPageGate.Set()
 Wait-Fetches $h $queries 3 -Spotify
 Check '  all pages: the dropped tracks gone' (Get-BigPlaylist) "Big One 150 spBigTrack000000000151 spBigTrack000000000251 synced True error []"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <initializer_list>
 #include <optional>
@@ -56,6 +57,8 @@
 #include "ui/inspector/InspectorPanel.h"
 #include "ui/log/LogPanel.h"
 #include "ui/main/MainLayout.h"
+#include "ui/main/StateRows.h"
+#include "ui/main/StateRowsWorker.h"
 #include "ui/main/WindowPlacement.h"
 #include "ui/playlists/PlaylistPanel.h"
 #include "ui/playlists/PlaylistRow.h"
@@ -111,6 +114,9 @@ private:
     void show_scope();
     void show_inspector();
     void show_playlists();
+    void show_state_rows(StateRows rows);
+    void request_state_rows();
+    void on_state_rows();
     void show_outdated_state();
     void on_timer(WPARAM timer);
     void show_run();
@@ -224,11 +230,15 @@ private:
     std::chrono::steady_clock::time_point state_shown_at_{};
     bool state_timer_set_ = false;
     std::optional<ShownPanels> laid_out_;
+    // Raised whenever the window makes rows itself, so the worker's rows of an earlier request don't replace them
+    std::uint64_t rows_generation_ = 0;
     // Only while they're open, so tool, look-up and search events can reach them
     std::optional<SettingsDialog> settings_dialog_;
     std::optional<AddPlaylistDialog> add_playlist_dialog_;
     std::optional<ChooseMatchDialog> choose_match_dialog_;
     framework::Size choose_match_dips_ = ChooseMatchDialog::DefaultWindowDips;
+    // Last, so its thread is joined before the rest goes
+    StateRowsWorker state_rows_worker_;
 };
 
 }

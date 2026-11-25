@@ -457,7 +457,9 @@ During an update, the matches and downloads refresh the rows, the counts and the
 a large library takes about a tenth of a second to refresh and the window would otherwise answer the user late. A
 fetched page or playlist refreshes them at once. The update's progress shows at once too: a playlist row's phase line,
 the status bar's Run part, and the Status cell of a track that starts downloading or moves its ring, which is the only
-cell painted again for it. Everything refreshes as the update ends.
+cell painted again for it. Everything refreshes as the update ends. The rows of a refresh that an update brings are
+made away from the window's thread, so the window keeps answering while a large library's rows are made; the user's
+own actions, such as selecting a playlist, show their rows at once.
 
 ## Inspector
 

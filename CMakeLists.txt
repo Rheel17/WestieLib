@@ -266,6 +266,8 @@ add_executable(WestieLib WIN32
 	src/ui/main/MainLayout.cpp
 	src/ui/main/MainMenu.cpp
 	src/ui/main/MainWindow.cpp
+	src/ui/main/StateRows.cpp
+	src/ui/main/StateRowsWorker.cpp
 	src/ui/main/WindowPlacement.cpp
 	src/ui/main/WindowState.cpp
 	src/ui/playlists/AllTracksRow.cpp
