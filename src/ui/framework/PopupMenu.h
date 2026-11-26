@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <span>
 
 #include <windows.h>
@@ -16,5 +17,6 @@ struct MenuItem {
 constexpr MenuItem MenuSeparator{};
 
 platform::win32::UniqueMenu build_popup_menu(std::span<const MenuItem> items);
+std::optional<WORD> choose_from_popup(HWND owner, POINT screen, HMENU menu);
 
 }

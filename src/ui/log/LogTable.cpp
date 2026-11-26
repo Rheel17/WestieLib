@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -159,6 +160,27 @@ void LogTable::fit_message_column() {
         list_.set_column_width(*message, width);
     }
     list_.set_cell_tip_width(width);
+}
+
+std::optional<POINT> LogTable::menu_point(LPARAM point) {
+    return list_.menu_point(point);
+}
+
+std::optional<int> LogTable::focused_line() const {
+    std::optional<int> focused = list_.focused_item();
+    return focused && *focused >= 0 && std::cmp_less(*focused, lines_.shown_count()) ? focused : std::nullopt;
+}
+
+std::wstring LogTable::selected_text() const {
+    std::wstring text;
+    for (int item : list_.selected_items()) {
+        if (item < 0 || std::cmp_greater_equal(item, lines_.shown_count())) {
+            continue;
+        }
+        const LogRow& row = lines_.shown(item);
+        text += std::format(L"{}{}\t{}\t{}\t{}", text.empty() ? L"" : L"\r\n", row.time, row.level_text, row.subject_text, row.text);
+    }
+    return text;
 }
 
 LRESULT LogTable::on_notify(NMHDR& header) {

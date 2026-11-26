@@ -234,6 +234,21 @@ std::vector<TrackRow> TrackTable::selected_rows() const {
     return selected;
 }
 
+bool TrackTable::select_track(const std::string& track) {
+    auto found = std::ranges::find(rows_, track, &TrackRow::track);
+    if (found == rows_.end()) {
+        return false;
+    }
+    auto item = static_cast<int>(found - rows_.begin());
+    list_.select_items(std::array{item}, item);
+    list_.reveal(item);
+    return true;
+}
+
+std::optional<POINT> TrackTable::menu_point(LPARAM point) {
+    return list_.menu_point(point);
+}
+
 LRESULT TrackTable::on_notify(NMHDR& header) {
     switch (header.code) {
     case LVN_COLUMNCLICK:    sort_by(reinterpret_cast<const NMLISTVIEW&>(header).iSubItem); return 0;
@@ -270,7 +285,7 @@ void TrackTable::sort_by(int column_index) {
     restore(selected);
     // The row the user was on moved with the sort, so the list follows it
     if (std::optional<int> focused = list_.focused_item()) {
-        SendMessageW(list_.hwnd(), LVM_ENSUREVISIBLE, *focused, FALSE);
+        list_.reveal(*focused);
     }
     platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
 }

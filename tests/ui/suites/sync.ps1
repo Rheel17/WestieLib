@@ -194,6 +194,54 @@ $DownloadedLines = @($Downloads | ForEach-Object { "T INFO    Downloaded as `"$(
 function Get-DownloadedRows([int[]]$which) { @($which | ForEach-Object { "T | Info | $($Downloads[$_].Title) | Downloaded as `"$($Downloads[$_].File)`"" }) -join ' / ' }
 $DownloadError = 'ERROR: [youtube] trackDDDDD6: Requested format is not available'
 $DownloadErrorRow = "T | Error | Only Here | Couldn't download: $DownloadError"
+$TrackMenuItems = '&Confirm match, C&hoose match..., &Edit track... [Enter], -, &Retry, &Keep, &Delete file..., -, &Show in folder, Show in &log, Open on &YouTube Music, Open on S&potify'
+
+# With Late Night Swing selected in its Spotify playlist and the log at Info in the All scope, its line selected. The
+# row's context menu is the Track menu, from the keyboard at the row's bottom-left corner; its L is Show in log. A
+# right-click below the rows shows none. A log line's menu, and a double-click on a line about a track, a playlist and
+# neither. Ends in Checked PLtracks1, the log in the All scope.
+function Check-RowAndLineMenus($app) {
+	$hwnd = $app.Hwnd
+	$table = Get-TrackTable $hwnd
+	[void][W]::PostMessageW($table, 0x7B, $table, [IntPtr](-1))
+	$popup = Wait-PopupMenu $app
+	$r = [W]::RectIn($popup, [IntPtr]::Zero)
+	# LVM_GETITEMRECT with LVIR_BOUNDS
+	$row = [W]::SendForRect($table, 0x100E, [IntPtr]0)
+	$list = [W]::RectIn($table, [IntPtr]::Zero)
+	Check 'Track row, Shift+F10: the Track menu' (Get-PopupItems $popup) "$TrackMenuItems | grayed: &Confirm match, &Edit track... [Enter], &Retry, &Keep, &Delete file..."
+	Check '  at the row''s bottom-left corner' "$($r.Left),$($r.Top)" "$($list.Left + [math]::Max(0, $row.Left)),$($list.Top + $row.Bottom)"
+	# L is Show in log's access key
+	[void][W]::PostMessageW($hwnd, 0x100, [IntPtr]0x4C, [IntPtr]1)
+	Wait-Closed $popup
+	Start-Sleep -Milliseconds 200
+	Check '  L: Show in log, the Selected track scope | its lines' "$(Get-LogView $hwnd) | $(Get-LogRows $hwnd)" "2 2 | $LateRow / $(Get-DownloadedRows 4)"
+	# Under the second and last row, above the scroll bar, which has a menu of its own
+	$last = [W]::SendForRect($table, 0x100E, [IntPtr]1)
+	[void][W]::PostMessageW($table, 0x7B, $table, (LParam ($list.Left + (S 100)) ($list.Top + $last.Bottom + (S 20))))
+	Start-Sleep -Milliseconds 500
+	$popup = [W]::WindowOfProcess($app.Process.Id, '#32768')
+	Check 'Right-click below the rows: no menu' ($popup -eq [IntPtr]::Zero) 'True'
+	if ($popup -ne [IntPtr]::Zero) { Close-PopupMenu $app $popup }
+
+	$logList = Get-LogList $hwnd
+	[void][W]::PostMessageW($logList, 0x7B, $logList, [IntPtr](-1))
+	$popup = Wait-PopupMenu $app
+	Check 'Log line about a track, Shift+F10: its menu' (Get-PopupItems $popup) '&Go to track, Go to &playlist, -, &Copy [Ctrl+C] | grayed: Go to &playlist'
+	Close-PopupMenu $app $popup
+
+	Click-LogScope $hwnd 0
+	$lines = @((Get-LogRows $hwnd) -split ' / ')
+	Double-Click-Row $logList ([array]::IndexOf($lines, (Get-DownloadedRows 0)))
+	Start-Sleep -Milliseconds 300
+	Check 'Log: Way Down We Go''s line double-clicked: All tracks, the track alone' "$(Get-Selection $hwnd 4) | $(Get-SelectedRows $hwnd)" 'All tracks | 6 Way Down We Go'
+	Double-Click-Row $logList ([array]::IndexOf($lines, "T | Info | $TracksName | Fetched 4 tracks"))
+	Start-Sleep -Milliseconds 300
+	Check '  a playlist''s line: that playlist' (Get-Selection $hwnd 4) 'row 1'
+	Double-Click-Row $logList (0)
+	Start-Sleep -Milliseconds 300
+	Check '  Update started: nothing' "$(Get-Selection $hwnd 4) | $(Get-LogView $hwnd)" 'row 1 | 2 0'
+}
 
 # The Spotify playlist: two tracks, one by a single artist with a comma in its name, an episode and a local file (both
 # left out), and a repeat
@@ -329,6 +377,7 @@ Check '  Late Night Swing: its lines' "$(Get-LogRows $h) [$([W]::TextOf($logList
 [void][W]::SendMessageW($logList, 0x100, [IntPtr]0x24, [IntPtr]::Zero)
 Click-LogScope $h 0
 Check '  its first line selected, then All: still that line' (Get-LogSelection $h) $LateRow
+Check-RowAndLineMenus $app
 Click-AllTracks $h
 Send-Command $h '&Log'
 Start-Sleep -Milliseconds 200

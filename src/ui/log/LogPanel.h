@@ -8,6 +8,7 @@
 #include <commctrl.h>
 
 #include "core/log/LogLine.h"
+#include "core/log/LogSubject.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/FontSet.h"
 #include "ui/framework/Panel.h"
@@ -21,8 +22,10 @@ namespace westie::ui {
 class LogPanel final : public framework::Panel {
 public:
     struct Callbacks {
-        std::function<void()> on_open_folder;
-        std::function<void()> on_close;
+        std::function<void()> on_open_folder{};
+        std::function<void()> on_close{};
+        // A line's track or playlist, for the window to select
+        std::function<void(const core::LogSubject&)> on_go_to{};
     };
 
     LogPanel(HWND parent, Callbacks callbacks);
@@ -45,10 +48,14 @@ private:
     void keep_selection();
     void show_lines(bool to_last_line);
     LRESULT on_notify(NMHDR& header);
+    void on_context_menu(HWND window, LPARAM point);
+    void go_to(int line);
+    void copy_selection() const;
 
     LogLines lines_;
     LogToolbar toolbar_;
     LogTable table_;
+    std::function<void(const core::LogSubject&)> on_go_to_;
     bool unshown_lines_ = false;
     // The list's selection as it was before the lines changed, until it shows them
     std::optional<LineSelection> kept_selection_;

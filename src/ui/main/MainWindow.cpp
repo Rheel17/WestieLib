@@ -38,11 +38,13 @@
 #include "ui/framework/Size.h"
 #include "ui/framework/WindowClass.h"
 #include "ui/inspector/TrackDetails.h"
+#include "ui/inspector/TrackPages.h"
 #include "ui/log/SelectedForLog.h"
 #include "ui/main/MainMenu.h"
 #include "ui/main/WindowState.h"
 #include "ui/playlists/PlaylistMenu.h"
 #include "ui/playlists/PlaylistRows.h"
+#include "ui/tracks/TrackMenu.h"
 #include "ui/tracks/TrackRows.h"
 
 namespace westie::ui {
@@ -54,6 +56,16 @@ constexpr framework::Size MinimumWindowDips{1100, 680};
 constexpr UINT StateRowsMessage = WM_APP + 2;
 constexpr UINT_PTR StateTimer = 1;
 constexpr std::chrono::seconds StateInterval{1};
+
+// It needs review, or the Matcher found nothing for it
+bool needs_match(const core::State& state, const TrackRow& row) {
+    if (row.status == StatusTab::NeedsReview) {
+        return true;
+    }
+    auto track = state.tracks.find(row.track);
+    return track != state.tracks.end() && track->second.status == core::TrackStatus::Failed &&
+           (track->second.failure == core::TrackFailure::NoMatch || track->second.failure == core::TrackFailure::Search);
+}
 
 }
 
@@ -98,7 +110,15 @@ MainWindow::MainWindow(
                 }
         ),
         playlists_splitter_(hwnd(), framework::SplitterAxis::X, [this](int left) { on_playlists_splitter_drag(left); }),
-        tracks_(hwnd(), normalizer, [this] { show_inspector(); }),
+        tracks_(
+                hwnd(),
+                normalizer,
+                {
+                    .on_selection_change = [this] { show_inspector(); },
+                    .on_double_click = [this] { on_track_double_click(); },
+                    .on_context_menu = [this](POINT screen) { show_track_menu(screen); },
+                }
+        ),
         welcome_(
                 hwnd(),
                 settings_store.defaults().library_path,
@@ -120,6 +140,7 @@ MainWindow::MainWindow(
                 {
                     .on_open_folder = [this] { run_command(CommandId::OpenLogFolder); },
                     .on_close = [this] { run_command(CommandId::ToggleLog); },
+                    .on_go_to = [this](const core::LogSubject& subject) { go_to(subject); },
                 }
         ),
         status_bar_(hwnd()),
@@ -450,11 +471,13 @@ void MainWindow::layout_panels() {
 
 CommandState MainWindow::command_state() const {
     std::vector<TrackRow> selected = tracks_.selected_rows();
+    TrackPages pages = selected_track_pages();
     return {
         .syncing = sync_board_.running(),
         .tools_busy = tool_board_.running(),
         .has_playlists = has_playlists(),
         .playlist_selected = selected_playlist_.has_value(),
+        .track_selected = !selected.empty(),
         .review_selected = selected.size() == 1 && selected.front().status == StatusTab::NeedsReview,
         .matched_entry_selected = selected.size() == 1 && core::is_matched_entry(*library_.snapshot(), selected.front().key),
         .failed_selected = std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Failed; }),
@@ -462,6 +485,8 @@ CommandState MainWindow::command_state() const {
         .deletable_selected =
                 std::ranges::any_of(selected, [](const TrackRow& row) { return row.counts_as == StatusTab::Removed || row.counts_as == StatusTab::Kept; }),
         .file_selected = selected.size() == 1 && !selected.front().file.empty(),
+        .youtube_music_page_selected = pages.youtube_music.has_value(),
+        .spotify_page_selected = pages.spotify.has_value(),
         .log_visible = panels_.log_visible,
     };
 }
@@ -500,6 +525,9 @@ void MainWindow::run_command(CommandId command) {
     case CommandId::Keep:                   keep_selected(); return;
     case CommandId::DeleteFiles:            delete_selected(); return;
     case CommandId::ShowInFolder:           show_selected_in_folder(); return;
+    case CommandId::ShowInLog:              show_selected_in_log(); return;
+    case CommandId::OpenOnYouTubeMusic:     open_page(selected_track_pages().youtube_music); return;
+    case CommandId::OpenOnSpotify:          open_page(selected_track_pages().spotify); return;
     default:                                return;
     }
 }
@@ -526,6 +554,41 @@ void MainWindow::show_playlist_menu(POINT screen) {
     if (std::optional<CommandId> command = choose_playlist_command(hwnd(), screen, command_state())) {
         run_command(*command);
     }
+}
+
+void MainWindow::show_track_menu(POINT screen) {
+    if (std::optional<CommandId> command = choose_track_command(hwnd(), screen, command_state())) {
+        run_command(*command);
+    }
+}
+
+void MainWindow::on_track_double_click() {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    if (selected.size() == 1 && needs_match(*library_.snapshot(), selected.front())) {
+        run_command(CommandId::ChooseMatch);
+    }
+}
+
+// The track alone, in the scope that shows it: All tracks with every row, when the current one hides it
+void MainWindow::go_to(const core::LogSubject& subject) {
+    std::shared_ptr<const core::State> state = library_.snapshot();
+    if (!subject.track.empty()) {
+        if (!state->tracks.contains(subject.track)) {
+            MessageBeep(MB_ICONWARNING);
+            return;
+        }
+        if (!tracks_.select_track(subject.track)) {
+            select_playlist(std::nullopt);
+            tracks_.show_status_tab(StatusTab::All);
+            tracks_.select_track(subject.track);
+        }
+        return;
+    }
+    if (!state->playlists.contains(subject.playlist)) {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+    select_playlist(subject.playlist);
 }
 
 void MainWindow::remove_playlist() {
@@ -617,6 +680,28 @@ void MainWindow::show_selected_in_folder() const {
     std::vector<TrackRow> selected = tracks_.selected_rows();
     if (selected.size() == 1 && !selected.front().file.empty() && !platform::win32::show_in_folder(settings_.library_path / selected.front().file)) {
         MessageBeep(MB_ICONWARNING);
+    }
+}
+
+void MainWindow::show_selected_in_log() {
+    show_log();
+    LogView view = log_.view();
+    view.scope = LogScope::Track;
+    log_.set_view(view);
+}
+
+TrackPages MainWindow::selected_track_pages() const {
+    std::vector<TrackRow> selected = tracks_.selected_rows();
+    if (selected.size() != 1) {
+        return {};
+    }
+    std::optional<TrackDetails> details = track_details(*library_.snapshot(), normalizer_, selected.front(), settings_.library_path);
+    return details ? track_pages(*details) : TrackPages{};
+}
+
+void MainWindow::open_page(const std::optional<std::wstring>& url) const {
+    if (url) {
+        platform::win32::open_with_shell(hwnd(), *url);
     }
 }
 

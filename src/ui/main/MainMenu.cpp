@@ -8,6 +8,7 @@
 #include "platform/win32/Win32Error.h"
 #include "ui/commands/CommandMenu.h"
 #include "ui/framework/PopupMenu.h"
+#include "ui/tracks/TrackMenu.h"
 
 namespace westie::ui {
 
@@ -34,20 +35,6 @@ constexpr std::array UpdateItems = {
     command_item(CommandId::CancelUpdate, L"&Cancel"),
 };
 
-constexpr std::array TrackItems = {
-    command_item(CommandId::ConfirmMatch, L"&Confirm match"),
-    command_item(CommandId::ChooseMatch, L"C&hoose match…"),
-    command_item(CommandId::EditTrack, L"&Edit track…\tEnter"),
-    framework::MenuSeparator,
-    command_item(CommandId::Retry, L"&Retry"),
-    command_item(CommandId::Keep, L"&Keep"),
-    command_item(CommandId::DeleteFiles, L"&Delete file…"),
-    framework::MenuSeparator,
-    command_item(CommandId::ShowInFolder, L"&Show in folder"),
-    command_item(CommandId::OpenOnYouTube, L"Open on &YouTube"),
-    command_item(CommandId::OpenSourcePage, L"Open source &page"),
-};
-
 constexpr std::array ViewItems = {
     command_item(CommandId::ToggleLog, L"&Log\tCtrl+L"),
     framework::MenuSeparator,
@@ -68,16 +55,15 @@ constexpr std::array HelpItems = {
     command_item(CommandId::About, L"&About WestieLib"),
 };
 
-constexpr std::array Popups = {
-    Popup{L"&File", FileItems}, Popup{L"&Update", UpdateItems}, Popup{L"&Track", TrackItems},
-    Popup{L"&View", ViewItems}, Popup{L"T&ools", ToolsItems},   Popup{L"&Help", HelpItems},
-};
-
 }
 
 platform::win32::UniqueMenu build_main_menu() {
+    std::array popups = {
+        Popup{L"&File", FileItems}, Popup{L"&Update", UpdateItems}, Popup{L"&Track", track_menu_items()},
+        Popup{L"&View", ViewItems}, Popup{L"T&ools", ToolsItems},   Popup{L"&Help", HelpItems},
+    };
     platform::win32::UniqueMenu menu_bar(platform::win32::check(CreateMenu(), "CreateMenu"));
-    for (const Popup& popup : Popups) {
+    for (const Popup& popup : popups) {
         platform::win32::UniqueMenu items = framework::build_popup_menu(popup.items);
         platform::win32::check(AppendMenuW(menu_bar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(items.get()), popup.title), "AppendMenuW");
         // The menu bar owns it now

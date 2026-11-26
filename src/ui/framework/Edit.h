@@ -12,8 +12,9 @@ namespace westie::ui::framework {
 
 struct EditOptions {
     const wchar_t* cue_banner = nullptr;
-    // Room before the text, for an icon inside the field
+    // Room before and after the text, for icons inside the field
     int leading_dips = 0;
+    int trailing_dips = 0;
     bool escape_clears = false;
 };
 
@@ -25,6 +26,8 @@ public:
     void apply_dpi(Dpi dpi, const MessageFont& font);
     std::wstring text() const;
     void set_text(const std::wstring& text);
+    // As a key the user presses would, so the field's history can undo it
+    void erase_text();
     void select_all();
 
 protected:
@@ -32,6 +35,7 @@ protected:
 
 private:
     int leading_dips_ = 0;
+    int trailing_dips_ = 0;
     bool escape_clears_ = false;
     int height_ = 0;
     int text_height_ = 0;

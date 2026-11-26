@@ -638,6 +638,18 @@ function Wait-PopupMenu($app) {
 	[IntPtr]::Zero
 }
 
+# Posts a double click near the left edge of row $index (from 0) of a list view, which the list turns into NM_DBLCLK.
+# Only WM_LBUTTONDBLCLK and WM_LBUTTONUP: a sent WM_LBUTTONDOWN would start a drag against the real cursor. Posted, so
+# a dialog the app opens for it doesn't hold the script.
+function Double-Click-Row($list, [int]$index) {
+	# LVM_ENSUREVISIBLE, so the point is on the row
+	[void][W]::SendMessageW($list, 0x1013, [IntPtr]$index, [IntPtr]::Zero)
+	$r = [W]::SendForRect($list, 0x100E, [IntPtr]$index)
+	$point = LParam (S 30) ([int](($r.Top + $r.Bottom) / 2))
+	[void][W]::PostMessageW($list, 0x203, [IntPtr]1, $point)
+	[void][W]::PostMessageW($list, 0x202, [IntPtr]0, $point)
+}
+
 # A popup menu's items, separators as "-", then the grayed ones
 function Get-PopupItems($popup) {
 	$menu = [W]::SendMessageW($popup, 0x1E1, [IntPtr]::Zero, [IntPtr]::Zero)

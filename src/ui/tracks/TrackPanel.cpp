@@ -39,13 +39,11 @@ framework::Rect inset(framework::Rect rect, int side) {
 
 }
 
-TrackPanel::TrackPanel(HWND parent, const platform::TextNormalizer& normalizer, std::function<void()> on_selection_change) :
+TrackPanel::TrackPanel(HWND parent, const platform::TextNormalizer& normalizer, Callbacks callbacks) :
         Panel(parent, L"Tracks"),
         normalizer_(normalizer),
-        on_selection_change_(std::move(on_selection_change)),
-        filter_(
-                hwnd(), [this] { on_filter_change(); }, [this] { clear_status(); }
-        ),
+        callbacks_(std::move(callbacks)),
+        filter_(hwnd(), [this] { on_filter_change(); }),
         status_(hwnd()),
         result_(hwnd(), L"", {.color = framework::TextColor::Gray}),
         table_(hwnd(), [this] { post_selection_change(); }) {
@@ -100,10 +98,15 @@ void TrackPanel::focus_search() {
     filter_.focus_search();
 }
 
+bool TrackPanel::select_track(const std::string& track) {
+    return table_.select_track(track);
+}
+
 LRESULT TrackPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case WM_SIZE:                 layout(); return 0;
     case SelectionChangedMessage: on_selection_change(); return 0;
+    case WM_CONTEXTMENU:          on_context_menu(reinterpret_cast<HWND>(wparam), lparam); return 0;
     // The paint fills the background, so the rule isn't erased first and doesn't blink
     case WM_ERASEBKGND: return TRUE;
     case WM_PAINT:      paint(); return 0;
@@ -157,10 +160,25 @@ void TrackPanel::post_selection_change() {
 
 void TrackPanel::on_selection_change() {
     selection_change_posted_ = false;
-    on_selection_change_();
+    callbacks_.on_selection_change();
+}
+
+void TrackPanel::on_context_menu(HWND window, LPARAM point) {
+    if (window != table_.hwnd()) {
+        return;
+    }
+    if (std::optional<POINT> screen = table_.menu_point(point)) {
+        callbacks_.on_context_menu(*screen);
+    }
 }
 
 LRESULT TrackPanel::on_notify(NMHDR& header) {
+    if (header.hwndFrom == table_.hwnd() && header.code == NM_DBLCLK) {
+        if (reinterpret_cast<const NMITEMACTIVATE&>(header).iItem >= 0) {
+            callbacks_.on_double_click();
+        }
+        return 0;
+    }
     if (header.hwndFrom == table_.hwnd()) {
         return table_.on_notify(header);
     }
@@ -177,7 +195,6 @@ void TrackPanel::show_tab_change(StatusTab before) {
     if (other_tab) {
         table_.clear_selection();
     }
-    update_clear();
     show_rows();
     if (other_tab) {
         table_.scroll_to_top();
@@ -185,13 +202,8 @@ void TrackPanel::show_tab_change(StatusTab before) {
 }
 
 void TrackPanel::on_filter_change() {
-    update_clear();
     show_rows();
     table_.scroll_to_top();
-}
-
-void TrackPanel::update_clear() {
-    filter_.set_clear_enabled(!filter_.is_default() || status_.selected() != StatusTab::All);
 }
 
 // Every track in the tab shows, so the search and the source don't hide any
@@ -199,12 +211,6 @@ void TrackPanel::show_status_tab(StatusTab tab) {
     filter_.clear();
     StatusTab before = status_.selected();
     status_.select(tab);
-    show_tab_change(before);
-}
-
-void TrackPanel::clear_status() {
-    StatusTab before = status_.selected();
-    status_.reset();
     show_tab_change(before);
 }
 

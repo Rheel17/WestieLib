@@ -1,10 +1,13 @@
 #include "ui/log/LogPanel.h"
 
+#include <string>
 #include <utility>
 
+#include "platform/win32/Clipboard.h"
 #include "platform/win32/Win32Error.h"
 #include "ui/framework/DeferredPositions.h"
 #include "ui/framework/Rect.h"
+#include "ui/log/LogMenu.h"
 
 namespace westie::ui {
 
@@ -18,7 +21,8 @@ LogPanel::LogPanel(HWND parent, Callbacks callbacks) :
                     .on_close = std::move(callbacks.on_close),
                 }
         ),
-        table_(hwnd(), lines_) {
+        table_(hwnd(), lines_),
+        on_go_to_(std::move(callbacks.on_go_to)) {
     show_lines(true);
 }
 
@@ -74,9 +78,10 @@ void LogPanel::set_view(LogView view) {
 
 LRESULT LogPanel::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_SIZE:   layout(); return 0;
-    case WM_NOTIFY: return on_notify(*reinterpret_cast<NMHDR*>(lparam));
-    default:        return Panel::handle_message(message, wparam, lparam);
+    case WM_SIZE:        layout(); return 0;
+    case WM_NOTIFY:      return on_notify(*reinterpret_cast<NMHDR*>(lparam));
+    case WM_CONTEXTMENU: on_context_menu(reinterpret_cast<HWND>(wparam), lparam); return 0;
+    default:             return Panel::handle_message(message, wparam, lparam);
     }
 }
 
@@ -111,10 +116,59 @@ void LogPanel::show_lines(bool to_last_line) {
 }
 
 LRESULT LogPanel::on_notify(NMHDR& header) {
-    if (header.hwndFrom == table_.hwnd()) {
-        return table_.on_notify(header);
+    if (header.hwndFrom != table_.hwnd()) {
+        return 0;
     }
-    return 0;
+    switch (header.code) {
+    case NM_DBLCLK:
+        if (int line = reinterpret_cast<const NMITEMACTIVATE&>(header).iItem; line >= 0 && std::cmp_less(line, lines_.shown_count())) {
+            go_to(line);
+        }
+        return 0;
+    case LVN_KEYDOWN:
+        if (reinterpret_cast<const NMLVKEYDOWN&>(header).wVKey == 'C' && GetKeyState(VK_CONTROL) < 0 && GetKeyState(VK_SHIFT) >= 0 && GetKeyState(VK_MENU) >= 0) {
+            copy_selection();
+        }
+        return 0;
+    default: return table_.on_notify(header);
+    }
+}
+
+void LogPanel::on_context_menu(HWND window, LPARAM point) {
+    if (window != table_.hwnd()) {
+        return;
+    }
+    std::optional<POINT> screen = table_.menu_point(point);
+    std::optional<int> line = table_.focused_line();
+    if (!screen || !line) {
+        return;
+    }
+    const core::LogSubject& subject = lines_.shown(*line).subject;
+    std::optional<LogLineAction> action = choose_log_line_action(hwnd(), *screen, {.track = !subject.track.empty(), .playlist = !subject.playlist.empty()});
+    if (!action) {
+        return;
+    }
+    switch (*action) {
+    // A line is about a track or a playlist, never both
+    case LogLineAction::GoToTrack:
+    case LogLineAction::GoToPlaylist: go_to(*line); return;
+    case LogLineAction::Copy:         copy_selection(); return;
+    }
+}
+
+// A line about neither does nothing
+void LogPanel::go_to(int line) {
+    core::LogSubject subject = lines_.shown(line).subject;
+    if (!subject.track.empty() || !subject.playlist.empty()) {
+        on_go_to_(subject);
+    }
+}
+
+void LogPanel::copy_selection() const {
+    std::wstring text = table_.selected_text();
+    if (!text.empty() && !platform::win32::set_clipboard_text(hwnd(), text)) {
+        MessageBeep(MB_ICONWARNING);
+    }
 }
 
 }

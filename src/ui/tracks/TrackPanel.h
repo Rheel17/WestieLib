@@ -23,7 +23,14 @@ namespace westie::ui {
 
 class TrackPanel final : public framework::Panel {
 public:
-    TrackPanel(HWND parent, const platform::TextNormalizer& normalizer, std::function<void()> on_selection_change);
+    struct Callbacks {
+        std::function<void()> on_selection_change{};
+        // On a row, which the first click selected
+        std::function<void()> on_double_click{};
+        std::function<void(POINT)> on_context_menu{};
+    };
+
+    TrackPanel(HWND parent, const platform::TextNormalizer& normalizer, Callbacks callbacks);
 
     void apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts);
     void show_tracks(const std::optional<PlaylistRow>& playlist, std::vector<TrackRow> rows, int library_total);
@@ -33,6 +40,7 @@ public:
     void set_column_widths(const std::map<TrackColumn, int>& width_dips);
     void focus_search();
     void show_status_tab(StatusTab tab);
+    bool select_track(const std::string& track);
 
 protected:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam) override;
@@ -42,16 +50,16 @@ private:
     void paint() const;
     void post_selection_change();
     void on_selection_change();
+    void on_context_menu(HWND window, LPARAM point);
     LRESULT on_notify(NMHDR& header);
     void on_filter_change();
-    void update_clear();
-    void clear_status();
+
     void show_tab_change(StatusTab before);
     void show_rows();
     void show_result_line();
 
     const platform::TextNormalizer& normalizer_;
-    std::function<void()> on_selection_change_;
+    Callbacks callbacks_;
     FilterBar filter_;
     StatusFilter status_;
     framework::Label result_;

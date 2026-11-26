@@ -7,7 +7,7 @@
 #include <windows.h>
 
 #include "core/sources/SourceType.h"
-#include "ui/framework/Button.h"
+#include "ui/framework/CloseButton.h"
 #include "ui/framework/ComboBox.h"
 #include "ui/framework/Dpi.h"
 #include "ui/framework/Edit.h"
@@ -20,15 +20,13 @@ namespace westie::ui {
 
 class FilterBar final : public framework::Panel {
 public:
-    FilterBar(HWND parent, std::function<void()> on_change, std::function<void()> on_clear);
+    FilterBar(HWND parent, std::function<void()> on_change);
 
     int height() const;
     void apply_dpi(framework::Dpi dpi, const framework::MessageFont& font);
-    bool is_default() const;
     std::wstring search() const;
     std::optional<core::SourceType> source() const;
     void clear();
-    void set_clear_enabled(bool enabled);
     void focus_search();
 
 protected:
@@ -37,16 +35,17 @@ protected:
 private:
     int row_height() const;
     void layout();
-    void place_search_icon();
+    void place_search_icons();
+    void show_search_clear();
+    void erase_search();
     void on_command(WPARAM wparam, LPARAM lparam);
 
     std::function<void()> on_change_;
-    std::function<void()> on_clear_;
     framework::Edit search_;
     framework::IconView search_icon_;
+    framework::CloseButton search_clear_;
     framework::Label source_label_;
     framework::ComboBox source_;
-    framework::Button clear_;
     int label_height_ = 0;
 };
 

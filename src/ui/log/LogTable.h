@@ -32,6 +32,11 @@ public:
     LineSelection selection() const;
     void show_lines(bool to_last_line, const std::optional<LineSelection>& selection);
     void fit_message_column();
+    std::optional<POINT> menu_point(LPARAM point);
+    // An index into the lines shown
+    std::optional<int> focused_line() const;
+    // A line for each selected one, its columns as the list shows them, separated by tabs
+    std::wstring selected_text() const;
     LRESULT on_notify(NMHDR& header);
 
 private:

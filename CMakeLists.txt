@@ -257,9 +257,11 @@ add_executable(WestieLib WIN32
 	src/ui/inspector/SyncedValue.cpp
 	src/ui/inspector/TrackCard.cpp
 	src/ui/inspector/TrackDetails.cpp
+	src/ui/inspector/TrackPages.cpp
 	src/ui/inspector/TrackStatusText.cpp
 	src/ui/log/LogFilter.cpp
 	src/ui/log/LogLines.cpp
+	src/ui/log/LogMenu.cpp
 	src/ui/log/LogPanel.cpp
 	src/ui/log/LogTable.cpp
 	src/ui/log/LogToolbar.cpp
@@ -293,6 +295,7 @@ add_executable(WestieLib WIN32
 	src/ui/tracks/StatusFilter.cpp
 	src/ui/tracks/StatusTabText.cpp
 	src/ui/tracks/TrackEntries.cpp
+	src/ui/tracks/TrackMenu.cpp
 	src/ui/tracks/TrackPanel.cpp
 	src/ui/tracks/TrackReview.cpp
 	src/ui/tracks/TrackRows.cpp

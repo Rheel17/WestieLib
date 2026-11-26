@@ -21,6 +21,9 @@ struct CommandState {
     bool deletable_selected = false;
     // Exactly one row, and its track has a file
     bool file_selected = false;
+    // Exactly one row, and its track has a YouTube Music id, or a Spotify source
+    bool youtube_music_page_selected = false;
+    bool spotify_page_selected = false;
     bool log_visible = false;
 
     bool enabled(CommandId command) const;

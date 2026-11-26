@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+#include <span>
 #include <utility>
 
 #include <windows.h>
@@ -15,5 +17,7 @@ constexpr framework::MenuItem command_item(CommandId command, const wchar_t* tex
 }
 
 void update_menu_items(HMENU menu, const CommandState& state);
+// A context menu of these commands, enabled as the state says
+std::optional<CommandId> choose_command(HWND owner, POINT screen, std::span<const framework::MenuItem> items, const CommandState& state);
 
 }

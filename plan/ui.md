@@ -15,7 +15,7 @@ The static screens in `ui-mockup.html` are the visual reference for this spec.
 │ [+ Add playlist] [⟳ Update all ▾] [■ Cancel]  [⚙ Settings]                       │ toolbar
 │ ⚠ 5 tracks are no longer in any playlist.                  [Review…] [✕]         │ infobar (when needed)
 ├────────────────────────┬────────────────────────────────────────┬────────────────┤
-│ ▤ All tracks           │ [🔍 Search title, artist, album ] Source [All ▾] Clear│ filter bar
+│ ▤ All tracks           │ [🔍 Search title, artist, album ] Source [All ▾]      │ filter bar
 │   412, 398 downloaded  │ All 412│Downloaded 398│Waiting 6│Needs review 3│Fail… │ status filter
 ├────────────────────────┤ Showing 214 of 412 in WCS                       │                │
 │ ▶ WCS                  ├────────────────────────────────────────┤ [ cover art ]  │
@@ -117,14 +117,15 @@ Each menu lists its items top to bottom; ─ is a separator. Shortcuts are right
 |-------|-------|
 | File  | Add playlist… (Ctrl+N), Remove playlist…, ─, Open library folder, ─, Exit (Ctrl+Q) |
 | Update | Update all (F5), Update selected playlist, ─, Cancel |
-| Track | Confirm match, Choose match…, Edit track… (Enter, double-click), ─, Retry, Keep, Delete file…, ─, Show in folder, Open on YouTube, Open source page |
+| Track | Confirm match, Choose match…, Edit track… (Enter), ─, Retry, Keep, Delete file…, ─, Show in folder, Show in log, Open on YouTube Music, Open on Spotify |
 | View  | Log (Ctrl+L), ─, Columns… |
 | Tools | Settings… (Ctrl+Alt+S), Check for updates, ─, Rebuild library from files…, Locate library folder…, ─, Open log folder |
 | Help  | About WestieLib |
 
 Access keys: the menu bar has **F**ile, **U**pdate, **T**rack, **V**iew, T**o**ols and **H**elp (Track and Tools can't
 share T). The items, in order: File **A**dd, **R**emove, **O**pen, E**x**it; Update **A**ll, **S**elected, **C**ancel;
-Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **D**elete, **S**how, **Y**ouTube, source **P**age;
+Track **C**onfirm, C**h**oose, **E**dit, **R**etry, **K**eep, **D**elete, **S**how in folder, Show in **l**og,
+**Y**ouTube Music, S**p**otify;
 View **L**og, **C**olumns; Tools **S**ettings, **U**pdates, **R**ebuild, **F**older, **L**og folder; Help **A**bout.
 
 The menu bar is white and runs straight into the toolbar, without the gray line Windows draws under a menu bar. Its
@@ -150,8 +151,14 @@ The toolbar has `+ Add playlist`, `⟳ Update all ▾`, `■ Cancel` and `⚙ Se
     `Choose match…` needs exactly one selected row whose entry the Matcher matches: a Spotify track, or a YouTube Music
     entry whose id is unavailable (`arch.md`, Unavailable ids). `Retry` needs a selected row whose
     track failed, and retries every such track the selection holds; it is enabled during an update too, whose queues
-    the tracks join. `Show in folder` needs exactly one selected row whose track has a file.
-  - So far the other Track items stay disabled; each is enabled with its feature.
+    the tracks join. `Show in folder` needs exactly one selected row whose track has a file. `Show in log` needs a
+    selected row. `Open on YouTube Music` needs exactly one selected row whose track has a YouTube Music id, the one
+    the card's Audio section shows, and opens its `music.youtube.com/watch` page. `Open on Spotify` needs exactly one
+    selected row whose track has a Spotify source, and opens its `open.spotify.com/track` page: the row's own entry when
+    that is a Spotify one, else the track's first Spotify source.
+  - **Show in log** shows the log pane when it is hidden and sets its scope to `Selected track`, so it lists the lines
+    of the selected tracks. The level stays as it is.
+  - So far `Edit track…` stays disabled; it is enabled with its feature.
   - `Check for updates` is disabled while tools are checked, installed or updated, and while an update runs.
   - Everything else is always enabled.
 - View › Log shows a check mark while the log pane is shown.
@@ -167,7 +174,8 @@ Each field keeps its own history: Ctrl+Z undoes the last change and Ctrl+Y redoe
 change after an undo drops the changes that could have been redone. Characters typed one after another are one change,
 as are Backspaces or Deletes one after another; moving the caret, or any other kind of change, starts a new one. An undo
 puts back the text and the selection from before the change. Text the app sets, as when it loads the library folder or
-Clear all empties the search, starts a new history. The shortcuts are the only way in: Alt+Backspace does nothing.
+the infobar's `Review…` empties the search, starts a new history. Esc and the search field's ✕ are changes like typing,
+so Ctrl+Z brings the search back. The shortcuts are the only way in: Alt+Backspace does nothing.
 
 Text fields have no context menu; a right-click or the Menu key does nothing.
 
@@ -382,10 +390,12 @@ The library folder:
   Esc empties the field. Ctrl+F (not in a menu)
   puts the focus in it and selects its text. A 16 px magnifier sits inside the field, 5 px from its left edge, and the
   text starts 5 px after it.
+- While the search field holds text, a ✕ sits inside it against its right edge: the close button's icon at 10 px, in
+  an 18 px box, 2 px from the field's right border and centered top to bottom, with the close button's hover and
+  pressed colors. The text stops 4 px before the box, and the field keeps that room while the ✕ is hidden, so the text
+  doesn't move when it comes. A click on it empties the field, as Esc does, and puts the focus in the field.
 - **Source**: the label `Source`, its text level with the search field's, then a drop-down list with All, YouTube
   Music and Spotify.
-- **Clear**: a compact button (no 75 px minimum, 9 px of padding at the sides), enabled when the search, the source
-  or the status tab is not at its default. It empties the search, sets the source to All and selects the All tab.
 
 The bar has 8 px of padding at the top and sides and 4 px under it, with 8 px between its parts. The search field is
 300 px wide, and narrows when the panel is too narrow for it; the drop-down is 128 px wide.
@@ -441,7 +451,20 @@ a second click reverses it, however quickly it follows; the header shows the arr
 the column keep the order they had before the click, so sorting by Album after Artists sorts each album by artist. A
 reverse turns the whole list round, ties included. Rows that tie on every column the user sorted by go by the scope's
 default sort, then track key. The order holds while the rows are filtered or refreshed. Another scope starts at its
-default sort, and forgets the earlier clicks. The row context menu is the Track menu.
+default sort, and forgets the earlier clicks.
+
+**Double-click.** A double-click on a row that needs a match is `Choose match…` for it: the row needs review, or its
+track failed because no match was found or the search failed. On any other row it does nothing yet; it will be
+`Edit track…` once that exists. A double-click between or below the rows does nothing.
+
+**Context menu.** A row's context menu is the Track menu, with the same items, access keys and rules.
+
+- A right-click on a row that isn't selected selects it alone first; on a selected row it keeps the selection, so the
+  menu acts on every selected row. It gives the table the focus. A right-click between or below the rows shows no menu.
+- Shift+F10 and the menu key open it while the table has the focus, at the bottom-left corner of the focused row, or
+  of the first selected row when the focused one isn't selected, which scrolls into view first. With nothing selected
+  they show nothing.
+- An item chosen does what the menu bar's does.
 
 Ctrl+A selects every row, as in Explorer; so does it in the log pane's list.
 
@@ -744,6 +767,29 @@ the rest of the width. Rows are 20 px tall.
   when the mouse moves, which left the highlight on a row that had moved away.) This holds for every list view in the
   app.
 
+**Going to a line's track or playlist.** A double-click on a line goes to what it is about:
+
+- A line about a track selects that track in the table, alone, and scrolls it into view. When the selected playlist
+  doesn't list it, or the search, the source or the status tab hides it, All tracks is selected first, with the
+  search emptied, the source at All and the All tab, so the track shows. In a playlist that lists the track twice, the
+  first row is selected.
+- A line about a playlist selects that playlist in the left panel, as a click on it would.
+- A line about neither does nothing, and so does a line whose track or playlist is no longer in the library; that
+  beeps.
+- The keyboard focus stays in the log, and the log's own selection stays on the line. In the `Selected track` and
+  `Selected playlist` scopes the lines then follow the new selection, as they always do.
+
+**Context menu.** A line's context menu has **G**o to track, Go to **p**laylist, ─, **C**opy (Ctrl+C).
+
+- Go to track is enabled for a line about a track, Go to playlist for one about a playlist; each does what a
+  double-click does. They act on the line that was right-clicked, or with the keyboard on the focused line.
+- **Copy** puts the selected lines on the clipboard, one per line, with their four columns as the list shows them,
+  separated by tabs. Ctrl+C in the list does the same. When another program holds the clipboard, it beeps instead.
+- A right-click selects the line as in the track table (a line that isn't selected alone, a selected one keeps the
+  selection), and gives the list the focus. A right-click below the lines shows no menu.
+- Shift+F10 and the menu key open it while the list has the focus, at the bottom-left corner of the focused line, or
+  of the first selected line, which scrolls into view first. With no line selected they show nothing.
+
 ## Status bar
 
 | Part    | Content |
@@ -912,9 +958,9 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     │                                            [Use this match]  [Cancel]  ◢ │
     └──────────────────────────────────────────────────────────────────────────┘
     ```
-  - So far it opens from the inspector and the Track menu, for an entry whose source is a Spotify track; Edit track
-    comes with its feature.
-- **Edit track**. Opened by `Edit track…`, Enter, or a double-click on a row:
+  - So far it opens from the inspector, the Track menu, the row's context menu and a double-click on a row that needs a
+    match; Edit track comes with its feature.
+- **Edit track**. Opened by `Edit track…`, Enter, or a double-click on a row that needs no match:
   - **Cover art**: a 132 px preview, `Choose image…`, `Paste` and `Reset`, plus a source line (`From the
     YouTube thumbnail`, `From Spotify`, `Custom image`).
   - **Tags**: Title, Artists, Album and Year edits. A changed field gets a `Reset` link, and the original value
@@ -966,10 +1012,10 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | `removePlaylist` | playlist context menu, File menu, inspector playlist card → confirmation |
 | `sync` / `cancel` | toolbar split button (Update all), Update menu, playlist row update button, playlist context menu, inspector card |
 | `SyncQueued` / `PlaylistFetching` / `TracksQueued` / `TrackMatching` / `SyncFinished` | playlist row phase, status bar Run part |
-| `resolveRemovals` | infobar → Removed tab, Track menu, inspector (single and bulk) |
-| `retry` | inspector Retry, Track menu |
-| `confirmMatch` | inspector actions, Track menu |
-| `setYtmOverride` | Choose a match dialog, Edit track dialog (Audio link) |
+| `resolveRemovals` | infobar → Removed tab, Track menu and row context menu, inspector (single and bulk) |
+| `retry` | inspector Retry, Track menu and row context menu |
+| `confirmMatch` | inspector actions, Track menu and row context menu |
+| `setYtmOverride` | Choose a match dialog (from the inspector, the Track menu, the row context menu or a double-click on a row that needs a match), Edit track dialog (Audio link) |
 | `editTrack` | Edit track dialog (tags, cover art) |
 | `searchCandidates` / `CandidateSearchResults` | Choose a match dialog's list |
 | `setSettings` | Settings dialog OK |
@@ -994,9 +1040,9 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Status bar | `STATUSCLASSNAME` with owner-drawn parts, an embedded `PROGRESS_CLASS` and a `TOOLTIPS_CLASS` tool over the Tools part |
 | Left panel | All tracks is a custom-painted row window above the list. The playlist list is a custom-painted window with its own vertical scroll bar; rows, bars and icons are drawn in its `WM_PAINT`. It isn't a `LISTBOX`, because list box items are at most 255 px tall, which a playlist row passes above ~260% scaling. `No playlists yet.` is a label, and `+ Add playlist` a push button with an icon; both are children of the list, placed after the last row, so they scroll with it. Rows hot-track with `WM_MOUSEMOVE` + `TrackMouseEvent` (`WM_MOUSELEAVE`); `WM_LBUTTONDOWN` presses the row it hits, takes the mouse capture and the focus, and `WM_LBUTTONUP` over the same row selects it. The list's `WM_KEYDOWN` moves the selection. `WM_CONTEXTMENU` selects the row and shows the context menu with `TrackPopupMenu` (`TPM_RETURNCMD`). The per-row update control is drawn in the same pass, right after the measured line-5 text (`GetTextExtentPoint32`), with the hover colors `#E5F3FF` and a `#CCE8FF` frame (`#99D1FF` on a selected row) while the mouse is over it. It is hit-tested in `WM_LBUTTONDOWN`, takes the mouse capture until `WM_LBUTTONUP`, hot-tracked with `WM_MOUSEMOVE` + `TrackMouseEvent`, and has a tooltip-control tool per row rectangle while it can be clicked. The spinning ⟳ is 12 icon resources (30° steps) advanced by a ~100 ms `WM_TIMER` that invalidates only the icon rectangles. The timer runs only while a row spins. When `SPI_GETCLIENTAREAANIMATION` is off, the icon stays still. The inspector's `Downloading` icon uses the same frames |
 | First run | a panel that paints the icon, with labels, an `EDIT` (`ES_AUTOHSCROLL`; the hint follows `EN_CHANGE`) and push buttons; the picker is `IFileOpenDialog` with `FOS_PICKFOLDERS` |
-| Filter bar | `EDIT` with `EM_SETCUEBANNER`, a `CBS_DROPDOWNLIST` combo box, a push button |
+| Filter bar | `EDIT` with `EM_SETCUEBANNER`, holding the magnifier and the ✕ (a close button) as child windows, with `EM_SETMARGINS` leaving room for both; a `CBS_DROPDOWNLIST` combo box |
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |
-| Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks. The log colors its rows through `clrText` at `CDDS_ITEMPREPAINT`, keeps to the bottom with `LVM_ENSUREVISIBLE`, and takes its empty text from `LVN_GETEMPTYMARKUP` |
+| Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks. The log colors its rows through `clrText` at `CDDS_ITEMPREPAINT`, keeps to the bottom with `LVM_ENSUREVISIBLE`, and takes its empty text from `LVN_GETEMPTYMARKUP`. Both act on `NM_DBLCLK`, and on the `WM_CONTEXTMENU` the list passes to its parent, with `TrackPopupMenu` (`TPM_RETURNCMD`); the log's Ctrl+C comes as `LVN_KEYDOWN`. After rows move under a mouse that stands still, `LVM_SUBITEMHITTEST` at the cursor and `LVM_SETHOTITEM` move the hover |
 | Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the downloaded bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
 | Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`; the rows' play buttons are painted at `CDDS_ITEMPOSTPAINT`, and the list is subclassed for their mouse handling and tooltip. Choose a match has `WS_THICKFRAME`, an `SBS_SIZEGRIP` scroll bar, `BS_ICON` push buttons, and moves its controls on `WM_SIZE` by their anchors; `WM_GETMINMAXINFO` holds its minimum. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also keeps the undo history (`EditHistory`), taking Ctrl+Z and Ctrl+Y (`WM_CHAR` `0x1A` and `0x19`) and swallowing the edit's own one-step undo: `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO` and Alt+Backspace. It swallows `WM_CONTEXTMENU` too |

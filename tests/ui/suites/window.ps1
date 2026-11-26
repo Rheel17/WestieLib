@@ -43,7 +43,7 @@ Check 'Menu bar' ([W]::MenuText($menu)) '&File &Update &Track &View T&ools &Help
 $popups = @(
 	'&Add playlist... [Ctrl+N], &Remove playlist..., -, &Open library folder, -, E&xit [Ctrl+Q]',
 	'Update &all [F5], Update &selected playlist, -, &Cancel',
-	'&Confirm match, C&hoose match..., &Edit track... [Enter], -, &Retry, &Keep, &Delete file..., -, &Show in folder, Open on &YouTube, Open source &page',
+	'&Confirm match, C&hoose match..., &Edit track... [Enter], -, &Retry, &Keep, &Delete file..., -, &Show in folder, Show in &log, Open on &YouTube Music, Open on S&potify',
 	'&Log [Ctrl+L], -, &Columns...',
 	'&Settings... [Ctrl+Alt+S], Check for &updates, -, &Rebuild library from files..., Locate library &folder..., -, Open &log folder',
 	'&About WestieLib'
@@ -53,7 +53,7 @@ for ($i = 0; $i -lt $popups.Count; $i++) {
 }
 Update-MenuStates $h
 Check 'Grayed while idle, no playlists, nothing selected' ([W]::ItemsWithState($menu, 0x1)) ('&Remove playlist..., Update &all, Update &selected playlist, &Cancel, ' +
-	'&Confirm match, C&hoose match..., &Edit track..., &Retry, &Keep, &Delete file..., &Show in folder, Open on &YouTube, Open source &page')
+	'&Confirm match, C&hoose match..., &Edit track..., &Retry, &Keep, &Delete file..., &Show in folder, Show in &log, Open on &YouTube Music, Open on S&potify')
 Check 'Checked items' ([W]::ItemsWithState($menu, 0x8)) ''
 Send-Command $h '&About WestieLib'
 $about = Wait-OwnedWindow $h

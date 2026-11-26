@@ -13,6 +13,7 @@
 #include "core/library/Library.h"
 #include "core/log/Log.h"
 #include "core/log/LogLine.h"
+#include "core/log/LogSubject.h"
 #include "core/matching/CandidateSearch.h"
 #include "core/matching/CandidateSearchResults.h"
 #include "core/playlists/PlaylistLink.h"
@@ -55,6 +56,7 @@
 #include "ui/infobar/Infobar.h"
 #include "ui/infobar/RemovalsNotice.h"
 #include "ui/inspector/InspectorPanel.h"
+#include "ui/inspector/TrackPages.h"
 #include "ui/log/LogPanel.h"
 #include "ui/main/MainLayout.h"
 #include "ui/main/StateRows.h"
@@ -132,6 +134,9 @@ private:
     void sync_all();
     std::optional<PlaylistRow> selected_row() const;
     void show_playlist_menu(POINT screen);
+    void show_track_menu(POINT screen);
+    void on_track_double_click();
+    void go_to(const core::LogSubject& subject);
     void remove_playlist();
     void confirm_match();
     void choose_match();
@@ -153,6 +158,9 @@ private:
     void keep_selected();
     void delete_selected();
     void show_selected_in_folder() const;
+    void show_selected_in_log();
+    TrackPages selected_track_pages() const;
+    void open_page(const std::optional<std::wstring>& url) const;
     void apply_event(const core::ToolsRunChanged& event);
     void apply_event(const core::ToolStatus& status);
     void apply_event(const core::ToolsChecked& event);

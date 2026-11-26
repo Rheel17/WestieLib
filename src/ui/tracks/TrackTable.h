@@ -35,6 +35,9 @@ public:
     void scroll_to_top();
     void clear_selection();
     std::vector<TrackRow> selected_rows() const;
+    // Its first row, alone; false when no row shows the track
+    bool select_track(const std::string& track);
+    std::optional<POINT> menu_point(LPARAM point);
     LRESULT on_notify(NMHDR& header);
 
 private:

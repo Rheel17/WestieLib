@@ -1,15 +1,16 @@
 # The track panel, before it holds tracks: the filter bar, the status filter, the result line and the table's columns,
 # their widths saved across restarts. Dot-sourced by ui-checks.ps1.
 
-function Get-ClearButton($hwnd) { ([W]::Children((Get-FilterBar $hwnd), 'Button'))[0] }
+# The x inside the search field that empties it
+function Get-SearchClear($hwnd) { ([W]::Children((Get-SearchField $hwnd), 'WestieLib.CloseButton'))[0] }
 
 function Get-SelectedTab($hwnd) { [int][W]::SendMessageW((Get-StatusTabs $hwnd), 0x130B, [IntPtr]::Zero, [IntPtr]::Zero) }
 
 function Get-SelectedSource($hwnd) { [int][W]::SendMessageW((Get-SourceBox $hwnd), 0x147, [IntPtr]::Zero, [IntPtr]::Zero) }
 
-# The search text, the source, the tab, and whether Clear is enabled
+# The search text, the source, the tab, and whether the search field shows its x
 function Get-Filters($hwnd) {
-	"'$([W]::EditText((Get-SearchField $hwnd)))' source $(Get-SelectedSource $hwnd) tab $(Get-SelectedTab $hwnd) | Clear $([W]::IsWindowEnabled((Get-ClearButton $hwnd)))"
+	"'$([W]::EditText((Get-SearchField $hwnd)))' source $(Get-SelectedSource $hwnd) tab $(Get-SelectedTab $hwnd) | x $([W]::IsWindowVisible((Get-SearchClear $hwnd)))"
 }
 
 # Each tab is as wide as its text and 8 DIPs at either side
@@ -46,8 +47,8 @@ function Set-ColumnWidth($hwnd, [int]$position, [int]$width) {
 
 function Get-AllTracksColumns { "Status $(S 56) | Title $(S 204) ^ | Artists $(S 156) | Album $(S 132) | Playlists $(S 114) | Time $(S 48)" }
 
-# From the top: the filter bar (search, Source, the drop-down, Clear), the status tabs, the result line, the rule and
-# the table to the bottom
+# From the top: the filter bar (search, Source, the drop-down), the status tabs, the result line, the rule and the table
+# to the bottom
 function Check-TrackLayout([string]$what, $hwnd) {
 	$panel = Get-TrackPanel $hwnd
 	$pw = Get-ClientWidth $panel
@@ -58,17 +59,16 @@ function Check-TrackLayout([string]$what, $hwnd) {
 
 	$label = ([W]::Children($bar, 'WestieLib.Label'))[0]
 	$labelWidth = [W]::TextWidth('Source', $script:dpi)
-	$clearWidth = 2 * (S 9) + [W]::TextWidth('Clear', $script:dpi)
-	$search = [math]::Min((S 300), $pw - 2 * (S 8) - 3 * (S 8) - $labelWidth - (S 128) - $clearWidth)
+	$search = [math]::Min((S 300), $pw - 2 * (S 8) - 2 * (S 8) - $labelWidth - (S 128))
 	$labelLeft = (S 8) + $search + (S 8)
 	$sourceLeft = $labelLeft + $labelWidth + (S 8)
-	$clearLeft = $sourceLeft + (S 128) + (S 8)
-	$actual = @((Get-SearchField $hwnd), $label, (Get-SourceBox $hwnd), (Get-ClearButton $hwnd) | ForEach-Object { Format-Rect ([W]::RectIn($_, $bar)) }) -join ' | '
+	$actual = @((Get-SearchField $hwnd), $label, (Get-SourceBox $hwnd) | ForEach-Object { Format-Rect ([W]::RectIn($_, $bar)) }) -join ' | '
 	# The label is one line tall, centered like the search field's text, so the two stand level
 	$line = [W]::TextHeight($script:dpi)
 	$expected = "$(S 8),$(S 8) $($search)x$(S 23) | $labelLeft,$((S 8) + [math]::Floor(((S 23) - $line) / 2)) $($labelWidth)x$line | " +
-		"$sourceLeft,$(S 8) $(S 128)x$(S 23) | $clearLeft,$(S 8) $($clearWidth)x$(S 23)"
-	Check "$what  search | Source | drop-down | Clear" $actual $expected
+		"$sourceLeft,$(S 8) $(S 128)x$(S 23)"
+	Check "$what  search | Source | drop-down" $actual $expected
+	Check "$what  no button after them" (@([W]::Children($bar, 'Button')).Count) 0
 
 	$tabsTop = $barHeight + (S 4)
 	$resultTop = $tabsTop + (S 22) + (S 2) + (S 3)
@@ -86,7 +86,7 @@ function Check-TrackLayout([string]$what, $hwnd) {
 }
 
 # The search field's cue banner and the magnifier inside it, 16 DIPs, centered in its height; the drop-down's items,
-# All chosen, and a list that shows them all; Clear disabled
+# All chosen, and a list that shows them all; no x while the search is empty
 function Check-FilterBar($hwnd) {
 	$edit = Get-SearchField $hwnd
 	$icon = ([W]::Children($edit, 'WestieLib.IconView'))[0]
@@ -96,9 +96,9 @@ function Check-FilterBar($hwnd) {
 	$r = [W]::RectIn($icon, (Get-FilterBar $hwnd))
 	$actual = "$($r.Left - $field.Left),$($r.Top - $field.Top) $($r.Right - $r.Left)x$($r.Bottom - $r.Top)"
 	Check '  magnifier in the field' $actual "$(2 + (S 4)),$([math]::Floor(((S 23) - (S 16)) / 2)) $(S 16)x$(S 16)"
-	# The text starts after the icon and its gap
+	# The text starts after the icon and its gap, and stops 4 DIPs before the x's box, which sits 2 DIPs from the border
 	$margins = [int64][W]::SendMessageW($edit, 0xD4, [IntPtr]::Zero, [IntPtr]::Zero)
-	Check '  text margins left | right' "$($margins -band 0xFFFF) | $($margins -shr 16)" "$((S 4) + (S 16) + (S 5)) | $(S 4)"
+	Check '  text margins left | right' "$($margins -band 0xFFFF) | $($margins -shr 16)" "$((S 4) + (S 16) + (S 5)) | $((S 4) + (S 20))"
 	# The text's line is centered in the field
 	Check '  text line top in the field' ([W]::EditTextTop($edit)) ([math]::Floor(((S 23) - [W]::TextHeight($script:dpi)) / 2))
 
@@ -111,32 +111,42 @@ function Check-FilterBar($hwnd) {
 	$listHeight = if ($drop -ne [IntPtr]::Zero) { Get-ClientHeight $drop } else { 0 }
 	[void][W]::SendMessageW($source, 0x14F, [IntPtr]0, [IntPtr]::Zero)
 	Check-That '  dropped list height' $listHeight ($listHeight -ge 3 * $itemHeight) "at least 3 items of $itemHeight"
-	Check 'Filters at the start' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
+	Check 'Filters at the start' (Get-Filters $hwnd) "'' source 0 tab 0 | x False"
 }
 
-# Clear is enabled while the search, the source or the tab is off its default, and puts all three back
-function Check-Clear($hwnd) {
-	$clear = Get-ClearButton $hwnd
-	[W]::SetEditText((Get-SearchField $hwnd), 'bruno')
-	Check '  search typed' (Get-Filters $hwnd) "'bruno' source 0 tab 0 | Clear True"
-	[void][W]::SendMessageW($clear, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	Check '  Clear' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
-
+function Choose-SourceIndex($hwnd, [int]$index) {
 	$source = Get-SourceBox $hwnd
-	[void][W]::SendMessageW($source, 0x14E, [IntPtr]2, [IntPtr]::Zero)
+	[void][W]::SendMessageW($source, 0x14E, [IntPtr]$index, [IntPtr]::Zero)
 	# CB_SETCURSEL doesn't notify; a choice by the user does
 	[void][W]::SendMessageW((Get-FilterBar $hwnd), 0x111, [IntPtr](1 -shl 16), $source)
-	Check '  Spotify chosen' (Get-Filters $hwnd) "'' source 2 tab 0 | Clear True"
+}
+
+# The x shows while the search holds text, against the field's right border; a click empties the search, as Esc does,
+# keeps the focus in the field, and leaves the source and the tab as they are
+function Check-SearchClear($hwnd) {
+	$edit = Get-SearchField $hwnd
+	[W]::SetEditText($edit, 'bruno')
+	Check 'Search typed: the x shows' (Get-Filters $hwnd) "'bruno' source 0 tab 0 | x True"
+	# An 18 DIP box, 2 DIPs inside the 2 px client edge, centered in the field's height as far as the client area lets it:
+	# its top may be a pixel lower
+	$field = [W]::RectIn($edit, (Get-FilterBar $hwnd))
+	$r = [W]::RectIn((Get-SearchClear $hwnd), (Get-FilterBar $hwnd))
+	Check '  its box in the field: right gap, size' "$($field.Right - $r.Right) $($r.Right - $r.Left)x$($r.Bottom - $r.Top)" "$(2 + (S 2)) $(S 18)x$(S 18)"
+	$top = $r.Top - $field.Top
+	$centered = [math]::Floor(((S 23) - (S 18)) / 2)
+	Check-That '  its top in the field' $top ($top -ge $centered -and $top -le $centered + 1) "$centered or $($centered + 1)"
+	Choose-SourceIndex $hwnd 2
 	Click-Tab $hwnd 1
-	Check '  and the Synced tab clicked' (Get-Filters $hwnd) "'' source 2 tab 1 | Clear True"
-	[void][W]::SendMessageW($source, 0x14E, [IntPtr]0, [IntPtr]::Zero)
-	[void][W]::SendMessageW((Get-FilterBar $hwnd), 0x111, [IntPtr](1 -shl 16), $source)
-	Check '  source back to All' (Get-Filters $hwnd) "'' source 0 tab 1 | Clear True"
-	[void][W]::SendMessageW($clear, 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
-	Check '  Clear' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
-	Click-Tab $hwnd 3
+	[W]::Focus((Get-TrackTable $hwnd))
+	Send-Click (Get-SearchClear $hwnd) (S 9) (S 9)
+	Check '  clicked: search empty, no x, source and tab kept' (Get-Filters $hwnd) "'' source 2 tab 1 | x False"
+	Check '  the focus in the search' ([W]::FocusOf($hwnd) -eq $edit) 'True'
+	Send-EditChars $edit 0x1A
+	Check '  Ctrl+Z: the search back, with its x' (Get-Filters $hwnd) "'bruno' source 2 tab 1 | x True"
+	Send-EditChars $edit 0x1B
+	Choose-SourceIndex $hwnd 0
 	Click-Tab $hwnd 0
-	Check '  Needs review clicked, then All' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
+	Check '  Esc, All, the All tab' (Get-Filters $hwnd) "'' source 0 tab 0 | x False"
 }
 
 function Send-EditChars($edit, [int[]]$chars) {
@@ -196,9 +206,9 @@ function Check-EditKeys($hwnd) {
 	Send-EditChars $edit 0x0D
 	Check 'Enter types nothing' "'$([W]::EditText($edit))'" "'Late Swing'"
 	Send-EditChars $edit 0x1B
-	Check 'Esc empties the search' (Get-Filters $hwnd) "'' source 0 tab 0 | Clear False"
+	Check 'Esc empties the search' (Get-Filters $hwnd) "'' source 0 tab 0 | x False"
 	Send-EditChars $edit 0x1A
-	Check '  Ctrl+Z: the search back' (Get-Filters $hwnd) "'Late Swing' source 0 tab 0 | Clear True"
+	Check '  Ctrl+Z: the search back' (Get-Filters $hwnd) "'Late Swing' source 0 tab 0 | x True"
 
 	[W]::SetEditText($edit, 'bruno')
 	Send-EditChars $edit 0x1A
@@ -260,7 +270,7 @@ Check-FilterBar $h
 Check 'Status tabs | selected' "$([W]::TabTexts((Get-StatusTabs $h))) | $(Get-SelectedTab $h)" 'All 0 | Downloaded 0 | Waiting 0 | Needs review 0 | Failed 0 | 0'
 Check '  width beyond each text' (Get-TabPadding $h) ((1..5 | ForEach-Object { 2 * (S 8) }) -join ' ')
 Check 'Result line' ([W]::TextOf((Get-ResultLine $h))) 'Showing 0 of 0'
-Check-Clear $h
+Check-SearchClear $h
 Check-EditKeys $h
 Check-Columns $h
 Check-RowHeight $h

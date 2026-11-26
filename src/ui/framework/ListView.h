@@ -64,6 +64,10 @@ public:
     std::optional<int> focused_item() const;
     void select_items(std::span<const int> items, std::optional<int> focused);
     void hover_row_under_cursor();
+    void reveal(int item);
+    // Where a context menu opens for the WM_CONTEXTMENU point: a row under the mouse, or from the keyboard a selected
+    // row's bottom-left corner. Nothing between or below the rows, or without a selection
+    std::optional<POINT> menu_point(LPARAM point);
     void set_cell_tip(std::function<std::wstring(int item, int column_index)> cell_tip);
     void set_cell_tip_width(int width);
     int text_width(const std::wstring& text) const;

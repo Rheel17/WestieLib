@@ -31,6 +31,7 @@ Edit::Edit(HWND parent, const EditOptions& options) :
             .parent = parent,
         }),
         leading_dips_(options.leading_dips),
+        trailing_dips_(options.trailing_dips),
         escape_clears_(options.escape_clears) {
     add_edit_keys(hwnd());
     if (options.cue_banner) {
@@ -46,7 +47,7 @@ void Edit::apply_dpi(Dpi dpi, const MessageFont& font) {
     set_font(font.handle());
     // A new font resets the margins
     int margin = dpi.scale(TextMarginDips);
-    SendMessageW(hwnd(), EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(margin + dpi.scale(leading_dips_), margin));
+    SendMessageW(hwnd(), EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(margin + dpi.scale(leading_dips_), margin + dpi.scale(trailing_dips_)));
     height_ = std::max(dpi.scale(HeightDips), font.line_height() + dpi.scale(TextHeightPaddingDips));
     text_height_ = font.line_height();
     UINT flags = SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
@@ -59,9 +60,8 @@ LRESULT Edit::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
         return 0;
     }
     if (message == WM_CHAR && wparam == EscapeChar) {
-        if (escape_clears_ && GetWindowTextLengthW(hwnd()) > 0) {
-            select_all();
-            SendMessageW(hwnd(), EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(L""));
+        if (escape_clears_) {
+            erase_text();
         }
         return 0;
     }
@@ -86,6 +86,13 @@ std::wstring Edit::text() const {
 
 void Edit::set_text(const std::wstring& text) {
     platform::win32::check(SetWindowTextW(hwnd(), text.c_str()), "SetWindowTextW");
+}
+
+void Edit::erase_text() {
+    if (GetWindowTextLengthW(hwnd()) > 0) {
+        select_all();
+        SendMessageW(hwnd(), EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(L""));
+    }
 }
 
 void Edit::select_all() {

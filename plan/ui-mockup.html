@@ -139,6 +139,15 @@ body { background: var(--page); color: var(--page-text); font: 14px/1.5 var(--ui
 /* ---------- main panel ---------- */
 .fbar { display: flex; align-items: center; gap: 8px; padding: 8px 8px 4px; }
 .fbar .search { width: 300px; }
+/* The ✕ that empties the search: an 18 px box, 2 px inside the right border */
+.edit .sx { flex: none; width: 18px; height: 18px; margin: 0 -3px 0 auto; display: flex; align-items: center; justify-content: center; }
+/* A popup menu, as Windows 10 draws it */
+.ctx { position: absolute; z-index: 4; min-width: 220px; padding: 2px 0; background: #f2f2f2; border: 1px solid #ccc; box-shadow: 2px 2px 3px rgba(0,0,0,.25); }
+.ctx .mi { display: flex; height: 22px; align-items: center; padding: 0 20px 0 32px; white-space: nowrap; }
+.ctx .mi .k { margin-left: auto; padding-left: 24px; }
+.ctx .mi.dis { color: #6d6d6d; }
+.ctx .mi.hot { background: #91c9f7; }
+.ctx .ms { height: 1px; margin: 3px 1px 3px 28px; background: #ccc; }
 .fbar .combo { width: 128px; }
 .stabs { display: flex; align-items: center; padding: 4px 8px 2px; }
 .stab { height: 22px; display: flex; align-items: center; padding: 0 8px; border: 1px solid transparent; white-space: nowrap; }
@@ -678,7 +687,6 @@ function mainPanel(s, cfg) {
 	c.dups = items.filter(({ t }) => t.dup).length;
 	const tab = cfg.tab || 'all';
 	const rows = items.filter(({ t }) => tab === 'dups' ? t.dup : inTab(t, tab));
-	const filtered = !!q || !!cfg.source || tab !== 'all';
 	const inPlaylist = cfg.scope !== 'all';
 
 	const search = q ? `<span>${esc(cfg.search)}</span><span class="caret" style="margin-left:-3px"></span>` : `<span class="cue">Search title, artist, album</span>`;
@@ -707,9 +715,8 @@ function mainPanel(s, cfg) {
 	}).join('');
 
 	return `<div class="fbar">
-			<div class="edit search">${ic('search')}${search}</div>
+			<div class="edit search">${ic('search')}${search}${q ? `<span class="sx">${ic('close', 's10')}</span>` : ''}</div>
 			<span>Source</span><div class="combo"><span>${cfg.source ? srcName(cfg.source) : 'All'}</span>${ic('chev', 's10')}</div>
-			${btn('Clear', filtered ? 'sm' : 'sm dis')}
 		</div>
 		<div class="stabs">${tabs}</div>
 		<div class="res">Showing ${rows.length} of ${s.tracks.size}${scopeName}</div>
@@ -717,7 +724,23 @@ function mainPanel(s, cfg) {
 			<colgroup>${cols.map(col => `<col style="width:${col.w}px">`).join('')}<col></colgroup>
 			<thead><tr>${cols.map(col => `<th class="${col.r ? 'r' : ''}">${col.sort ? SORT_UP : ''}${col.h}</th>`).join('')}<th class="fill"></th></tr></thead>
 			<tbody>${body}</tbody>
-		</table>${cellTip(rows, cfg, inPlaylist)}</div>`;
+		</table>${cellTip(rows, cfg, inPlaylist)}${rowMenu(rows, cfg)}</div>`;
+}
+
+// The row context menu: the Track menu's items, opened by a right-click on the selected row. & marks the access key.
+const TRACK_MENU = [['&Confirm match'], ['C&hoose match…'], ['&Edit track…', 'Enter'], null, ['&Retry'], ['&Keep'], ['&Delete file…'], null,
+	['&Show in folder'], ['Show in &log'], ['Open on &YouTube Music'], ['Open on S&potify']];
+function rowMenu(rows, cfg) {
+	if (!cfg.menu) return '';
+	const i = rows.findIndex(({ t }) => t.title === cfg.menu.row);
+	const items = TRACK_MENU.map(item => {
+		if (!item) return '<div class="ms"></div>';
+		const [text, key] = item;
+		const plain = text.replace('&', '');
+		const cls = cfg.menu.off.includes(plain) ? ' dis' : plain === cfg.menu.hot ? ' hot' : '';
+		return `<div class="mi${cls}"><span>${text.replace(/&(.)/, '<u>$1</u>')}</span>${key ? `<span class="k">${key}</span>` : ''}</div>`;
+	}).join('');
+	return `<div class="ctx" style="top:${25 + (i + 1) * 22 - 6}px;left:260px">${items}</div>`;
 }
 
 // A hovered Status cell's tooltip, drawn under that row.
@@ -1123,14 +1146,16 @@ const SCREENS = [
 	},
 	{
 		id: 'review', title: 'Needs review', state: base,
-		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'] },
-		cap: 'The Needs review tab lists the matches the Matcher wasn’t sure of. One is selected, and the inspector offers Confirm match, Choose match… and Edit track….',
+		cfg: { scope: 'all', tab: 'review', sort: 'title', sel: ['Feeling Good'],
+			menu: { row: 'Feeling Good', hot: 'Choose match…', off: ['Edit track…', 'Retry', 'Keep', 'Delete file…'] } },
+		cap: 'The Needs review tab lists the matches the Matcher wasn’t sure of. One is selected, and the inspector offers Confirm match, Choose match… and Edit track…. Its row was right-clicked.',
 		notes: [
 			'Needs review is a subset of Downloaded and Waiting. The Matcher wasn’t sure it picked the right result, so the match doesn’t merge into another track until it is confirmed.',
 			'The amber list says what the Matcher doubts, a line for each doubt: here the match’s title adds "Live". Halo has two lines.',
 			'The Audio section shows what was matched.',
 			'Confirm match clears the flag (<code>confirmMatch</code>). Choose match… opens the dialog on the next screen.',
 			'The confidence bar is yellow, the color of a paused progress bar.',
+			'The row’s context menu is the Track menu. Edit track… waits for its feature, and Retry, Keep and Delete file… don’t apply to this track. Show in log shows the track’s lines in the log pane. A double-click on this row would open Choose match… too, since it needs review.',
 		],
 	},
 	{

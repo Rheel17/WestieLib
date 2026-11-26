@@ -20,9 +20,11 @@ bool CommandState::enabled(CommandId command) const {
     case CommandId::ShowInFolder:           return file_selected;
     case CommandId::Keep:                   return removed_selected;
     case CommandId::DeleteFiles:            return deletable_selected;
-    case CommandId::EditTrack:
-    case CommandId::OpenOnYouTube:
-    case CommandId::OpenSourcePage:         return track_selected;
+    case CommandId::ShowInLog:              return track_selected;
+    case CommandId::OpenOnYouTubeMusic:     return youtube_music_page_selected;
+    case CommandId::OpenOnSpotify:          return spotify_page_selected;
+    // It comes with its feature
+    case CommandId::EditTrack:              return false;
     default:                                return true;
     }
 }

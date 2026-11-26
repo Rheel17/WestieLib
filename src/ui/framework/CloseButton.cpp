@@ -14,25 +14,25 @@ namespace westie::ui::framework {
 
 namespace {
 
-constexpr int BoxDips = 24;
-constexpr int IconDips = 12;
 constexpr COLORREF HotColor = RGB(0xE5, 0xF3, 0xFF);
 constexpr COLORREF PressedColor = RGB(0xCC, 0xE4, 0xF7);
 
 }
 
-CloseButton::CloseButton(HWND parent, COLORREF background, std::function<void()> on_click) :
-        Window(window_class(), {.title = L"Close", .style = WS_CHILD | WS_VISIBLE, .parent = parent}),
+CloseButton::CloseButton(HWND parent, COLORREF background, std::function<void()> on_click, const CloseButtonOptions& options) :
+        Window(window_class(), {.title = options.title, .style = WS_CHILD | WS_VISIBLE, .parent = parent}),
         background_(background),
-        on_click_(std::move(on_click)) {}
+        on_click_(std::move(on_click)),
+        box_dips_(options.box_dips),
+        icon_dips_(options.icon_dips) {}
 
 int CloseButton::size() const noexcept {
     return size_;
 }
 
 void CloseButton::apply_dpi(Dpi dpi) {
-    size_ = dpi.scale(BoxDips);
-    icon_.emplace(IDI_CLOSE, dpi.scale(IconDips));
+    size_ = dpi.scale(box_dips_);
+    icon_.emplace(IDI_CLOSE, dpi.scale(icon_dips_));
     platform::win32::check(InvalidateRect(hwnd(), nullptr, FALSE), "InvalidateRect");
 }
 

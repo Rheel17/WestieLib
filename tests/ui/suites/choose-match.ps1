@@ -237,14 +237,19 @@ Check 'Track > Choose match, the library''s song: merged into its track' "$(Wait
 
 Select-ListRow $table 1
 Check 'Lost Song, no match: the card offers Choose match and Retry' ((Wait-TrackCard $h $LostKey) -like "* / No match found. / * / $ChooseMatch / Retry / Source / *") 'True'
-$open = Open-ChooseMatch $h { Send-Command $h 'C&hoose match...' }
+# A row that needs a match opens the dialog on a double-click
+$open = Open-ChooseMatch $h { Double-Click-Row $table 1 }
 $dialog = $open.Dialog
+Check '  double-clicked: the dialog' "$([W]::ClassOf($dialog)) $([W]::TextOf($dialog))" '#32770 Choose a match'
 Check '  no current match, no results' "$([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $(Wait-CandidateRows $dialog $open.Before)" (
 	'No match found. | [] No results. Try fewer words, or paste a link below.')
 Set-YtmLink $dialog 'https://www.youtube.com/watch?v=customVid01'
 Use-ThisResult $dialog
 Check '  a pasted link: the override, no failure' (Wait-SavedTrack $LostKey '*customVid01*') "pending [$LostKey] customVid01 "
 Check '  its card' ((Wait-TrackCard $h $LostKey) -like "* / Status / Waiting / * / ID / customVid01 / Chosen by / Override / File / *") 'True'
+Double-Click-Row $table 1
+Start-Sleep -Milliseconds 500
+Check '  matched now: a double-click opens nothing' ([W]::OwnedWindow($h) -eq [IntPtr]::Zero) 'True'
 
 Select-ListRow $table 2
 [void](Wait-TrackCard $h $MergedKey)

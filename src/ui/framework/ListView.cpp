@@ -21,6 +21,7 @@ constexpr COLORREF RuleColor = RGB(0xE5, 0xE5, 0xE5);
 // Item -1 is every item
 constexpr int EveryItem = -1;
 constexpr WPARAM CtrlAChar = 0x01;
+constexpr WPARAM CtrlCChar = 0x03;
 
 void set_item_state(HWND list, int item, UINT state, UINT mask) {
     LVITEMW entry{};
@@ -157,7 +158,7 @@ int ListView::text_width(const std::wstring& text) const {
 
 void ListView::scroll_to_top() {
     if (SendMessageW(hwnd(), LVM_GETITEMCOUNT, 0, 0) > 0) {
-        SendMessageW(hwnd(), LVM_ENSUREVISIBLE, 0, FALSE);
+        reveal(0);
     }
 }
 
@@ -228,13 +229,45 @@ void ListView::hover_row_under_cursor() {
     }
 }
 
+void ListView::reveal(int item) {
+    SendMessageW(hwnd(), LVM_ENSUREVISIBLE, item, FALSE);
+    hover_row_under_cursor();
+}
+
+std::optional<POINT> ListView::menu_point(LPARAM point) {
+    POINT screen{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
+    if (screen.x == -1 && screen.y == -1) {
+        std::vector<int> selected = selected_items();
+        if (selected.empty()) {
+            return std::nullopt;
+        }
+        std::optional<int> focused = focused_item();
+        int item = focused && std::ranges::contains(selected, *focused) ? *focused : selected.front();
+        reveal(item);
+        // Subitem 0's bounds are the whole row's
+        RECT row = cell_rect(item, 0);
+        POINT corner{std::max(row.left, LONG{0}), row.bottom};
+        platform::win32::check(ClientToScreen(hwnd(), &corner), "ClientToScreen");
+        return corner;
+    }
+    LVHITTESTINFO hit{};
+    hit.pt = screen;
+    platform::win32::check(ScreenToClient(hwnd(), &hit.pt), "ScreenToClient");
+    SendMessageW(hwnd(), LVM_SUBITEMHITTEST, 0, reinterpret_cast<LPARAM>(&hit));
+    if (hit.iItem < 0 || !(hit.flags & LVHT_ONITEM)) {
+        return std::nullopt;
+    }
+    return screen;
+}
+
 LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     // The list has no Ctrl+A of its own, and would search the rows for the character it makes
     if (message == WM_KEYDOWN && wparam == 'A' && only_ctrl_down()) {
         set_item_state(hwnd(), EveryItem, LVIS_SELECTED, LVIS_SELECTED);
         return 0;
     }
-    if (message == WM_CHAR && wparam == CtrlAChar) {
+    // Ctrl+C comes to the parent as LVN_KEYDOWN, and its character too would search the rows
+    if (message == WM_CHAR && (wparam == CtrlAChar || wparam == CtrlCChar)) {
         return 0;
     }
 
