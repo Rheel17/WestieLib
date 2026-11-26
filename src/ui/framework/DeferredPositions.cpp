@@ -10,7 +10,11 @@ constexpr UINT PlacementFlags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS;
 }
 
 void DeferredPositions::place(HWND hwnd, const std::optional<Rect>& rect) {
-    placements_.push_back({hwnd, rect});
+    placements_.push_back({.hwnd = hwnd, .rect = rect});
+}
+
+void DeferredPositions::move(HWND hwnd, const Rect& rect) {
+    placements_.push_back({.hwnd = hwnd, .rect = rect, .keeps_visibility = true});
 }
 
 void DeferredPositions::apply() {
@@ -32,6 +36,9 @@ void DeferredPositions::apply() {
 }
 
 UINT DeferredPositions::flags_for(const Placement& placement) noexcept {
+    if (placement.keeps_visibility) {
+        return PlacementFlags;
+    }
     return placement.rect ? PlacementFlags | SWP_SHOWWINDOW : PlacementFlags | SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE;
 }
 

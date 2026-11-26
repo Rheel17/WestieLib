@@ -270,6 +270,7 @@ add_executable(WestieLib WIN32
 	src/ui/main/MainLayout.cpp
 	src/ui/main/MainMenu.cpp
 	src/ui/main/MainWindow.cpp
+	src/ui/main/MatchChoices.cpp
 	src/ui/main/StateRows.cpp
 	src/ui/main/StateRowsWorker.cpp
 	src/ui/main/WindowPlacement.cpp
@@ -332,6 +333,7 @@ add_executable(WestieLibTests
 	tests/unit/FileRuleChecks.cpp
 	tests/unit/LibraryChecks.cpp
 	tests/unit/LogChecks.cpp
+	tests/unit/MatchChoiceChecks.cpp
 	tests/unit/MatchWordsChecks.cpp
 	tests/unit/NameChecks.cpp
 	tests/unit/RunPhaseChecks.cpp
@@ -347,6 +349,9 @@ add_executable(WestieLibTests
 	src/ui/sync/SyncBoard.cpp
 	src/ui/sync/TrackStage.cpp
 	src/ui/sync/WaitingText.cpp
+	# The tracks Choose a match opens for by itself
+	src/ui/main/MatchChoices.cpp
+	src/ui/tracks/TrackReview.cpp
 )
 target_include_directories(WestieLibTests PRIVATE src)
 target_compile_definitions(WestieLibTests PRIVATE ${WINDOWS_DEFINITIONS} ${LIBSTDCXX_DEFINITIONS})

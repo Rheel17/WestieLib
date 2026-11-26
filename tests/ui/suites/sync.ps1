@@ -261,6 +261,9 @@ $Web.SpotifyNames[$ErrorSpotifyId] = 'Refused'
 $Web.SpotifyItems[$BigSpotifyId] = [Collections.Generic.List[string]]@(1..150 | ForEach-Object { New-BigTrack $_ })
 [void]$Web.ErrorQueryIds.Add($ErrorSpotifyId)
 
+# Its updates leave tracks to review or unmatched, which would open Choose a match by itself
+Set-SavedSetting openChooseMatch $false
+
 "--- Run 1: syncing"
 Set-SavedWindow @{}
 Install-FakeTools

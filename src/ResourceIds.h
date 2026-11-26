@@ -66,3 +66,5 @@
 #define IDC_CHOOSE_GRIP            1209
 #define IDC_CHOOSE_LINK_LABEL      1210
 #define IDC_CHOOSE_QUERY_LABEL     1211
+#define IDC_CHOOSE_OPEN_BY_ITSELF  1212
+#define IDC_CHOOSE_NEXT            1213

@@ -23,15 +23,34 @@ namespace westie::ui {
 // The title of a YouTube Music id the library has
 using LibraryResultTitle = std::function<std::optional<std::string>(const std::string& ytm_id)>;
 
+struct ChooseMatchOptions {
+    framework::Size window_dips{};
+    // The check box's state as it opens
+    bool open_by_itself = true;
+    // Another track waits, so Next shows
+    bool next = false;
+};
+
+enum class ChooseMatchEnd { Chosen, Next, Cancelled };
+
+struct ChooseMatchOutcome {
+    ChooseMatchEnd end = ChooseMatchEnd::Cancelled;
+    // Set when chosen
+    std::string ytm_id{};
+    // The check box's state as it closed
+    bool open_by_itself = true;
+};
+
 class ChooseMatchDialog final : public framework::ModalDialog {
 public:
     static constexpr framework::Size DefaultWindowDips{900, 600};
 
-    ChooseMatchDialog(MatchChoice choice, core::CandidateSearch& search, LibraryResultTitle library_title, framework::Size window_dips);
+    ChooseMatchDialog(MatchChoice choice, core::CandidateSearch& search, LibraryResultTitle library_title, const ChooseMatchOptions& options);
 
-    // The YouTube Music id
-    std::optional<std::string> choose(HWND owner);
+    ChooseMatchOutcome choose(HWND owner);
     void show_results(const core::CandidateSearchResults& results);
+    // As other tracks start to wait while it is open
+    void show_next();
     // The size it was closed at
     framework::Size window_dips() const noexcept;
 
@@ -57,6 +76,8 @@ private:
     core::CandidateSearch& search_;
     LibraryResultTitle library_title_;
     framework::Size window_dips_;
+    bool open_by_itself_ = true;
+    bool next_ = false;
     std::optional<framework::DialogSizing> sizing_;
     std::optional<CandidateListView> list_;
     std::optional<PlayButton> source_play_;

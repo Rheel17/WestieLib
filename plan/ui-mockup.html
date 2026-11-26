@@ -1015,7 +1015,8 @@ const dlgTitle = title => `<div class="dt"><span class="t">${title}</span><span 
 
 // One dialog for both cases: several candidates to pick from, or nothing found. Both take a pasted link. The list
 // holds the current match, the library's YouTube Music entries that come close, and the search results, by score.
-function chooseMatchDialog(t, found) {
+// Opened by itself during an update, with other tracks waiting, it shows Next.
+function chooseMatchDialog(t, found, next) {
 	const results = found ? [
 		['Feeling Good', 'Michael Bublé', '', '3:59', 'Same recording', 'library', 'sel'],
 		['Feeling Good (Live)', 'Michael Bublé', 'Caught in the Act', '3:58', 'Check version', 'current'],
@@ -1051,7 +1052,7 @@ function chooseMatchDialog(t, found) {
 			<div class="lbl" style="margin-top:12px">Or paste a YouTube or YouTube Music link:</div>
 			${link}
 		</div>
-		<div class="df">${btn('Use this match', 'def')}${btn('Cancel')}</div><span class="grip">${ic('grip')}</span></div>`;
+		<div class="df"><span class="chk" style="margin-right:auto"><i>${CHECK}</i>Open by itself when an update needs a choice</span>${next ? btn('Next') : ''}${btn('Use this match', 'def')}${btn('Cancel')}</div><span class="grip">${ic('grip')}</span></div>`;
 }
 
 function editTrackDialog(t) {
@@ -1089,7 +1090,7 @@ function dialogHtml(s, cfg) {
 		case 'add-wait': return addDialog('wait');
 		case 'settings': return settingsDialog();
 		case 'choose': return chooseMatchDialog(t, true);
-		case 'nomatch': return chooseMatchDialog(t, false);
+		case 'nomatch': return chooseMatchDialog(t, false, true);
 		case 'edit': return editTrackDialog(t);
 		default: return '';
 	}
@@ -1183,8 +1184,9 @@ const SCREENS = [
 	{
 		id: 'nomatch', title: 'Choose a match: nothing found', state: base,
 		cfg: { scope: 'all', tab: 'failed', sort: 'title', sel: ['Sway With Me (WCS Edit)'], inactive: true, dialog: 'nomatch' },
-		cap: 'This is the same dialog, for a track the Matcher couldn’t match at all. DJ edits are often not on YouTube Music.',
+		cap: 'This is the same dialog, for a track the Matcher couldn’t match at all. DJ edits are often not on YouTube Music. Here it opened by itself during an update, and another track waits.',
 		notes: [
+			'While its check box is on, an update opens the dialog by itself for each track it leaves to review or can’t match. Tracks found meanwhile wait their turn; Next leaves this one as it is and opens the next, and Use this match goes on to the next too. Cancel ends it for now.',
 			'A track with no usable result fails with the reason <i>No match on YouTube Music</i>. Its inspector offers Choose match… first.',
 			'The empty list says what to try next. A ListView can show this text through its empty markup.',
 			'A pasted link is checked as you type. Use this match is enabled once the link names a YouTube Music id.',

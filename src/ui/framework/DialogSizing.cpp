@@ -84,7 +84,8 @@ void DialogSizing::place() const {
     for (const Placed& placed : controls_) {
         auto [left, right] = anchored(rescale(placed.rect.left, dpi_, dpi), rescale(placed.rect.right, dpi_, dpi), placed.horizontal, grow_x);
         auto [top, bottom] = anchored(rescale(placed.rect.top, dpi_, dpi), rescale(placed.rect.bottom, dpi_, dpi), placed.vertical, grow_y);
-        positions.place(placed.control, Rect{left, top, right, bottom});
+        // A control the dialog hides stays hidden
+        positions.move(placed.control, Rect{left, top, right, bottom});
     }
     positions.apply();
 }

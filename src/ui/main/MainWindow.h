@@ -59,6 +59,7 @@
 #include "ui/inspector/TrackPages.h"
 #include "ui/log/LogPanel.h"
 #include "ui/main/MainLayout.h"
+#include "ui/main/MatchChoices.h"
 #include "ui/main/StateRows.h"
 #include "ui/main/StateRowsWorker.h"
 #include "ui/main/WindowPlacement.h"
@@ -140,6 +141,10 @@ private:
     void remove_playlist();
     void confirm_match();
     void choose_match();
+    ChooseMatchEnd run_choose_match(MatchChoice choice, bool next);
+    void offer_choices();
+    void open_choices();
+    bool choice_held_back() const;
     void open_library_folder() const;
     void open_log_folder() const;
     void open_playlist_page() const;
@@ -245,6 +250,11 @@ private:
     std::optional<AddPlaylistDialog> add_playlist_dialog_;
     std::optional<ChooseMatchDialog> choose_match_dialog_;
     framework::Size choose_match_dips_ = ChooseMatchDialog::DefaultWindowDips;
+    // The tracks an update left for Choose a match to open by itself
+    MatchChoices match_choices_;
+    bool choices_posted_ = false;
+    // It opened by itself, so tracks that come to wait show Next
+    bool choosing_by_itself_ = false;
     // Last, so its thread is joined before the rest goes
     StateRowsWorker state_rows_worker_;
 };

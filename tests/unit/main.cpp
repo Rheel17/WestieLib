@@ -18,6 +18,7 @@ int main() {
     westie::tests::check_downloads_to_queue();
     westie::tests::check_file_rules();
     westie::tests::check_unavailable();
+    westie::tests::check_match_choices();
     std::cout << std::format("{} checks, {} failure(s)\n", westie::tests::checks_run(), westie::tests::checks_failed());
     return westie::tests::checks_failed() == 0 ? 0 : 1;
 }

@@ -36,6 +36,8 @@ constexpr std::array Anchors = {
     framework::ControlAnchor{.id = IDC_CHOOSE_LINK, .horizontal = framework::Anchor::Stretch, .vertical = framework::Anchor::End},
     framework::ControlAnchor{.id = IDC_PLAY_LINK, .horizontal = framework::Anchor::End, .vertical = framework::Anchor::End},
     framework::ControlAnchor{.id = IDC_CHOOSE_LINK_KIND, .horizontal = framework::Anchor::Stretch, .vertical = framework::Anchor::End},
+    framework::ControlAnchor{.id = IDC_CHOOSE_OPEN_BY_ITSELF, .vertical = framework::Anchor::End},
+    framework::ControlAnchor{.id = IDC_CHOOSE_NEXT, .horizontal = framework::Anchor::End, .vertical = framework::Anchor::End},
     framework::ControlAnchor{.id = IDOK, .horizontal = framework::Anchor::End, .vertical = framework::Anchor::End},
     framework::ControlAnchor{.id = IDCANCEL, .horizontal = framework::Anchor::End, .vertical = framework::Anchor::End},
     framework::ControlAnchor{.id = IDC_CHOOSE_GRIP, .horizontal = framework::Anchor::End, .vertical = framework::Anchor::End},
@@ -51,17 +53,29 @@ std::wstring result_page(const std::string& ytm_id) {
 
 }
 
-ChooseMatchDialog::ChooseMatchDialog(MatchChoice choice, core::CandidateSearch& search, LibraryResultTitle library_title, framework::Size window_dips) :
+ChooseMatchDialog::ChooseMatchDialog(MatchChoice choice, core::CandidateSearch& search, LibraryResultTitle library_title, const ChooseMatchOptions& options) :
         ModalDialog(IDD_CHOOSE_MATCH),
         choice_(std::move(choice)),
         search_(search),
         library_title_(std::move(library_title)),
-        window_dips_(window_dips) {}
+        window_dips_(options.window_dips),
+        open_by_itself_(options.open_by_itself),
+        next_(options.next) {}
 
-std::optional<std::string> ChooseMatchDialog::choose(HWND owner) {
+ChooseMatchOutcome ChooseMatchDialog::choose(HWND owner) {
     INT_PTR result = show_modal(owner);
     search_.stop();
-    return result == IDOK ? chosen_ : std::nullopt;
+    if (result == IDOK && chosen_) {
+        return {.end = ChooseMatchEnd::Chosen, .ytm_id = *chosen_, .open_by_itself = open_by_itself_};
+    }
+    return {.end = result == IDC_CHOOSE_NEXT ? ChooseMatchEnd::Next : ChooseMatchEnd::Cancelled, .open_by_itself = open_by_itself_};
+}
+
+void ChooseMatchDialog::show_next() {
+    next_ = true;
+    if (hwnd()) {
+        ShowWindow(GetDlgItem(hwnd(), IDC_CHOOSE_NEXT), SW_SHOWNA);
+    }
 }
 
 void ChooseMatchDialog::show_results(const core::CandidateSearchResults& results) {
@@ -116,6 +130,8 @@ void ChooseMatchDialog::on_init_dialog() {
     platform::win32::check(SetDlgItemTextW(hwnd(), IDC_CHOOSE_SOURCE, heading.c_str()), "SetDlgItemTextW");
     platform::win32::check(SetDlgItemTextW(hwnd(), IDC_CHOOSE_CURRENT, choice_.current.c_str()), "SetDlgItemTextW");
     platform::win32::check(SetDlgItemTextW(hwnd(), IDC_CHOOSE_QUERY, choice_.query.c_str()), "SetDlgItemTextW");
+    CheckDlgButton(hwnd(), IDC_CHOOSE_OPEN_BY_ITSELF, open_by_itself_ ? BST_CHECKED : BST_UNCHECKED);
+    ShowWindow(GetDlgItem(hwnd(), IDC_CHOOSE_NEXT), next_ ? SW_SHOWNA : SW_HIDE);
     framework::add_edit_keys(platform::win32::check(GetDlgItem(hwnd(), IDC_CHOOSE_QUERY), "GetDlgItem"));
     framework::add_edit_keys(platform::win32::check(GetDlgItem(hwnd(), IDC_CHOOSE_LINK), "GetDlgItem"));
     list_.emplace(platform::win32::check(GetDlgItem(hwnd(), IDC_CHOOSE_LIST), "GetDlgItem"), [this](std::size_t row) {
@@ -144,6 +160,10 @@ void ChooseMatchDialog::on_command(WPARAM wparam) {
         }
         return;
     case IDCANCEL:         end(IDCANCEL); return;
+    case IDC_CHOOSE_NEXT:  end(IDC_CHOOSE_NEXT); return;
+    case IDC_CHOOSE_OPEN_BY_ITSELF:
+        open_by_itself_ = IsDlgButtonChecked(hwnd(), IDC_CHOOSE_OPEN_BY_ITSELF) == BST_CHECKED;
+        return;
     case IDC_CHOOSE_SEARCH: search_typed(); return;
     case IDC_PLAY_SOURCE:  play_source(); return;
     case IDC_PLAY_LINK:
@@ -166,6 +186,9 @@ INT_PTR ChooseMatchDialog::on_notify(NMHDR& header) {
     }
     switch (header.code) {
     case LVN_ITEMCHANGED: show_buttons(); return TRUE;
+    case LVN_GETDISPINFOW:
+        list_->show_cell(reinterpret_cast<NMLVDISPINFOW&>(header).item);
+        return TRUE;
     case NM_CUSTOMDRAW:   return message_result(list_->on_custom_draw(reinterpret_cast<NMLVCUSTOMDRAW&>(header)));
     case LVN_GETEMPTYMARKUP:
         list_->on_empty_markup(reinterpret_cast<NMLVEMPTYMARKUP&>(header));

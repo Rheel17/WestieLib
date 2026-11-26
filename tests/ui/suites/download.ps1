@@ -60,6 +60,9 @@ $Web.SpotifyItems[$DownloadSpotifyId] = [Collections.Generic.List[string]]@(
 # Twenty seconds longer than Spotify's: a match with a length doubt, which needs review
 $Web.YtmResults['Bea Maybe'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('reviewMaybe', 'Maybe', @('Bea'), 'Unsure', '3:40'))
 
+# Its updates leave tracks to review or unmatched, which would open Choose a match by itself
+Set-SavedSetting openChooseMatch $false
+
 "--- Run 1: an update downloads"
 Set-SavedWindow @{}
 Install-FakeTools

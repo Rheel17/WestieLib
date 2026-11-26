@@ -37,6 +37,7 @@ struct SettingsJson {
     std::optional<int> concurrency{};
     std::optional<std::int64_t> delay_between_tracks_seconds{};
     std::optional<bool> auto_update_tools{};
+    std::optional<bool> open_choose_match{};
 };
 
 AudioFormat format_named(const std::optional<std::string>& name, AudioFormat fallback) {
@@ -61,7 +62,7 @@ struct glz::meta<westie::core::SettingsJson> {
     using T = westie::core::SettingsJson;
     constexpr static auto value = glz::object(
             "version", &T::version, "libraryPath", &T::library_path, "format", &T::format, "embedCover", &T::embed_cover, "concurrency", &T::concurrency,
-            "delayBetweenTracksSeconds", &T::delay_between_tracks_seconds, "autoUpdateTools", &T::auto_update_tools
+            "delayBetweenTracksSeconds", &T::delay_between_tracks_seconds, "autoUpdateTools", &T::auto_update_tools, "openChooseMatch", &T::open_choose_match
     );
 };
 
@@ -99,6 +100,7 @@ Settings SettingsStore::load() {
         settings.delay_between_tracks = std::chrono::seconds(std::max<std::int64_t>(*json.delay_between_tracks_seconds, 0));
     }
     settings.auto_update_tools = json.auto_update_tools.value_or(defaults_.auto_update_tools);
+    settings.open_choose_match = json.open_choose_match.value_or(defaults_.open_choose_match);
 
     std::scoped_lock lock(mutex_);
     current_ = settings;
@@ -113,6 +115,7 @@ void SettingsStore::save(const Settings& settings) {
         .concurrency = settings.concurrency,
         .delay_between_tracks_seconds = settings.delay_between_tracks.count(),
         .auto_update_tools = settings.auto_update_tools,
+        .open_choose_match = settings.open_choose_match,
     };
     glz::expected<std::string, glz::error_ctx> contents = glz::write<PrettyJsonWriteOptions>(json);
     if (!contents) {

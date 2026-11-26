@@ -886,8 +886,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     also cancels the look-up.
   - `Add` stores the playlist with the name the look-up found. The welcome screen gives way to the main panel, and the
     playlist shows in the left panel.
-- **Choose a match**. Opened by `Choose match…` in the inspector, the Track menu or Edit track. One dialog
-  covers both the case with several candidates and the case where nothing was found:
+- **Choose a match**. Opened by `Choose match…` in the inspector, the Track menu or Edit track, and by itself during an
+  update (below). One dialog covers both the case with several candidates and the case where nothing was found:
   - At the top: the source track (glyph, title, then `by <artists> (<album>, <length>)` in gray), with a play button
     at the right end of the line (see Play buttons), which opens the track on Spotify. Under it the track's current
     match, by where it comes from: "Current match: <title>, 58% confidence", "Current match: <title>, from a YouTube Music
@@ -903,6 +903,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     - the current match, marked `(current)`;
     - the YouTube Music sources the playlists list that the Matcher doesn't reject for the track, marked
       `(in library)`;
+    - The marks are gray, after the title in the Title cell. A title too long for the cell ends in an ellipsis before
+      its mark, which stays whole while the cell has room for it.
     - the search results. When the dialog opens, those of the Matcher's queries; after `Search` (or Enter in the
       edit), those of the edit's text. The current match and the library rows stay.
     - A result whose YouTube Music id already belongs to another track is marked `(in library)` too. Choosing a
@@ -919,8 +921,23 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     gray, or the YouTube Music logo and `YouTube Music id <id>`, followed by the title when the library has that id.
     The links it takes are in `arch.md` (YouTube Music links).
   - A link that names a YouTube Music id wins over the list's selection; selecting a row leaves the link as it is.
-  - The footer has `Use this match` (default) and `Cancel`. `Use this match` is enabled once the link names a YouTube
-    Music id or a row is selected. A double-click on a row is `Use this match`.
+  - The footer has, at the left, the check box `Open by itself when an update needs a choice`, and at the right `Next`
+    (only while other tracks wait, see below), `Use this match` (default) and `Cancel`. `Use this match` is enabled
+    once the link names a YouTube Music id or a row is selected. A double-click on a row is `Use this match`.
+  - **Opening by itself.** While the check box is on, which it is at first, an update that leaves a track needing
+    review, or finds no match for it, opens the dialog for that track. A search that failed doesn't: the next update
+    tries it again.
+    - Each track once per update. Tracks found while the dialog is open wait their turn, in the order the update
+      matched them. While one waits, `Next` shows; it leaves this track as it is and opens the next. `Use this match`
+      also goes on to the next.
+    - `Cancel` or closing the dialog ends it: the tracks left stay in Needs review and Failed, and only tracks the
+      update matches after that open it again. Turning the check box off ends it too.
+    - A track that no longer needs a choice when its turn comes, as when it was confirmed or merged in the meantime, is
+      left out.
+    - It waits while another dialog or a menu is open, while a mouse button is held (as in a splitter drag), and while
+      the window is minimized, and opens within a second after that.
+    - The check box shows when the dialog is opened by hand too, so it can be turned on again there; `Next` never shows
+      then. Its state is saved in settings.json (`openChooseMatch`) as the dialog closes.
   - `Use this match` on the current match confirms it. Any other result becomes the override, which downloads
     the track again.
   - While it is open, an update starts no new downloads, because YouTube Music doesn't answer the dialog's searches
@@ -955,11 +972,11 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     │ [                                                               ] [▶]    │
     │ ● YouTube Music id 5aM1xdk8lRw                                           │
     │                                                                          │
-    │                                            [Use this match]  [Cancel]  ◢ │
+    │ [✓] Open by itself when an update…    [Next] [Use this match] [Cancel] ◢ │
     └──────────────────────────────────────────────────────────────────────────┘
     ```
-  - So far it opens from the inspector, the Track menu, the row's context menu and a double-click on a row that needs a
-    match; Edit track comes with its feature.
+  - So far it opens from the inspector, the Track menu, the row's context menu, a double-click on a row that needs a
+    match, and by itself during an update; Edit track comes with its feature.
 - **Edit track**. Opened by `Edit track…`, Enter, or a double-click on a row that needs no match:
   - **Cover art**: a 132 px preview, `Choose image…`, `Paste` and `Reset`, plus a source line (`From the
     YouTube thumbnail`, `From Spotify`, `Custom image`).
@@ -1044,7 +1061,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
 | Status filter | `WC_TABCONTROL` with `TCS_BUTTONS \| TCS_FLATBUTTONS`; labels rewritten with counts. The control's own buttons are classic 3D ones on a gray band, so its subclass paints the buttons, the hover and the separators in `WM_PAINT`, and the control keeps the clicks, keys and selection |
 | Track table, log | `WC_LISTVIEW` with `LVS_REPORT \| LVS_OWNERDATA`, `LVS_EX_FULLROWSELECT \| LVS_EX_DOUBLEBUFFER \| LVS_EX_HEADERDRAGDROP`; `NM_CUSTOMDRAW` for the Status icon and colored text; `SetWindowTheme(L"Explorer")`, which also draws faint lines under the column dividers. The header's `NM_CUSTOMDRAW` post-paint draws the rule under the titles, which Explorer's design leaves out. The progress ring comes from a 24-step image list. The Status tooltip uses `LVS_EX_INFOTIP` + `LVN_GETINFOTIP`. The # column is inserted when a playlist is selected and removed for All tracks. The log colors its rows through `clrText` at `CDDS_ITEMPREPAINT`, keeps to the bottom with `LVM_ENSUREVISIBLE`, and takes its empty text from `LVN_GETEMPTYMARKUP`. Both act on `NM_DBLCLK`, and on the `WM_CONTEXTMENU` the list passes to its parent, with `TrackPopupMenu` (`TPM_RETURNCMD`); the log's Ctrl+C comes as `LVN_KEYDOWN`. After rows move under a mouse that stands still, `LVM_SUBITEMHITTEST` at the cursor and `LVM_SETHOTITEM` move the hover |
 | Inspector | a child window with its own vertical scroll bar, holding one card at a time. A card is a panel of labels, buttons and small self-painted windows: the title, the section titles with their rules, the downloaded bar and the link. The link isn't `WC_LINK`, which can't end in an ellipsis and takes its background from its parent; it hot-tracks like the playlist rows. Covers decoded with WIC into an HBITMAP |
-| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`; the rows' play buttons are painted at `CDDS_ITEMPOSTPAINT`, and the list is subclassed for their mouse handling and tooltip. Choose a match has `WS_THICKFRAME`, an `SBS_SIZEGRIP` scroll bar, `BS_ICON` push buttons, and moves its controls on `WM_SIZE` by their anchors; `WM_GETMINMAXINFO` holds its minimum. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
+| Dialogs | `DIALOGEX` resources, `UPDOWN_CLASS`, an `SS_OWNERDRAW` static for each detection line (icon and text), a `WM_TIMER` that delays the playlist look-up and another that redraws its spinner about 60 times a second (drawn with GDI+, its angle from the time since it started), `BS_AUTORADIOBUTTON`, `IFileOpenDialog` (`FOS_PICKFOLDERS` for the library, image filter for covers), `TaskDialogIndirect`. The Choose a match results are a report ListView, and its empty text comes from `LVN_GETEMPTYMARKUP`; the rows' play buttons are painted at `CDDS_ITEMPOSTPAINT`, and the list is subclassed for their mouse handling and tooltip. Its titles are `LPSTR_TEXTCALLBACK` texts, empty while the list draws a row, and painted at `CDDS_ITEMPOSTPAINT` with their marks in gray, as the log's messages are. Its `Next` starts hidden, and its anchors move the controls without showing them. Choose a match has `WS_THICKFRAME`, an `SBS_SIZEGRIP` scroll bar, `BS_ICON` push buttons, and moves its controls on `WM_SIZE` by their anchors; `WM_GETMINMAXINFO` holds its minimum. Edit track's cover is an `SS_BITMAP` static, and Paste reads `CF_DIB` |
 | Global | ComCtl32 v6 manifest, Per-Monitor V2 DPI awareness, message font from `SPI_GETNONCLIENTMETRICS`. Every `EDIT` is subclassed for the word keys: Ctrl+Backspace arrives as `WM_CHAR` `0x7F`, which the control would type as a box. The subclass also keeps the undo history (`EditHistory`), taking Ctrl+Z and Ctrl+Y (`WM_CHAR` `0x1A` and `0x19`) and swallowing the edit's own one-step undo: `WM_UNDO`, `EM_UNDO`, `EM_CANUNDO` and Alt+Backspace. It swallows `WM_CONTEXTMENU` too |
 
 The UI uses the Windows 10 palette:

@@ -87,6 +87,23 @@ function Get-ChoiceState($dialog) {
 
 function Set-YtmLink($dialog, [string]$link) { [W]::SetEditText([W]::GetDlgItem($dialog, 1205), $link) }
 
+# Whether "Open by itself when an update needs a choice" is checked (BM_GETCHECK), and whether Next shows
+function Get-OpenByItself($dialog) {
+	"$([W]::SendMessageW([W]::GetDlgItem($dialog, 1212), 0xF0, [IntPtr]::Zero, [IntPtr]::Zero) -eq 1) $([W]::IsWindowVisible([W]::GetDlgItem($dialog, 1213)))"
+}
+
+# The dialog an update opens, which waits for the fetch and the searches before it
+function Wait-ChoiceDialog($hwnd) {
+	for ($i = 0; $i -lt 150; $i++) {
+		$window = [W]::OwnedWindow($hwnd)
+		if ($window -ne [IntPtr]::Zero) { return $window }
+		Start-Sleep -Milliseconds 100
+	}
+	[IntPtr]::Zero
+}
+
+function Get-SavedOpenByItself { (Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json).openChooseMatch }
+
 function Use-ThisResult($dialog) {
 	[void][W]::PostMessageW([W]::GetDlgItem($dialog, 1), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 	Wait-Closed $dialog
@@ -136,6 +153,8 @@ $Web.YtmResults['Gone Lost Song'] = New-Object Collections.Generic.List[string]
 [void]$Web.YtmBrokenQueries.Add('Broken query')
 
 "--- Run 1: choosing matches"
+# Its updates leave tracks to review, which would open the dialog by itself until Run 3
+Set-SavedSetting openChooseMatch $false
 [IO.File]::WriteAllText($StateFile, "{`"version`": 1, `"playlists`": {$playlists}, `"sources`": {$($sources -join ', ')}, `"tracks`": {$($tracks -join ', ')}}")
 $app = Start-App
 $h = $app.Hwnd
@@ -151,6 +170,7 @@ Check '  menu: Confirm match and Choose match enabled' "$($grayed -like '*&Confi
 $open = Open-ChooseMatch $h { Click-CardButton $h $ChooseMatch }
 $dialog = $open.Dialog
 Check '  the card''s button opens it' "$([W]::ClassOf($dialog)) $([W]::TextOf($dialog))" '#32770 Choose a match'
+Check '  opened by hand: Open by itself off, as settings.json says | Next hidden' (Get-OpenByItself $dialog) 'False False'
 Check '  the track | the current match | the query' (
 	"$([W]::TextOf([W]::GetDlgItem($dialog, 1200))) | $([W]::TextOf([W]::GetDlgItem($dialog, 1201))) | $([W]::EditText([W]::GetDlgItem($dialog, 1202)))") (
 	"Tell Me by Rae (Tell, 3:20) | Current match: Tell Me (Live), 78% confidence | Rae Tell Me")
@@ -296,4 +316,43 @@ Check 'Choose a match opens at the saved size' (Get-DialogDips $open.Dialog) '82
 [void](Wait-CandidateRows $open.Dialog $open.Before)
 [void][W]::PostMessageW([W]::GetDlgItem($open.Dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
 Wait-Closed $open.Dialog
+Stop-App $app
+
+"--- Run 3: opening by itself during an update"
+# Drift Away's only result is 25 s longer, so it is to review; Nowhere Song finds nothing
+Set-SavedSetting openChooseMatch $true
+$AutoId = '9autoautoautoautoautoa'
+$Web.SpotifyNames[$AutoId] = 'Auto picks'
+$Web.SpotifyItems[$AutoId] = [Collections.Generic.List[string]]@(
+	[FakeWeb]::Track('spDriftAway00000000004', 'Drift Away', @('Kai'), 'Drift', 200000),
+	[FakeWeb]::Track('spNowhere0000000000005', 'Nowhere Song', @('Ghost'), 'Nowhere', 180000)
+)
+$Web.YtmResults['Kai Drift Away'] = [Collections.Generic.List[string]]@([FakeWeb]::Song('driftLong01', 'Drift Away', @('Kai'), 'Drift', '3:45'))
+$Web.YtmResults['Ghost Nowhere Song'] = New-Object Collections.Generic.List[string]
+[IO.File]::WriteAllText($StateFile, "{`"version`": 1, `"playlists`": {`"spotify:$AutoId`": {`"url`": `"https://open.spotify.com/playlist/$AutoId`", " +
+	"`"name`": `"Auto picks`", `"addedAt`": `"2026-01-03T12:00:00Z`"}}}")
+$app = Start-App
+$h = $app.Hwnd
+Send-Command $h 'Update &all'
+$first = Wait-ChoiceDialog $h
+Check 'Update: the dialog opens by itself for Drift Away, to review' "$([W]::TextOf($first)) | $([W]::TextOf([W]::GetDlgItem($first, 1200)))" (
+	'Choose a match | Drift Away by Kai (Drift, 3:20)')
+# Nowhere Song may be searched still as it opens
+for ($i = 0; $i -lt 50 -and -not [W]::IsWindowVisible([W]::GetDlgItem($first, 1213)); $i++) { Start-Sleep -Milliseconds 100 }
+Check '  Open by itself on | Next, once Nowhere Song waits too' (Get-OpenByItself $first) 'True True'
+[void][W]::PostMessageW([W]::GetDlgItem($first, 1213), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Wait-Closed $first
+$second = Wait-ChoiceDialog $h
+Check '  Next: the dialog for Nowhere Song, no match, no Next' (
+	"$([W]::TextOf([W]::GetDlgItem($second, 1200))) | $([W]::TextOf([W]::GetDlgItem($second, 1201))) | $(Get-OpenByItself $second)") (
+	'Nowhere Song by Ghost (Nowhere, 3:00) | No match found. | True False')
+# BM_CLICK, as a click would
+[void][W]::SendMessageW([W]::GetDlgItem($second, 1212), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Check '  Open by itself turned off' (Get-OpenByItself $second) 'False False'
+[void][W]::PostMessageW([W]::GetDlgItem($second, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Wait-Closed $second
+Start-Sleep -Milliseconds 500
+Check '  Cancel: no other dialog | saved off | the tracks as the update left them' (
+	"$([W]::OwnedWindow($h) -eq [IntPtr]::Zero) | $(Get-SavedOpenByItself) | $(Get-SavedTrack 'spotify:spDriftAway00000000004') | $(Get-SavedTrack 'spotify:spNowhere0000000000005')") (
+	'True | False | pending [spotify:spDriftAway00000000004]   | failed [spotify:spNowhere0000000000005]  noMatch')
 Stop-App $app

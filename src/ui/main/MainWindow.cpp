@@ -54,8 +54,12 @@ namespace {
 constexpr framework::Size InitialWindowDips{1280, 800};
 constexpr framework::Size MinimumWindowDips{1100, 680};
 constexpr UINT StateRowsMessage = WM_APP + 2;
+constexpr UINT OpenChoicesMessage = WM_APP + 3;
 constexpr UINT_PTR StateTimer = 1;
+constexpr UINT_PTR ChoiceTimer = 2;
 constexpr std::chrono::seconds StateInterval{1};
+// How soon Choose a match tries again to open by itself, after something kept it from it
+constexpr std::chrono::milliseconds ChoiceRetry{1000};
 
 // It needs review, or the Matcher found nothing for it
 bool needs_match(const core::State& state, const TrackRow& row) {
@@ -175,6 +179,10 @@ LRESULT MainWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
     case CoreEventsMessage: on_core_events(); return 0;
     case StateRowsMessage:  on_state_rows(); return 0;
+    case OpenChoicesMessage:
+        choices_posted_ = false;
+        open_choices();
+        return 0;
     case WM_COMMAND:        on_command(wparam, lparam); return 0;
     case WM_INITMENUPOPUP:  on_init_menu_popup(reinterpret_cast<HMENU>(wparam), HIWORD(lparam) != 0); return Window::handle_message(message, wparam, lparam);
     case WM_DRAWITEM:       return on_draw_item(*reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
@@ -388,6 +396,11 @@ void MainWindow::show_outdated_state() {
 }
 
 void MainWindow::on_timer(WPARAM timer) {
+    if (timer == ChoiceTimer) {
+        KillTimer(hwnd(), ChoiceTimer);
+        open_choices();
+        return;
+    }
     if (timer != StateTimer) {
         return;
     }
@@ -615,27 +628,84 @@ void MainWindow::choose_match() {
     if (selected.size() != 1) {
         return;
     }
-    std::optional<MatchChoice> choice = match_choice(*library_.snapshot(), selected.front().key);
-    if (!choice) {
-        return;
+    if (std::optional<MatchChoice> choice = match_choice(*library_.snapshot(), selected.front().key)) {
+        run_choose_match(std::move(*choice), false);
     }
-    std::string source = choice->source;
+    // Tracks an update found meanwhile take their turn now
+    offer_choices();
+}
+
+ChooseMatchEnd MainWindow::run_choose_match(MatchChoice choice, bool next) {
+    std::string source = choice.source;
     // YouTube Music doesn't answer the dialog's searches while yt-dlp downloads
     core::DownloadHold hold = sync_.hold_downloads();
     choose_match_dialog_.emplace(
-            std::move(*choice),
+            std::move(choice),
             candidate_search_,
             [this](const std::string& ytm_id) { return library_result_title(*library_.snapshot(), ytm_id); },
-            choose_match_dips_
+            ChooseMatchOptions{.window_dips = choose_match_dips_, .open_by_itself = settings_.open_choose_match, .next = next}
     );
-    std::optional<std::string> ytm_id = choose_match_dialog_->choose(hwnd());
+    ChooseMatchOutcome outcome = choose_match_dialog_->choose(hwnd());
     choose_match_dips_ = choose_match_dialog_->window_dips();
     choose_match_dialog_.reset();
-    if (!ytm_id) {
+    if (outcome.open_by_itself != settings_.open_choose_match) {
+        settings_.open_choose_match = outcome.open_by_itself;
+        settings_store_.save(settings_);
+    }
+    if (outcome.end == ChooseMatchEnd::Chosen) {
+        core::set_ytm_override(library_, logger_, source, outcome.ytm_id);
+        show_playlists();
+    }
+    return outcome.end;
+}
+
+void MainWindow::offer_choices() {
+    if (!settings_.open_choose_match || !match_choices_.any_waiting(*library_.snapshot())) {
         return;
     }
-    core::set_ytm_override(library_, logger_, source, *ytm_id);
-    show_playlists();
+    if (choose_match_dialog_) {
+        if (choosing_by_itself_) {
+            choose_match_dialog_->show_next();
+        }
+        return;
+    }
+    // From a message of its own, not from the events that queued the tracks
+    if (!std::exchange(choices_posted_, true)) {
+        platform::win32::check(PostMessageW(hwnd(), OpenChoicesMessage, 0, 0), "PostMessageW");
+    }
+}
+
+// One track after another, until none waits, Cancel, or the check box goes off
+void MainWindow::open_choices() {
+    if (choice_held_back()) {
+        platform::win32::check(SetTimer(hwnd(), ChoiceTimer, static_cast<UINT>(ChoiceRetry.count()), nullptr), "SetTimer");
+        return;
+    }
+    choosing_by_itself_ = true;
+    while (settings_.open_choose_match) {
+        std::shared_ptr<const core::State> state = library_.snapshot();
+        std::optional<std::string> track = match_choices_.take(*state);
+        if (!track) {
+            break;
+        }
+        std::optional<MatchChoice> choice = match_choice(*state, *core::source_to_match(*state, state->tracks.at(*track)));
+        if (choice && run_choose_match(std::move(*choice), match_choices_.any_waiting(*state)) == ChooseMatchEnd::Cancelled) {
+            match_choices_.clear();
+        }
+    }
+    if (!settings_.open_choose_match) {
+        match_choices_.clear();
+    }
+    choosing_by_itself_ = false;
+}
+
+// Another dialog or a menu, a drag, or a minimized window
+bool MainWindow::choice_held_back() const {
+    GUITHREADINFO thread{};
+    thread.cbSize = sizeof(thread);
+    bool in_menu = GetGUIThreadInfo(GetCurrentThreadId(), &thread) && (thread.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE | GUI_SYSTEMMENUMODE));
+    bool dialog = settings_dialog_ || add_playlist_dialog_ || choose_match_dialog_ || !IsWindowEnabled(hwnd());
+    return dialog || in_menu || GetCapture() != nullptr || IsIconic(hwnd());
 }
 
 // Each track once, though a playlist may list it more than once
@@ -650,6 +720,10 @@ std::vector<TrackRow> MainWindow::selected_tracks_in(std::initializer_list<Statu
 }
 
 void MainWindow::retry_selected() {
+    // Tracks retried by hand open Choose a match again when they fail again
+    if (!sync_board_.running()) {
+        match_choices_.start_update();
+    }
     sync_.retry(selected_tracks_in({StatusTab::Failed}) | std::views::transform(&TrackRow::track) | std::ranges::to<std::vector>());
     show_playlists();
 }
@@ -817,6 +891,7 @@ void MainWindow::on_core_events() {
     tracks_.show_activities(sync_board_.activities());
     log_.show_added();
     show_tools();
+    offer_choices();
 }
 
 void MainWindow::apply_event(const core::ToolsRunChanged& event) {
@@ -838,6 +913,9 @@ void MainWindow::apply_event(const core::PlaylistLookedUp& event) {
 }
 
 void MainWindow::apply_event(const core::SyncQueued& event) {
+    if (!sync_board_.running()) {
+        match_choices_.start_update();
+    }
     sync_board_.apply(event);
     run_outdated_ = true;
 }
@@ -896,6 +974,9 @@ void MainWindow::apply_event(const core::DownloadsWaiting& event) {
 
 void MainWindow::apply_event(const core::TrackStatusChanged& event) {
     sync_board_.finish_track(event.track);
+    if (settings_.open_choose_match) {
+        match_choices_.add(*library_.snapshot(), event.track);
+    }
     state_outdated_ = true;
 }
 

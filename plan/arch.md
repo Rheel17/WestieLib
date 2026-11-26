@@ -76,7 +76,8 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
   "embedCover": true,
   "concurrency": 2,
   "delayBetweenTracksSeconds": 1,
-  "autoUpdateTools": true
+  "autoUpdateTools": true,
+  "openChooseMatch": true
 }
 ```
 
@@ -89,6 +90,7 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
 | `concurrency`               | number of parallel downloads (1–4)                                            |
 | `delayBetweenTracksSeconds` | pause between track starts; 1 by default                                      |
 | `autoUpdateTools`           | update installed tools at startup (see ToolManager)                           |
+| `openChooseMatch`           | open Choose a match by itself during an update (see `ui.md`)                  |
 
 The file is pretty-printed UTF-8, indented by 4 spaces. Keys it doesn't know are skipped and missing ones keep their
 defaults, so files from other versions still load; a `format` it doesn't know reads as `opus`, and `concurrency` is

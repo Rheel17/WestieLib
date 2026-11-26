@@ -15,5 +15,6 @@ void check_library();
 void check_downloads_to_queue();
 void check_file_rules();
 void check_unavailable();
+void check_match_choices();
 
 }
