@@ -73,6 +73,7 @@ private:
     TrackActivities activities_;
     std::optional<RingIcons> rings_;
     std::optional<framework::IconResource> tool_wait_icon_;
+    std::optional<framework::IconResource> duplicate_synced_icon_;
 };
 
 }

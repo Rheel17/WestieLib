@@ -205,6 +205,29 @@ void ListView::select_items(std::span<const int> items, std::optional<int> focus
     }
 }
 
+// The list finds the row under the mouse only when the mouse moves, so rows that moved under a mouse that stood still
+// leave the hover on the row that was there
+void ListView::hover_row_under_cursor() {
+    POINT cursor;
+    if (!GetCursorPos(&cursor)) {
+        return;
+    }
+    int row = -1;
+    // The header, or a window over the list, takes the mouse
+    if (WindowFromPoint(cursor) == hwnd()) {
+        LVHITTESTINFO hit{};
+        hit.pt = cursor;
+        platform::win32::check(ScreenToClient(hwnd(), &hit.pt), "ScreenToClient");
+        SendMessageW(hwnd(), LVM_SUBITEMHITTEST, 0, reinterpret_cast<LPARAM>(&hit));
+        if (hit.iItem >= 0 && (hit.flags & LVHT_ONITEM)) {
+            row = hit.iItem;
+        }
+    }
+    if (row != static_cast<int>(SendMessageW(hwnd(), LVM_GETHOTITEM, 0, 0))) {
+        SendMessageW(hwnd(), LVM_SETHOTITEM, row, 0);
+    }
+}
+
 LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     // The list has no Ctrl+A of its own, and would search the rows for the character it makes
     if (message == WM_KEYDOWN && wparam == 'A' && only_ctrl_down()) {
@@ -222,8 +245,13 @@ LRESULT ListView::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     case WM_VSCROLL:
     case WM_HSCROLL:
     case WM_MOUSEWHEEL:
-    case WM_MOUSEHWHEEL: forget_cell_tip(); return result;
-    default:             break;
+    case WM_MOUSEHWHEEL:
+        forget_cell_tip();
+        hover_row_under_cursor();
+        return result;
+    // A key that moves the selection past the edge scrolls the rows
+    case WM_KEYDOWN: hover_row_under_cursor(); return result;
+    default:         break;
     }
     if (message != WM_NOTIFY || reinterpret_cast<const NMHDR*>(lparam)->hwndFrom != header()) {
         return result;

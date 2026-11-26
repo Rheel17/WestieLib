@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 
 #include <windows.h>
@@ -41,6 +42,7 @@ protected:
 private:
     void layout();
     void change_view(LogView view);
+    void keep_selection();
     void show_lines(bool to_last_line);
     LRESULT on_notify(NMHDR& header);
 
@@ -48,6 +50,8 @@ private:
     LogToolbar toolbar_;
     LogTable table_;
     bool unshown_lines_ = false;
+    // The list's selection as it was before the lines changed, until it shows them
+    std::optional<LineSelection> kept_selection_;
 };
 
 }

@@ -194,6 +194,16 @@ function Get-LogRows($hwnd) {
 	@(if ($count -gt 0) { 0..($count - 1) | ForEach-Object { [W]::ListViewRow($list, $_) -replace '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ', 'T ' } }) -join ' / '
 }
 
+# The selected rows of the log list, as Get-LogRows reads them (LVM_GETNEXTITEM with LVNI_SELECTED)
+function Get-LogSelection($hwnd) {
+	$list = Get-LogList $hwnd
+	$rows = @()
+	for ($i = [int][W]::SendMessageW($list, 0x100C, [IntPtr](-1), [IntPtr]2); $i -ne -1; $i = [int][W]::SendMessageW($list, 0x100C, [IntPtr]$i, [IntPtr]2)) {
+		$rows += [W]::ListViewRow($list, $i) -replace '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ', 'T '
+	}
+	$rows -join ' / '
+}
+
 function Test-Upright($hwnd, $child) { $r = [W]::RectIn($child, $hwnd); ($r.Right - $r.Left) -lt ($r.Bottom - $r.Top) }
 
 # The visible splitters between the panels, by their left edge

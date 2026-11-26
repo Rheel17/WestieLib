@@ -325,7 +325,10 @@ Select-TrackRow $h 0
 # The selection reaches the log on a posted message
 Start-Sleep -Milliseconds 200
 Check '  Late Night Swing: its lines' "$(Get-LogRows $h) [$([W]::TextOf($logList))]" "$LateRow / $(Get-DownloadedRows 4) []"
+# Home selects its first line, which stays selected among all the lines
+[void][W]::SendMessageW($logList, 0x100, [IntPtr]0x24, [IntPtr]::Zero)
 Click-LogScope $h 0
+Check '  its first line selected, then All: still that line' (Get-LogSelection $h) $LateRow
 Click-AllTracks $h
 Send-Command $h '&Log'
 Start-Sleep -Milliseconds 200

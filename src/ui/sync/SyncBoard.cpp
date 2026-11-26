@@ -57,8 +57,22 @@ void SyncBoard::finish_playlist(const std::string& playlist) {
 void SyncBoard::finish_track(const std::string& track) {
     if (!matches_.finish(track)) {
         downloads_.finish(track);
-        percents_.erase(track);
+        if (auto percent = percents_.find(track); percent != percents_.end()) {
+            ended_[track] = percent->second;
+            percents_.erase(percent);
+        }
     }
+}
+
+void SyncBoard::rows_requested() {
+    for (const auto& [track, percent] : ended_) {
+        ended_in_rows_[track] = percent;
+    }
+    ended_.clear();
+}
+
+void SyncBoard::rows_shown() {
+    ended_in_rows_.clear();
 }
 
 void SyncBoard::finish() {
@@ -137,8 +151,11 @@ int SyncBoard::downloading_in(const std::string& playlist) const {
 
 TrackActivities SyncBoard::activities() const {
     TrackActivities activities;
-    for (const auto& [track, percent] : percents_) {
-        activities[track].percent = percent;
+    // A track downloaded again shows its new download
+    for (const std::map<std::string, int>* percents : {&ended_in_rows_, &ended_, &percents_}) {
+        for (const auto& [track, percent] : *percents) {
+            activities[track].percent = percent;
+        }
     }
     if (!downloads_waiting_for_.empty()) {
         for (const std::string& track : downloads_.waiting()) {

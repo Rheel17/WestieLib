@@ -152,6 +152,7 @@ void TrackTable::apply_dpi(framework::Dpi dpi, const framework::MessageFont& fon
     }
     rings_.emplace(dpi.scale(StatusIconDips));
     tool_wait_icon_.emplace(IDI_TOOL_WAIT, dpi.scale(StatusIconDips));
+    duplicate_synced_icon_.emplace(IDI_DUPLICATE_SYNCED, dpi.scale(StatusIconDips));
 }
 
 void TrackTable::show_scope(bool playlist) {
@@ -370,6 +371,9 @@ const framework::IconResource* TrackTable::status_icon(const TrackRow& row) cons
         if (!activity->second.waiting_for.empty() && tool_wait_icon_) {
             return &*tool_wait_icon_;
         }
+    }
+    if (row.duplicate_of && row.counts_as == StatusTab::Synced && duplicate_synced_icon_) {
+        return &*duplicate_synced_icon_;
     }
     std::optional<StatusTab> status = row.duplicate_of ? std::nullopt : std::optional(row.status);
     auto found = std::ranges::find(status_icons_, status, &StatusIcon::status);

@@ -107,7 +107,7 @@ void TrackCard::set_contents(const TrackDetails& track) {
     }
     show_cover(track.file);
     if (track.row.duplicate_of) {
-        status_.set(IDI_DUPLICATE, row_status_word(track.row));
+        status_.set(track.row.counts_as == StatusTab::Synced ? IDI_DUPLICATE_SYNCED : IDI_DUPLICATE, row_status_word(track.row));
         explanation_.set_text(duplicate_explanation(*track.row.duplicate_of));
     } else {
         status_.set(status_icon(track.row.status), row_status_word(track.row));

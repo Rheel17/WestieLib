@@ -40,6 +40,7 @@ $Glyphs = [ordered]@{
 	removed = @{}
 	kept = @{}
 	duplicate = @{}
+	duplicatesynced = @{}
 	note = @{ Cover = $true }
 }
 

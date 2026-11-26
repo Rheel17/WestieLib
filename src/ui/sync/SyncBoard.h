@@ -29,6 +29,10 @@ public:
     void apply(const core::DownloadsWaiting& waiting);
     void finish_playlist(const std::string& playlist);
     void finish_track(const std::string& track);
+    // A download that ended keeps its ring until rows that show the track's new status do: rows made from the state as
+    // it is now, and then those rows shown
+    void rows_requested();
+    void rows_shown();
     void finish();
 
     bool running() const noexcept;
@@ -68,6 +72,9 @@ private:
     TrackStage matches_;
     TrackStage downloads_;
     std::map<std::string, int> percents_;
+    // The last percents of downloads that ended since rows were last asked for, and of those the asked rows show
+    std::map<std::string, int> ended_;
+    std::map<std::string, int> ended_in_rows_;
     std::vector<core::ToolPackage> downloads_waiting_for_;
 };
 

@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "platform/win32/Win32Error.h"
 #include "ui/framework/TextColor.h"
@@ -87,9 +88,27 @@ bool LogTable::shows_last_line() const {
     return top + per_page >= count;
 }
 
-void LogTable::show_lines(bool to_last_line) {
+LineSelection LogTable::selection() const {
+    auto known = [this](int item) { return item >= 0 && std::cmp_less(item, lines_.shown_count()); };
+    LineSelection selection;
+    for (int item : list_.selected_items()) {
+        if (known(item)) {
+            selection.lines.push_back(lines_.line_number(item));
+        }
+    }
+    if (std::optional<int> focused = list_.focused_item(); focused && known(*focused)) {
+        selection.focused = lines_.line_number(*focused);
+    }
+    return selection;
+}
+
+void LogTable::show_lines(bool to_last_line, const std::optional<LineSelection>& selection) {
     auto count = static_cast<int>(lines_.shown_count());
     list_.set_item_count(count);
+    // The list keeps its selection by index
+    if (selection) {
+        select(*selection);
+    }
     // What it reads while it has no lines, as its window text too, so the UI checks can read it
     platform::win32::check(SetWindowTextW(list_.hwnd(), empty_text()), "SetWindowTextW");
     // A scroll bar may have come or gone
@@ -102,8 +121,24 @@ void LogTable::show_lines(bool to_last_line) {
     }
     // The list keeps the empty text it was given until told to ask again
     SendMessageW(list_.hwnd(), ResetEmptyTextMessage, 0, 0);
+    list_.hover_row_under_cursor();
     // A virtual list doesn't know its texts changed
     platform::win32::check(InvalidateRect(list_.hwnd(), nullptr, FALSE), "InvalidateRect");
+}
+
+void LogTable::select(const LineSelection& selection) {
+    std::vector<int> items;
+    for (std::size_t line : selection.lines) {
+        if (std::optional<std::size_t> index = lines_.shown_index(line)) {
+            items.push_back(static_cast<int>(*index));
+        }
+    }
+    std::optional<std::size_t> focused = selection.focused ? lines_.shown_index(*selection.focused) : std::nullopt;
+    std::optional<int> focused_item = focused ? std::optional(static_cast<int>(*focused)) : std::nullopt;
+    // New lines mostly leave the selected ones where they were
+    if (items != list_.selected_items() || focused_item != list_.focused_item()) {
+        list_.select_items(items, focused_item);
+    }
 }
 
 void LogTable::fit_message_column() {
@@ -140,8 +175,10 @@ void LogTable::show_cell(LVITEMW& item) const {
         return;
     }
     std::wstring_view text;
-    if (item.iItem >= 0 && std::cmp_less(item.iItem, lines_.shown_count())) {
-        text = cell_text(lines_.shown(item.iItem), static_cast<LogColumn>(list_.column_subitem(item.iSubItem)));
+    auto column = static_cast<LogColumn>(list_.column_subitem(item.iSubItem));
+    bool drawn_by_app = column == LogColumn::Message && drawing_item_ == item.iItem;
+    if (item.iItem >= 0 && std::cmp_less(item.iItem, lines_.shown_count()) && !drawn_by_app) {
+        text = cell_text(lines_.shown(item.iItem), column);
     }
     // The list's buffer is all the room there is; the list ends a cut text in an ellipsis itself
     std::size_t length = std::min(text.size(), static_cast<std::size_t>(item.cchTextMax - 1));
@@ -159,35 +196,45 @@ std::wstring LogTable::message_tip(int item, int column_index) const {
     return list_.text_width(text) > room ? text : std::wstring();
 }
 
-LRESULT LogTable::on_custom_draw(NMLVCUSTOMDRAW& draw) const {
+LRESULT LogTable::on_custom_draw(NMLVCUSTOMDRAW& draw) {
     auto item = static_cast<int>(draw.nmcd.dwItemSpec);
     bool known = item >= 0 && std::cmp_less(item, lines_.shown_count());
     switch (draw.nmcd.dwDrawStage) {
     case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
-    // The colors hold for one cell at a time
+    // The list asks for a row's texts after this, so it draws the Message cell's background and selection without text
     case CDDS_ITEMPREPAINT:
+        if (!known) {
+            return CDRF_DODEFAULT;
+        }
+        drawing_item_ = item;
+        draw.clrText = level_color(lines_.shown(item).level);
+        return CDRF_NEWFONT | CDRF_NOTIFYSUBITEMDRAW | CDRF_NOTIFYPOSTPAINT;
+    // The colors hold for one cell at a time
     case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
         if (!known) {
             return CDRF_DODEFAULT;
         }
         draw.clrText = level_color(lines_.shown(item).level);
-        if (draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
-            return CDRF_NEWFONT | CDRF_NOTIFYSUBITEMDRAW;
-        }
-        // The list has drawn the row's background already; only the text is left to draw
-        if (list_.column_subitem(draw.iSubItem) == std::to_underlying(LogColumn::Message)) {
-            draw_message(draw.nmcd.hdc, item, draw.iSubItem);
-            return CDRF_SKIPDEFAULT;
-        }
         return CDRF_NEWFONT;
+    // The list also runs a row's stages to measure it, with an empty rect, and then draws nothing
+    case CDDS_ITEMPOSTPAINT:
+        drawing_item_.reset();
+        if (known && !IsRectEmpty(&draw.nmcd.rc)) {
+            draw_message(draw.nmcd.hdc, item);
+        }
+        return CDRF_DODEFAULT;
     default: return CDRF_DODEFAULT;
     }
 }
 
 // The list cuts a cell's text at 259 characters, which leaves much of a wide column empty
-void LogTable::draw_message(HDC dc, int item, int column_index) const {
+void LogTable::draw_message(HDC dc, int item) const {
+    std::optional<int> column = list_.column_index(std::to_underlying(LogColumn::Message));
+    if (!column) {
+        return;
+    }
     const LogRow& row = lines_.shown(item);
-    RECT cell = list_.cell_rect(item, column_index);
+    RECT cell = list_.cell_rect(item, *column);
     int padding = framework::Dpi::of(list_.hwnd()).scale(CellPaddingDips) / 2;
     cell.left += padding;
     cell.right -= padding;

@@ -29,6 +29,7 @@ void LogPanel::apply_dpi(framework::Dpi dpi, const framework::FontSet& fonts) {
 }
 
 void LogPanel::add(const core::LogLine& line) {
+    keep_selection();
     lines_.append(line);
     unshown_lines_ = true;
 }
@@ -47,13 +48,17 @@ void LogPanel::set_selection(LogSelection selection) {
     bool other = selection.playlist != filter.selection.playlist || selection.tracks != filter.selection.tracks;
     bool follow = other || table_.shows_last_line();
     filter.selection = std::move(selection);
+    keep_selection();
     if (lines_.set_filter(std::move(filter))) {
         show_lines(follow);
+    } else if (!unshown_lines_) {
+        kept_selection_.reset();
     }
 }
 
 void LogPanel::rename_track(const std::string& from, const std::string& to) {
     bool follow = table_.shows_last_line();
+    keep_selection();
     lines_.rename_track(from, to);
     show_lines(follow);
 }
@@ -89,12 +94,19 @@ void LogPanel::layout() {
 void LogPanel::change_view(LogView view) {
     LogFilter filter = lines_.filter();
     filter.view = view;
+    keep_selection();
     lines_.set_filter(std::move(filter));
     show_lines(true);
 }
 
+void LogPanel::keep_selection() {
+    if (!kept_selection_) {
+        kept_selection_ = table_.selection();
+    }
+}
+
 void LogPanel::show_lines(bool to_last_line) {
-    table_.show_lines(to_last_line);
+    table_.show_lines(to_last_line, std::exchange(kept_selection_, std::nullopt));
     unshown_lines_ = false;
 }
 

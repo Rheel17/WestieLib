@@ -31,6 +31,7 @@
 #define IDI_DUPLICATE             62
 #define IDI_PLAY                  63
 #define IDI_PLAY_DISABLED         64
+#define IDI_DUPLICATE_SYNCED      65
 #define IDD_SETTINGS             100
 #define IDC_LIBRARY_FOLDER        1000
 #define IDC_BROWSE_LIBRARY_FOLDER 1001

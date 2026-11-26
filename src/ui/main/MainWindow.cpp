@@ -254,10 +254,13 @@ void MainWindow::select_playlist(std::optional<std::string> key) {
 
 void MainWindow::show_scope() {
     ++rows_generation_;
+    sync_board_.rows_requested();
     std::shared_ptr<const core::State> state = library_.snapshot();
     std::optional<PlaylistRow> playlist = selected_playlist_ ? playlist_row(*state, *selected_playlist_) : std::nullopt;
     show_track_counts(*state);
     tracks_.show_tracks(playlist, track_rows(*state, selected_playlist_, normalizer_), track_counts_.total);
+    sync_board_.rows_shown();
+    tracks_.show_activities(sync_board_.activities());
     show_inspector();
 }
 
@@ -289,6 +292,7 @@ void MainWindow::show_playlists() {
     state_outdated_ = false;
     fetched_ = false;
     state_shown_at_ = std::chrono::steady_clock::now();
+    sync_board_.rows_requested();
     std::shared_ptr<const core::State> state = library_.snapshot();
     if (selected_playlist_ && !state->playlists.contains(*selected_playlist_)) {
         selected_playlist_.reset();
@@ -306,6 +310,8 @@ void MainWindow::show_state_rows(StateRows rows) {
     status_bar_.set_track_count(track_counts_.total);
     auto playlist = rows.playlist ? std::ranges::find(playlist_rows_, *rows.playlist, &PlaylistRow::key) : playlist_rows_.end();
     tracks_.show_tracks(playlist == playlist_rows_.end() ? std::nullopt : std::optional(*playlist), std::move(rows.tracks), track_counts_.total);
+    sync_board_.rows_shown();
+    tracks_.show_activities(sync_board_.activities());
     show_inspector();
     layout_moved_panels();
     // A hidden window would keep the keyboard focus from going anywhere
@@ -321,6 +327,7 @@ void MainWindow::request_state_rows() {
     state_outdated_ = false;
     fetched_ = false;
     state_shown_at_ = std::chrono::steady_clock::now();
+    sync_board_.rows_requested();
     state_rows_worker_.request(library_.snapshot(), selected_playlist_, rows_generation_);
 }
 

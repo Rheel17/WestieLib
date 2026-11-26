@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <optional>
 #include <string>
 
 #include "core/log/LogLevel.h"
@@ -29,6 +30,9 @@ public:
     void rename_track(const std::string& from, const std::string& to);
     std::size_t shown_count() const noexcept;
     const LogRow& shown(std::size_t index) const;
+    // A line's number stays with it when the lines shown change
+    std::size_t line_number(std::size_t index) const;
+    std::optional<std::size_t> shown_index(std::size_t line_number) const;
 
 private:
     void show_all();

@@ -298,6 +298,7 @@ const I = {
 	removed: SVG('<circle cx="8" cy="8" r="6" fill="#fff" stroke="#ca5010" stroke-width="1.6"/><path d="M3.9 12.1l8.2-8.2" stroke="#ca5010" stroke-width="1.6"/>'),
 	kept: SVG('<path d="M5.5 1.8h5l-.7 4.2 2.7 2.6v1.2h-9V8.6l2.7-2.6z" fill="#767676"/><path d="M8 9.6v4.8" stroke="#767676" stroke-width="1.5" stroke-linecap="round"/>'),
 	duplicate: SVG('<rect x="1.8" y="1.8" width="8.4" height="8.4" rx=".5" fill="#fff" stroke="#767676" stroke-width="1.4"/><rect x="5.8" y="5.8" width="8.4" height="8.4" rx=".5" fill="#fff" stroke="#767676" stroke-width="1.4"/>'),
+	duplicatesynced: SVG('<rect x="1.8" y="1.8" width="8.4" height="8.4" rx=".5" fill="#fff" stroke="#13a10e" stroke-width="1.4"/><rect x="5.8" y="5.8" width="8.4" height="8.4" rx=".5" fill="#fff" stroke="#13a10e" stroke-width="1.4"/>'),
 	toolwait: SVG('<path d="M4.4 2h7.2M4.4 14h7.2" stroke="#6d6d6d" stroke-width="1.4" stroke-linecap="round"/><path d="M5.3 2.2v1.5c0 1.7 1.2 2.8 2.7 4.3 1.5-1.5 2.7-2.6 2.7-4.3V2.2M5.3 13.8v-1.5c0-1.7 1.2-2.8 2.7-4.3 1.5 1.5 2.7 2.6 2.7 4.3v1.5" fill="none" stroke="#6d6d6d" stroke-width="1.2" stroke-linejoin="round"/><path d="M6.5 13.2h3L8 11.3z" fill="#8a8a8a"/>'),
 	syncgray: SVG('<path d="M12.6 8A4.6 4.6 0 0 1 4.6 11.1M3.4 8a4.6 4.6 0 0 1 8-3.1" fill="none" stroke="#6d6d6d" stroke-width="1.3" stroke-linecap="round"/><path d="M11.9 2.6v2.6H9.3M4.1 13.4v-2.6h2.6" fill="none" stroke="#6d6d6d" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>'),
 	syncing: SVG('<path d="M13.2 8A5.2 5.2 0 0 1 4 11.3M2.8 8A5.2 5.2 0 0 1 12 4.7" fill="none" stroke="#0078d7" stroke-width="1.6" stroke-linecap="round"/><path d="M12.6 1.9v3.1H9.5M3.4 14.1V11h3.1" fill="none" stroke="#0078d7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'),
@@ -569,7 +570,8 @@ function variantRemovals(s) {
 // ---------- derived values ----------
 const CAT = { downloaded: 'synced', pending: 'waiting', downloading: 'waiting', failed: 'failed', orphaned: 'removed', kept: 'kept' };
 const ST_ICON = { synced: 'synced', waiting: 'waiting', failed: 'failed', removed: 'removed', kept: 'kept' };
-const stIcon = t => t.dup ? 'duplicate' : t.status === 'downloaded' && t.review ? 'warn' : ST_ICON[CAT[t.status]];
+const dupIcon = t => t.status === 'downloaded' ? 'duplicatesynced' : 'duplicate';
+const stIcon = t => t.dup ? dupIcon(t) :t.status === 'downloaded' && t.review ? 'warn' : ST_ICON[CAT[t.status]];
 // Download progress ring for the Status column: grey track, blue arc from 12 o'clock.
 function ring(percent) {
 	const c = 2 * Math.PI * 5.6;
@@ -781,7 +783,7 @@ function trackInspector(s, t, cfg) {
 	let [icon, word, expl] = STATUS[t.status];
 	const review = (t.status === 'downloaded' || t.status === 'pending') && t.review;
 	if (review) [icon, word, expl] = ['warn', 'Needs review', ''];
-	if (t.dup) [icon, word, expl] = ['duplicate', 'Duplicate', `Duplicate of track #${t.dupAt} in this playlist.`];
+	if (t.dup) [icon, word, expl] = [dupIcon(t), 'Duplicate', `Duplicate of track #${t.dupAt} in this playlist.`];
 	if (t.noMatch) expl = 'No match found.';
 	let st = `<div class="stl">${ic(icon, icon === 'syncing' ? 'spin' : '')}${word}</div>${expl ? `<div class="expl">${expl}</div>` : ''}`;
 	if (review) st += `<div class="doubts">${doubtLines(t).map(line => `<div>• ${line}</div>`).join('')}</div>`;

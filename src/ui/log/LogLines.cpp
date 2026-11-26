@@ -80,6 +80,18 @@ const LogRow& LogLines::shown(std::size_t index) const {
     return rows_.at(shown_.at(index) - dropped_);
 }
 
+std::size_t LogLines::line_number(std::size_t index) const {
+    return shown_.at(index);
+}
+
+std::optional<std::size_t> LogLines::shown_index(std::size_t line_number) const {
+    auto found = std::ranges::lower_bound(shown_, line_number);
+    if (found == shown_.end() || *found != line_number) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(found - shown_.begin());
+}
+
 void LogLines::show_all() {
     shown_.clear();
     for (std::size_t index = 0; index < rows_.size(); ++index) {

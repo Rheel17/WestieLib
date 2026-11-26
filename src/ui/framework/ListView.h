@@ -63,6 +63,7 @@ public:
     std::vector<int> selected_items() const;
     std::optional<int> focused_item() const;
     void select_items(std::span<const int> items, std::optional<int> focused);
+    void hover_row_under_cursor();
     void set_cell_tip(std::function<std::wstring(int item, int column_index)> cell_tip);
     void set_cell_tip_width(int width);
     int text_width(const std::wstring& text) const;

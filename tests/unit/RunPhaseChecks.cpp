@@ -84,8 +84,17 @@ void check_board() {
     ui::TrackActivities activities = board.activities();
     CHECK(activities.size() == 2 && activities["t1"].percent == 0 && activities["t2"].percent == 62);
     board.finish_track("t1");
-    CHECK(board.finished() == 1 && board.under_way() == 1 && !board.activities().contains("t1"));
-    CHECK(board.download_progress("spotify:B") && board.download_progress("spotify:B")->ended == 1);
+    CHECK(board.finished() == 1 && board.under_way() == 1 && board.download_progress("spotify:B") && board.download_progress("spotify:B")->ended == 1);
+    // An ended download keeps its ring until rows asked for after it ended show; one that ends meanwhile keeps it longer
+    CHECK(board.activities()["t1"].percent == 0);
+    board.rows_requested();
+    board.finish_track("t2");
+    CHECK(board.activities()["t1"].percent == 0 && board.activities()["t2"].percent == 62);
+    board.rows_shown();
+    CHECK(!board.activities().contains("t1") && board.activities()["t2"].percent == 62);
+    board.rows_requested();
+    board.rows_shown();
+    CHECK(board.activities().empty());
 
     // Waiting for tools: the run, and the downloads that haven't started
     board.apply(core::DownloadsQueued{.tracks = {{.track = "t4", .playlists = {"spotify:C"}}}});

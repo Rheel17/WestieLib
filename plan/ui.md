@@ -422,7 +422,7 @@ when you click their header. Right-click the header to show, hide or reorder col
 | Column    | Default | Content |
 |-----------|---------|---------|
 | #         | playlist scope only | the entry's position in the playlist. It keeps its value when rows are filtered out, so a search can show 2, 5, 8. All tracks has no # column, because a position only means something inside a playlist |
-| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead (the status bar's ring at 16 px, filled as far as yt-dlp's percentage), a row whose download waits for a tool the gray hourglass, and a duplicate the duplicate icon. Hovering the cell shows the word as a tooltip (`Downloaded`, `Needs review`, `Downloading 62%`, `Waiting for ffmpeg`, …); a duplicate's reads `Duplicate of track #3 (<its track's word>)`, with the original's position |
+| Status    | on      | status icon only (56 px). A downloading row shows a blue progress ring instead (the status bar's ring at 16 px, filled as far as yt-dlp's percentage), a row whose download waits for a tool the gray hourglass, and a duplicate the duplicate icon, gray, or green once its track is downloaded. Hovering the cell shows the word as a tooltip (`Downloaded`, `Needs review`, `Downloading 62%`, `Waiting for ffmpeg`, …); a duplicate's reads `Duplicate of track #3 (<its track's word>)`, with the original's position |
 | Title     | on      | |
 | Artists   | on      | joined with `, ` |
 | Album     | on      | Spotify tracks have it from the fetch. Empty for waiting YouTube Music tracks, whose album comes from the info JSON at download time, unless a Spotify source merged in has one. Title, Artists, Album and Time show the track's effective metadata (`arch.md`), so a duplicate reads like its original |
@@ -461,7 +461,8 @@ During an update, the matches and downloads refresh the rows, the counts and the
 a large library takes about a tenth of a second to refresh and the window would otherwise answer the user late. A
 fetched page or playlist refreshes them at once. The update's progress shows at once too: a playlist row's phase line,
 the status bar's Run part, and the Status cell of a track that starts downloading or moves its ring, which is the only
-cell painted again for it. Everything refreshes as the update ends. The rows of a refresh that an update brings are
+cell painted again for it. A download that ends keeps its ring, full or where it stopped, until the refresh that shows
+the track's new status, so the cell doesn't go blank in between. Everything refreshes as the update ends. The rows of a refresh that an update brings are
 made away from the window's thread, so the window keeps answering while a large library's rows are made; the user's
 own actions, such as selecting a playlist, show their rows at once.
 
@@ -564,7 +565,8 @@ The track card, from the top, in DIPs:
   | Kept         | No longer in any playlist, but kept. |
   | Duplicate    | Duplicate of track #12 in this playlist. (The original's position) |
 
-  A duplicate's status line shows the duplicate icon and `Duplicate` whatever its track's status; a failure's reason
+  A duplicate's status line shows the duplicate icon (green once its track is downloaded, as in the table) and
+  `Duplicate` whatever its track's status; a failure's reason
   and box still follow, since they are the track's.
 
   Needs review shows an amber list in the explanation's place: a line for each of the match's doubts, in this order,
@@ -726,12 +728,21 @@ the rest of the width. Rows are 20 px tall.
   (`#C42B1C`), in every column; the other rows are black.
 - A message fills its column however long it is, and one too long for it ends in an ellipsis at the column's right
   edge. Hovering such a message shows all of it in a tooltip, wrapped at the column's width. (The list view itself
-  cuts a cell's text at 259 characters, wherever that falls, so the app draws the Message cells itself, in their own
-custom draw step, and the list draws only the rows' backgrounds under them.)
+  cuts a cell's text at 259 characters, wherever that falls, so while it draws a row, the list gets an empty Message
+  cell and draws it like the others, background, hover and selection included; the app then draws the message over
+  it. That holds for every row the list draws, also one it redraws alone as the mouse moves onto it, so a message is
+  never drawn twice. The list also goes through a row's drawing to measure it, without drawing; the app draws nothing
+  then.)
 - Playlist / Track is the track's title when the line is about a track, else the playlist's name when it's about a
   playlist, else `—`. It is the name when the line was written, so it stays after the playlist is removed.
 - New lines scroll the list to the bottom when it showed the last line; once the user has scrolled up, it stays.
   Changing the level or the scope scrolls to the bottom.
+- The selection stays on its lines when the lines shown change, as with another level, scope, playlist or track, or as
+  the oldest lines go. A selected line that is no longer shown leaves the selection.
+- The hover highlight stays on the row under the mouse when the rows move while the mouse stands still: as new lines
+  scroll the list, or as a key or the wheel scrolls it. (The list view itself only looks for the row under the mouse
+  when the mouse moves, which left the highlight on a row that had moved away.) This holds for every list view in the
+  app.
 
 ## Status bar
 
