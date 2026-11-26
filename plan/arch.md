@@ -75,7 +75,7 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
   "format": "opus",
   "embedCover": true,
   "concurrency": 2,
-  "delayBetweenTracksSeconds": 3,
+  "delayBetweenTracksSeconds": 1,
   "autoUpdateTools": true
 }
 ```
@@ -87,7 +87,7 @@ HKCU\Software\WestieLib\Window            main window placement and panel widths
 | `format`                    | `opus` or `flac`; applies to new downloads, existing files keep their format  |
 | `embedCover`                | write the cover art into the file                                             |
 | `concurrency`               | number of parallel downloads (1–4)                                            |
-| `delayBetweenTracksSeconds` | pause between track starts                                                    |
+| `delayBetweenTracksSeconds` | pause between track starts; 1 by default                                      |
 | `autoUpdateTools`           | update installed tools at startup (see ToolManager)                           |
 
 The file is pretty-printed UTF-8, indented by 4 spaces. Keys it doesn't know are skipped and missing ones keep their
@@ -1021,7 +1021,7 @@ The SyncEngine coordinates a sync run on a coordinator thread with a pool of `co
      `PlaylistFetchFailed`, and the run continues with the other playlists.
 2. **Orphans.** `downloaded` tracks with no source in any playlist become `orphaned`. The UI finds them in the
    state, so it also shows the ones an earlier run or `removePlaylist` left, and no event is needed.
-3. **Queue.** All `pending` and `failed` tracks are queued in playlist order. Workers start tracks
+3. **Queue.** The `pending` and `failed` tracks of the playlists in the run are queued in playlist order. Workers start tracks
    `delayBetweenTracksSeconds` apart.
 4. **Per track (worker).**
    1. Resolve the YouTube Music id (see YouTube Music id resolution). This step takes a lock on the id, so two
@@ -1040,7 +1040,7 @@ active, they join its queue. Otherwise they start a run of their own.
 - `retry` takes the failed ones among the tracks it is given, clears their failure in one save, and logs `Retrying 2
   tracks`. A track whose match failed is matched again, and one whose download failed downloads again.
 - A run of its own emits `SyncQueued` without playlists, and matches and downloads only those tracks. A `sync` during
-  it widens it to every track that waits, as an update does.
+  it adds the tracks of the playlists it queues, as an update does.
 - During a run, the tracks join its queues even when the run has already tried them.
 
 **Removal decisions** arrive through `resolveRemovals` at any time during or after a run (`resolve_removals`,
@@ -1072,6 +1072,10 @@ downloads. Its changes to tracks go through `Library`, so files follow merges an
   Spotify fetch read before it failed stay, beside the playlist's earlier sources.
 - Without yt-dlp, a YouTube Music fetch emits `PlaylistFetching` with `waitingFor`, and waits until ToolManager installs
   it (`ToolFolder::wait_until_installed`, which `ToolInstaller` signals after moving the files in).
+- A run matches and downloads only the tracks of the playlists it syncs, and the ones `retry` gives it. Updating one
+  playlist leaves the tracks that wait in another alone, also those the two share; a shared track counts in the
+  playlists of the run only (`TracksQueued`, `DownloadsQueued`). Merging what the library matches (below) still looks at
+  the whole library.
 - Once no playlist is left to fetch, the run first merges what the library matches (Matcher › The library first), in
   one save, without events of their own: the next refresh shows them. Then it matches. `tracks_to_match`
   (`TracksToMatch.cpp`) lists the tracks that are `pending` or `failed`, have no override and no YouTube Music source
@@ -1119,6 +1123,9 @@ downloads. Its changes to tracks go through `Library`, so files follow merges an
     `ApplyDownload.cpp`). It logs the Warning line (Logging) and emits `TrackStatusChanged`, and the track joins the
     run's match queue as a playlist's new tracks do. An override's id is the user's choice, so an unavailable override
     fails as an ordinary download, and its id doesn't join the set.
+  - `hold_downloads()` stops the pool from starting tracks while the UI's Choose a match dialog is open, since YouTube
+    Music doesn't answer searches while yt-dlp downloads. It returns a `DownloadHold`, and the pool goes on when that
+    goes. The downloads under way go on, and a pool that starts during the hold starts held. Nothing is logged or sent.
   - A missing tool stops the pool from starting tracks: the one that found it missing goes back to the front of the
     queue, the run emits `DownloadsWaiting` with the tools, and the log gets a Warning `Waiting for ffmpeg to install`.
     Nothing is written to the state. When `ToolFolder` reports the install, `DownloadsWaiting` without tools follows, and

@@ -18,6 +18,7 @@
 #include "core/playlists/AddPlaylist.h"
 #include "core/playlists/RemovePlaylist.h"
 #include "core/state/TrackYtmIds.h"
+#include "core/sync/DownloadHold.h"
 #include "platform/NearestExistingFolder.h"
 #include "platform/win32/Clipboard.h"
 #include "platform/win32/ShellOpen.h"
@@ -549,6 +550,8 @@ void MainWindow::choose_match() {
         return;
     }
     std::string source = choice->source;
+    // YouTube Music doesn't answer the dialog's searches while yt-dlp downloads
+    core::DownloadHold hold = sync_.hold_downloads();
     choose_match_dialog_.emplace(
             std::move(*choice),
             candidate_search_,

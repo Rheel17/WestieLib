@@ -55,13 +55,14 @@ std::optional<std::string> ytm_id_of(const State& state, const std::string& trac
 
 DownloadPool::DownloadPool(
         DownloadServices services, std::filesystem::path work_folder, std::stop_token stop, std::function<void()> on_idle,
-        std::function<void(const std::string& track)> on_unavailable
+        std::function<void(const std::string& track)> on_unavailable, bool held
 ) :
         services_(services),
         work_folder_(std::move(work_folder)),
         stop_(std::move(stop)),
         on_idle_(std::move(on_idle)),
-        on_unavailable_(std::move(on_unavailable)) {
+        on_unavailable_(std::move(on_unavailable)),
+        held_(held) {
     Settings settings = services_.settings.current();
     delay_ = settings.delay_between_tracks;
     for (int index = 0; index < std::clamp(settings.concurrency, MinConcurrency, MaxConcurrency); ++index) {
@@ -108,6 +109,15 @@ bool DownloadPool::idle() {
     return queue_.empty() && active_ == 0;
 }
 
+void DownloadPool::set_held(bool held) {
+    {
+        std::scoped_lock lock(mutex_);
+        held_ = held;
+        ++changes_;
+    }
+    wake_.notify_all();
+}
+
 void DownloadPool::work() {
     while (std::optional<Taken> taken = take()) {
         download(*taken);
@@ -119,7 +129,7 @@ std::optional<DownloadPool::Taken> DownloadPool::take() {
     std::unique_lock lock(mutex_);
     while (!closing_ && !stop_.stop_requested()) {
         std::uint64_t seen = changes_;
-        if (!waiting_for_tools_ && !queue_.empty()) {
+        if (!waiting_for_tools_ && !held_ && !queue_.empty()) {
             std::shared_ptr<const State> state = services_.library.snapshot();
             // A track whose id another worker is downloading waits for it, and the ones after it go first
             auto next = std::ranges::find_if(queue_, [&](const std::string& track) { return !busy_ids_.contains(ytm_id_of(*state, track).value_or("")); });

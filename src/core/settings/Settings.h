@@ -17,7 +17,7 @@ struct Settings {
     AudioFormat format = AudioFormat::Opus;
     bool embed_cover = true;
     int concurrency = 2;
-    std::chrono::seconds delay_between_tracks{3};
+    std::chrono::seconds delay_between_tracks{1};
     bool auto_update_tools = true;
 
     bool operator==(const Settings&) const = default;

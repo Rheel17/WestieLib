@@ -129,6 +129,7 @@ add_executable(WestieLib WIN32
 	src/core/state/StateStore.cpp
 	src/core/sync/ApplyFetch.cpp
 	src/core/sync/ApplyMatch.cpp
+	src/core/sync/DownloadHold.cpp
 	src/core/sync/DownloadPool.cpp
 	src/core/sync/SyncEngine.cpp
 	src/core/sync/TrackDownload.cpp

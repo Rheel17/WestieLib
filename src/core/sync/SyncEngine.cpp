@@ -87,6 +87,7 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
         }
         queue_.push_back(playlist);
         queued.playlists.push_back(playlist);
+        run_playlists_.insert(playlist);
     }
     if (queued.playlists.empty()) {
         return;
@@ -96,8 +97,6 @@ void SyncEngine::sync(const std::vector<std::string>& playlists) {
     log_.write(LogLevel::Info, running_ ? std::format("Added {} to the update", what) : std::format("Update started: {}", what), std::move(subject));
     // Under the lock, so the run can't report on these playlists before the UI knows they're queued
     events_.emit(std::move(queued));
-    // An update looks at every track that waits, also in a run that retry started
-    only_.reset();
     if (running_) {
         wake_.notify_all();
         return;
@@ -121,15 +120,12 @@ void SyncEngine::retry(const std::vector<std::string>& tracks) {
 
     std::unique_lock lock(mutex_);
     join_cancelled_run(lock);
+    run_tracks_.insert(retried.begin(), retried.end());
     if (running_) {
         retried_.insert(retried_.end(), retried.begin(), retried.end());
-        if (only_) {
-            only_->insert(retried.begin(), retried.end());
-        }
         wake_.notify_all();
         return;
     }
-    only_.emplace(retried.begin(), retried.end());
     // Under the lock, as for a sync, so the UI knows of the run before it reports
     events_.emit(SyncQueued{});
     start_run(lock);
@@ -154,6 +150,19 @@ void SyncEngine::start_run(std::unique_lock<std::mutex>& lock) {
 
 void SyncEngine::cancel() noexcept {
     worker_.request_stop();
+}
+
+DownloadHold SyncEngine::hold_downloads() {
+    change_holds(1);
+    return DownloadHold([this] { change_holds(-1); });
+}
+
+void SyncEngine::change_holds(int change) {
+    std::scoped_lock lock(mutex_);
+    holds_ += change;
+    if (pool_ != nullptr) {
+        pool_->set_held(holds_ > 0);
+    }
 }
 
 void SyncEngine::work(const std::stop_token& stop) {
@@ -197,6 +206,10 @@ void SyncEngine::work(const std::stop_token& stop) {
             continue;
         }
         // Joined before the run ends, so no download reports after it
+        {
+            std::scoped_lock lock(mutex_);
+            pool_ = nullptr;
+        }
         downloads.reset();
         if (finish(stop)) {
             return;
@@ -223,12 +236,20 @@ bool SyncEngine::take_retried(MatchQueue& queue, std::optional<DownloadPool>& po
     return true;
 }
 
+// A track the run syncs counts in the run's playlists only, so a playlist that isn't updated shows no progress
 std::vector<QueuedTrack> SyncEngine::in_run(std::vector<QueuedTrack> tracks) {
     std::scoped_lock lock(mutex_);
-    if (only_) {
-        std::erase_if(tracks, [this](const QueuedTrack& track) { return !only_->contains(track.track); });
+    std::vector<QueuedTrack> kept;
+    for (QueuedTrack& track : tracks) {
+        if (!run_tracks_.contains(track.track)) {
+            std::erase_if(track.playlists, [this](const std::string& playlist) { return !run_playlists_.contains(playlist); });
+            if (track.playlists.empty()) {
+                continue;
+            }
+        }
+        kept.push_back(std::move(track));
     }
-    return tracks;
+    return kept;
 }
 
 void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::stop_token& stop) {
@@ -237,6 +258,8 @@ void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::s
         return;
     }
     if (!pool) {
+        // Under the lock, so a hold that comes meanwhile reaches the pool
+        std::scoped_lock lock(mutex_);
         pool.emplace(
                 DownloadServices{
                     .download = downloads_.download,
@@ -260,8 +283,10 @@ void SyncEngine::queue_downloads(std::optional<DownloadPool>& pool, const std::s
                         retried_.push_back(track);
                     }
                     wake_.notify_all();
-                }
+                },
+                holds_ > 0
         );
+        pool_ = &*pool;
     }
     pool->add(std::move(ready));
 }
@@ -301,7 +326,8 @@ bool SyncEngine::finish(const std::stop_token& stop) {
     }
     queue_.clear();
     retried_.clear();
-    only_.reset();
+    run_playlists_.clear();
+    run_tracks_.clear();
     running_ = false;
     log_.write(LogLevel::Info, stop.stop_requested() ? "Update cancelled" : "Update finished");
     // Under the lock, so a sync that starts the next run comes after this in the events

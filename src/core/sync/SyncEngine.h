@@ -25,6 +25,7 @@
 #include "core/sources/SpotifyUrls.h"
 #include "core/state/Match.h"
 #include "core/state/Track.h"
+#include "core/sync/DownloadHold.h"
 #include "core/sync/DownloadPool.h"
 #include "core/sync/TrackDownload.h"
 #include "core/tools/ToolFolder.h"
@@ -53,6 +54,7 @@ public:
     void sync(const std::vector<std::string>& playlists);
     void retry(const std::vector<std::string>& tracks);
     void cancel() noexcept;
+    DownloadHold hold_downloads();
 
 private:
     struct QueuedMatch {
@@ -71,6 +73,7 @@ private:
     void work(const std::stop_token& stop);
     std::optional<std::string> take_next(const std::stop_token& stop);
     std::optional<QueuedMatch> take_track(MatchQueue& queue, const std::stop_token& stop);
+    void change_holds(int change);
     void join_cancelled_run(std::unique_lock<std::mutex>& lock);
     void start_run(std::unique_lock<std::mutex>& lock);
     bool take_retried(MatchQueue& queue, std::optional<DownloadPool>& pool);
@@ -106,10 +109,14 @@ private:
     std::deque<std::string> queue_;
     std::optional<std::string> current_;
     bool running_ = false;
-    // A run that retry started handles only these tracks, until a sync widens it
-    std::optional<std::set<std::string>> only_;
+    // A run matches and downloads only the tracks of the playlists it syncs, and the tracks retried in it
+    std::set<std::string> run_playlists_;
+    std::set<std::string> run_tracks_;
     // Tracks retried during the run, which join its queues
     std::vector<std::string> retried_;
+    // While any hold lasts, the run's pool starts no download
+    int holds_ = 0;
+    DownloadPool* pool_ = nullptr;
     // Last, so the thread is joined before the members it uses go
     std::jthread worker_;
 };

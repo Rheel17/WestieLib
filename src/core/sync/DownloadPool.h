@@ -41,7 +41,7 @@ class DownloadPool {
 public:
     DownloadPool(
             DownloadServices services, std::filesystem::path work_folder, std::stop_token stop, std::function<void()> on_idle,
-            std::function<void(const std::string& track)> on_unavailable
+            std::function<void(const std::string& track)> on_unavailable, bool held
     );
     ~DownloadPool();
 
@@ -52,6 +52,8 @@ public:
     // So a track tried already can be queued again
     void forget(const std::vector<std::string>& tracks);
     bool idle();
+    // A held pool starts no track; the ones under way go on
+    void set_held(bool held);
 
 private:
     struct Taken {
@@ -92,6 +94,7 @@ private:
     int active_ = 0;
     std::chrono::steady_clock::time_point next_start_{};
     bool waiting_for_tools_ = false;
+    bool held_ = false;
     bool closing_ = false;
     // Counts every change a waiting worker may want to look at
     std::uint64_t changes_ = 0;

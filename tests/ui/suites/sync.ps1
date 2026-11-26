@@ -1009,9 +1009,9 @@ Wait-Fetches $h $queries 1 -Spotify
 Check 'Synced: both matched, neither confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 False / spReviewApart000000002 apartVid001 False'
 Check '  confidences and doubts: the cut, the cut with a longer title' (Get-SavedJudgements '^spReview') (
 	'spReviewAlone000000001 reviewVid01 0.75 [length] / spReviewApart000000002 apartVid001 0.65 [title,length]')
-# The update downloads the entry too, as it downloads every track that waits; the two to review wait
+# The update leaves the entry alone, as Long ones isn't in it; the two to review wait
 Check '  the one with the entry''s id stays apart' (Get-SavedTracks) ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
-	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 downloaded [ytm:apartVid001] True')
+	'spReviewApart000000002 pending [spReviewApart000000002] True / ytm:apartVid001 pending [ytm:apartVid001] True')
 Check '  tabs | result line' (Get-TrackSummary $h) 'All 2 | Downloaded 0 | Waiting 2 | Needs review 2 | Failed 0 | Duplicates 0 | Showing 2 of 3 in Reviews'
 Check '  Status tooltips' "$(Get-StatusTip $h 0 1) | $(Get-StatusTip $h 1 1)" 'Needs review | Needs review'
 Check '  the playlist card counts them' ((Wait-CardTexts $h 'Playlist card') -like '* / To review / 2 / *') 'True'
@@ -1048,9 +1048,9 @@ Check 'Apart Song: a line for each doubt' (Wait-TrackCard $h 'spotify:spReviewAp
 	"Artists / Rae / Length / 3:45 (Spotify 3:20) / ID / apartVid001 / Chosen by / Matcher / Confidence / 65% / File / Not downloaded yet.")
 Send-Command $h '&Confirm match'
 Check 'Confirm match: merged into the entry''s track' (Wait-SavedTracks '*apartVid001,spReview*') ('spReviewAlone000000001 pending [spReviewAlone000000001] True / ' +
-	'ytm:apartVid001 downloaded [ytm:apartVid001,spReviewApart000000002] True')
+	'ytm:apartVid001 pending [ytm:apartVid001,spReviewApart000000002] True')
 Check '  saved confirmed' (Get-SavedReviews) 'spReviewAlone000000001 reviewVid01 True / spReviewApart000000002 apartVid001 True'
-Check '  tabs' (Get-TrackSummary $h) 'All 2 | Downloaded 1 | Waiting 1 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 2 in Reviews'
+Check '  tabs' (Get-TrackSummary $h) 'All 2 | Downloaded 0 | Waiting 2 | Needs review 0 | Failed 0 | Duplicates 0 | Showing 2 of 2 in Reviews'
 
 $searches = @($Web.YtmQueries()).Count
 $queries = Get-SpotifyQueries

@@ -306,3 +306,31 @@ $downloads = @(Get-DownloadRuns).Count
 Invoke-UpdateAll $h
 Check 'Update all again: nothing to download' (@(Get-DownloadRuns | Select-Object -Skip $downloads).Count) 0
 Stop-App $app
+
+"--- Run 7: no new downloads while a match is chosen"
+# One download at a time, the first held at 50%; Maybe needs review, so Choose match opens for it
+Set-SavedSetting concurrency 1
+Write-DownloadPlaylists 'ytm:PLhold1', "spotify:$DownloadSpotifyId"
+$hold = Join-Path $ToolsDir 'hold-trackHOLD08'
+[IO.File]::WriteAllText($hold, '')
+$downloads = @(Get-DownloadRuns).Count
+$app = Start-App
+$h = $app.Hwnd
+Send-Command $h 'Update &all'
+for ($i = 0; $i -lt 100 -and @(Get-DownloadRuns | Select-Object -Skip $downloads) -notcontains 'trackHOLD08'; $i++) { Start-Sleep -Milliseconds 100 }
+# During an update the rows show at most once a second
+Start-Sleep -Milliseconds 1500
+# By title: Held, Maybe, Spot On
+Select-TrackRow $h 1
+[void](Wait-TrackCard $h 'spotify:spDownReview000000002')
+Send-Command $h 'C&hoose match...'
+$dialog = Wait-OwnedWindow $h
+Remove-Item $hold
+Start-Sleep -Milliseconds 1500
+Check 'Choose match open: the held download ends, the next one waits' (
+	"$(@(Get-DownloadRuns | Select-Object -Skip $downloads) -join ' ') | $((Get-SavedState).tracks.'spotify:spDownAccept000000001'.status) | $(Test-Syncing $h)") 'trackHOLD08 | pending | True'
+[void][W]::PostMessageW([W]::GetDlgItem($dialog, 2), 0xF5, [IntPtr]::Zero, [IntPtr]::Zero)
+Wait-Closed $dialog
+for ($i = 0; $i -lt 100 -and (Test-Syncing $h); $i++) { Start-Sleep -Milliseconds 100 }
+Check '  closed: the next one downloads' (@(Get-DownloadRuns | Select-Object -Skip $downloads) -join ' ') 'trackHOLD08 ytspDownAccept000000001'
+Stop-App $app

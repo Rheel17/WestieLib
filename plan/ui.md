@@ -269,8 +269,10 @@ With no playlists, the list reads `No playlists yet.` in gray.
 The playlists are listed in the order they were added. A playlist that was just added reads `0 tracks`, an empty bar
 with `0/0`, and `○ Never updated ↻`.
 
-**So far** an update syncs playlists, YouTube Music and Spotify alike, matches the Spotify tracks, and downloads
-the tracks that have a YouTube Music id and don't need review. A track shows as Waiting until its download ends, then
+**So far** an update syncs playlists, YouTube Music and Spotify alike, matches the Spotify tracks, and then
+downloads the tracks that have a YouTube Music id and don't need review. It handles the tracks of the playlists it
+updates only: `Update selected playlist` leaves the tracks that wait in other playlists alone, and their rows don't
+show a phase. A track shows as Waiting until its download ends, then
 as Downloaded, or as Failed when its match or download fails. Meanwhile:
 
 - a YouTube Music playlist whose sync waits for yt-dlp shows ⧗ and `Waiting for yt-dlp`, with the still, faded ⟳ of
@@ -864,6 +866,8 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
     Music id or a row is selected. A double-click on a row is `Use this match`.
   - `Use this match` on the current match confirms it. Any other result becomes the override, which downloads
     the track again.
+  - While it is open, an update starts no new downloads, because YouTube Music doesn't answer the dialog's searches
+    while yt-dlp downloads. The downloads under way go on, and the rest wait until the dialog closes.
   - **Play buttons** open a track's page in the browser, so it can be heard before it's chosen. Each is a small
     button with the 12 px play glyph and a tooltip: `Play on Spotify` for the track (`Play on YouTube Music` for a
     YouTube Music entry whose id is unavailable, which opens its page though it won't play), `Play on YouTube Music`
@@ -912,7 +916,7 @@ Modal dialogs follow native behavior: the main window turns inactive, and nothin
   - **Library**: a read-only folder edit and `Browse…`.
   - **Files**: `Format:` radio buttons Opus / FLAC, and an `Embed album art in files` check box (on by default).
     Both apply to new downloads; existing files stay as they are.
-  - **Downloads**: `Parallel downloads` spin (1–4) and `Pause between tracks` spin (seconds).
+  - **Downloads**: `Parallel downloads` spin (1–4, 2 by default) and `Pause between tracks` spin (seconds, 1 by default).
   - **Tools**: a list of tool, release and status. Under it, an `Update tools automatically` check box (on by
     default), `Check for updates`, and "Last checked …".
     - One row per download: `yt-dlp`, `ffmpeg` (ffmpeg brings ffprobe along) and `deno`. The release is empty for a tool
